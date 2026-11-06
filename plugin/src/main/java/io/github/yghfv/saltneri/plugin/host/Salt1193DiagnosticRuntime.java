@@ -1,0 +1,133 @@
+package io.github.yghfv.saltneri.plugin.host;
+
+import com.xuncorp.spw.workshop.api.hook.HookRegistrar;
+import io.github.yghfv.saltneri.plugin.transport.LoopbackRangeServer;
+import io.github.yghfv.saltneri.plugin.transport.MediaLease;
+import io.github.yghfv.saltneri.core.TrackKey;
+import java.io.IOException;
+import java.net.URI;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+
+/** User-armed local diagnostic. Does not request platform media or modify the queue at startup. */
+public final class Salt1193DiagnosticRuntime implements AutoCloseable {
+    private final Salt1193Probe.MediaFactory media;
+    private final Salt1193Probe.Result profile;
+    private final StreamBinding adapter;
+    private final LoopbackRangeServer transport;
+    private final Salt1193EngineLink engine;
+    private final Salt1193PlaybackSession.QueueSink queue;
+    private final BooleanSupplier authorized;
+    private final ScheduledExecutorService watchdog;
+    private URI toneUri;
+    private String tonePath;
+    private boolean closed;
+    private final java.util.Map<String, Salt1193PlaybackSession> sessions = new java.util.HashMap<>();
+    private final java.util.Map<String, MediaLease.Platform> sessionPlatforms = new java.util.HashMap<>();
+
+    public static Salt1193DiagnosticRuntime open(ClassLoader loader, Salt1193Probe.Result profile,
+                                                HookRegistrar registrar, BooleanSupplier authorized)
+            throws IOException, ReflectiveOperationException {
+        if (!profile.matched() || profile.mediaFactory() == null) throw new IllegalArgumentException("Host profile not verified");
+        if (!authorized.getAsBoolean()) throw new SecurityException("CLASS_TRANSFORM not granted");
+        LoopbackRangeServer transport = new LoopbackRangeServer(authorized);
+        Salt1193StreamAdapter adapter = null;
+        try {
+            adapter = new Salt1193StreamAdapter(loader, profile, authorized, Salt1193StreamAdapter.nativeFactory(loader));
+            return new Salt1193DiagnosticRuntime(profile, adapter, transport,
+                    Salt1193EngineLink.nativeHost(loader, profile), Salt1193EngineLink.hooks(registrar),
+                    Salt1193PlaybackSession.nativeQueue(loader, profile, authorized), authorized);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
+            try { if (adapter != null) adapter.close(); } finally { transport.close(); }
+            throw failure;
+        }
+    }
+
+    /** Transfers ownership on success; explicit injection keeps native audio out of offline tests. */
+    public Salt1193DiagnosticRuntime(Salt1193Probe.Result profile, StreamBinding adapter, LoopbackRangeServer transport,
+                                     Salt1193EngineLink.HostAccess host, Salt1193EngineLink.HookInstaller hooks,
+                                     Salt1193PlaybackSession.QueueSink queue, BooleanSupplier authorized)
+            throws ReflectiveOperationException {
+        if (!profile.matched() || profile.mediaFactory() == null) throw new IllegalArgumentException("Host profile not verified");
+        this.profile = profile; this.media = profile.mediaFactory();
+        this.adapter = Objects.requireNonNull(adapter);
+        this.transport = Objects.requireNonNull(transport);
+        this.queue = Objects.requireNonNull(queue);
+        this.authorized = Objects.requireNonNull(authorized);
+        this.engine = new Salt1193EngineLink(profile, adapter, host, authorized);
+        try { engine.connect(hooks); }
+        catch (ReflectiveOperationException | RuntimeException failure) { transport.close(); throw failure; }
+        watchdog = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "salt-neri-diagnostic-permission");
+            thread.setDaemon(true); return thread;
+        });
+        watchdog.scheduleWithFixedDelay(() -> {
+            if (!permitted() || engine.isClosed()) { try { close(); } catch (RuntimeException ignored) { } }
+        }, 250, 250, TimeUnit.MILLISECONDS);
+    }
+
+    /** Explicit queue-changing action. Submission is not proof that the stream actually became audible. */
+    public synchronized void playTone() throws ReflectiveOperationException {
+        if (closed) throw new IllegalStateException("Diagnostic adapter stopped");
+        if (!permitted()) { close(); throw new SecurityException("CLASS_TRANSFORM revoked"); }
+        try { engine.ensureAttached(); }
+        catch (ReflectiveOperationException | RuntimeException failure) { close(); throw failure; }
+        URI local = transport.registerDiagnosticTone();
+        String path = "saltneri://diagnostic/" + UUID.randomUUID();
+        try {
+            adapter.register(path, local);
+            Object item = media.create(path, "Salt Neri - 2 second test tone", "Local diagnostic", "Not platform audio", "", path);
+            if (!permitted()) throw new SecurityException("CLASS_TRANSFORM revoked");
+            queue.addToPlay(item);
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            adapter.unregister(path); transport.revoke(local); throw failure;
+        }
+        if (tonePath != null) { adapter.unregister(tonePath); transport.revoke(toneUri); }
+        tonePath = path;
+        toneUri = local;
+    }
+
+    public synchronized boolean isClosed() { return closed; }
+    /** Explicit platform queue submission. Preparation/resolution elsewhere never calls this method. */
+    public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+                                       BooleanSupplier accountActive) throws ReflectiveOperationException {
+        if (closed || !permitted()) throw new IllegalStateException("Arm the experimental adapter first");
+        if (!accountActive.getAsBoolean()) throw new SecurityException("Account revision revoked");
+        engine.ensureAttached();
+        sessions.entrySet().removeIf(entry -> { if (entry.getValue().isClosed()) { sessionPlatforms.remove(entry.getKey()); return true; } return false; });
+        Salt1193PlaybackSession session = sessions.get(lease.scope());
+        if (session == null) {
+            if (sessions.size() >= 4) throw new IllegalStateException("Too many active account sessions");
+            session = new Salt1193PlaybackSession(profile, lease.scope(), () -> permitted() && accountActive.getAsBoolean(), adapter, transport, false);
+            sessions.put(lease.scope(), session); sessionPlatforms.put(lease.scope(), lease.platform());
+        }
+        Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease);
+        try { session.enqueue(track, item -> {
+            if (!permitted() || !accountActive.getAsBoolean()) throw new SecurityException("Account/permission revoked before enqueue");
+            queue.addToPlay(item);
+        }); }
+        catch (ReflectiveOperationException | RuntimeException failure) { track.close(); throw failure; }
+    }
+    public synchronized void revokePlatform(MediaLease.Platform platform) {
+        for (String scope : java.util.List.copyOf(sessions.keySet())) if (sessionPlatforms.get(scope) == platform) {
+            sessions.remove(scope).close(); sessionPlatforms.remove(scope);
+        }
+    }
+    private boolean permitted() {
+        try { return authorized.getAsBoolean(); }
+        catch (RuntimeException failure) { return false; }
+    }
+    @Override public synchronized void close() {
+        if (closed) return;
+        closed = true;
+        watchdog.shutdownNow();
+        tonePath = null; toneUri = null;
+        try { for (var session : sessions.values()) session.close(); }
+        finally { sessions.clear(); sessionPlatforms.clear(); try { engine.close(); } finally { transport.close(); } }
+        // Never clear the host queue or abort global Unspecified streams during cleanup.
+    }
+}

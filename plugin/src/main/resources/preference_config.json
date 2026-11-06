@@ -1,0 +1,57 @@
+{
+  "configs": [
+    {
+      "title": "Salt Extend Online - 宿主检查预览",
+      "config": "config.json",
+      "preferences": [
+        {
+          "type": "button",
+          "title": "查看接入状态",
+          "summary": "后台核验 Steam 1.19.3 原生媒体入口与 17 个类指纹，不修改队列。尚未连接在线播放与词图获取，下列选项当前不生效。",
+          "arrow_type": "none",
+          "on_click": "io.github.yghfv.saltneri.plugin.MainPlugin.showStatus"
+        },
+        {
+          "type": "list",
+          "key": "lyrics.source",
+          "title": "歌词来源（预留）",
+          "entries": [
+            "自动",
+            "网易云",
+            "酷狗",
+            "QQ 音乐",
+            "LRCLIB",
+            "AMLL TTML"
+          ],
+          "entry_values": [
+            "automatic",
+            "cloud_music",
+            "kugou",
+            "qq_music",
+            "lrclib",
+            "amll_ttml"
+          ],
+          "default_value": "automatic"
+        },
+        {
+          "type": "switch",
+          "key": "lyrics.preferWordTimed",
+          "title": "优先逐字歌词（预留）",
+          "default_value": true
+        },
+        {
+          "type": "switch",
+          "key": "lyrics.amllEnabled",
+          "title": "AMLL 逐字补全（预留）",
+          "default_value": true
+        },
+        {
+          "type": "switch",
+          "key": "lyrics.biliCcEnabled",
+          "title": "使用 B 站 CC 字幕（预留）",
+          "default_value": true
+        }
+      ]
+    }
+  ]
+}

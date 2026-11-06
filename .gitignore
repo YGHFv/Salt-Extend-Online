@@ -1,0 +1,10 @@
+.gradle/
+.reference/
+.tools/
+**/build/
+.idea/
+*.iml
+local.properties
+*.spmod
+*.log
+__pycache__/

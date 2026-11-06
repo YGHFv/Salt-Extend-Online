@@ -1,0 +1,41 @@
+{
+  "reviewedOn": "2026-11-06",
+  "neriplayer": {
+    "repository": "https://github.com/YGHFv/NeriPlayer",
+    "commit": "fd7fdb757821fda7a62aee3a2b7cecf3a4b8bfe0",
+    "license": "GPL-3.0-or-later"
+  },
+  "saltWorkshopApi": {
+    "repository": "https://github.com/Moriafly/spw-workshop-api",
+    "tag": "0.1.0-dev22",
+    "commit": "4f5f164ccf2fb2563efa18afeb9ddaa611978a88",
+    "license": "Apache-2.0",
+    "javaVersion": 25
+  },
+  "qrCodeGenerator": {
+    "repository": "https://github.com/nayuki/QR-Code-generator",
+    "commit": "bcfe1b018cec5f1f91b5705eca5bb4cdd34e9f8d",
+    "license": "MIT",
+    "sha256": {
+      "QrCode.java": "9b299cae899fe2ec25d7dcb847d7e5b5eb41276789154e05ec3990d32fb5cbd4",
+      "QrSegment.java": "b292946739e41ed45ef20b881f296a81af621af048b00549af72926910d2359c",
+      "BitBuffer.java": "7a37d1bd2e1f2f1578dea076634bc0263a8f1fb526f58b92dd9930ee3f6cc3b8",
+      "DataTooLongException.java": "c000986e4400f0084e30358b22acdeffe1b2886d75d22d3d7217d685cae78319"
+    }
+  },
+  "workshopReference": {
+    "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=3829341669",
+    "title": "WebDAV 音乐库",
+    "sourceOrBinaryObtained": true,
+    "sourceObtained": false,
+    "installedBinaryVersion": "0.2.2",
+    "inspectionOnly": true
+  },
+  "officialDocumentation": [
+    "https://saltplayer.com/workshop/",
+    "https://saltplayer.com/workshop/getting-started.html",
+    "https://saltplayer.com/workshop/permissions.html",
+    "https://saltplayer.com/workshop/configs.html",
+    "https://saltplayer.com/workshop/hook.html"
+  ]
+}

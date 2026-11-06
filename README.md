@@ -1,0 +1,164 @@
+# Salt Extend Online
+
+## 当前版本：0.7.7
+
+- 播放封面不再复用 96×96 列表缩略图，独立读取原图并保留最高 1024×1024；低分辨率原图不做虚假放大。
+- B站「收藏 / 订阅」中的视频合集可单击打开，分页浏览后双击曲目播放；已删除或无访问权限的内容仍不可播放。
+- 单页列表（包括恰好 20 项）隐藏上一页 / 下一页，多页列表保留分页入口。
+- Bilibili / 网易云侧栏采用对应品牌矢量图标，mod 显示名统一为 **Salt Extend Online**。
+- 插件 ID 不变，沿用本插件已有的账号存储和升级识别。
+
+在 Salt 的模组管理中导入 `plugin/build/libs/plugin-io.github.yghfv.saltneri.online-0.7.7-online-polish.spmod`。
+同 ID 的旧版不要同时启用；升级后从列表重新双击歌曲，以重建高清播放封面。
+
+构建与回归测试已通过，包含真实 Salt 标签读图、离屏原生 UI、合集 API fixture 和录制队列测试；
+**这些测试不等于真实账号的完整在线播放验收**。本次未操作用户账号、未替换已安装模组、未启动音频设备。
+完整变更、测试边界和验收步骤见 [0.7.7 修正记录](docs/ONLINE_POLISH_0.7.7.md)。
+
+## 工程与历史进度
+
+面向 Salt Player 桌面创意工坊的 Bilibili / 网易云在线播放模组设计与初始工程。
+词图行为以 [YGHFv/NeriPlayer](https://github.com/YGHFv/NeriPlayer) 为参考，不另建公共媒体代理。
+
+**当前仍是开发预览；下文保留早期工程与验证记录，最新状态以 0.7.7 说明为准。**
+已提供设计、真实 API 能力审计、核心策略、私有 Range 传输、可逆流适配和账号级播放会话；
+另有显式启用、可提交本机测试音的实验接线包；用户截图已确认侧栏、平台页、B站收藏夹视频列表及音轨准备，真实提交后的发声仍待验收。
+新增 B 站匿名公开视频解析／DASH 音轨选择／长度探测和后台配置按钮；已通过一次公网 API/CDN 单字节探测。
+新增两端二维码登录／确认后账号校验／退出／默认DPAPI安全保存与自动恢复；B站与网易云解析支持本插件的已验证账号。网易云新增歌曲详情／EAPI音频地址／单字节探测。0.7改为 Salt 内原生页面：左侧“音乐库”下新增 Bilibili、网易云，二维码也在 Salt 内显示，不再打开浏览器。发现/个人歌单/收藏和明确单曲提交复用既有控制器。
+两端真实二维码创建探测通过；0.7.0/0.7.1平台页曾分派失败，0.7.2修复页面，0.7.3修复收藏夹，0.7.4加入列表封面。最新截图显示曲目已经提交到底部，但用户反馈还需手动点播放。0.7.6补上明确play命令、默认记住/恢复登录、播放栏封面、标题作者对齐及透出宿主背景；详见[流程修正](docs/FLOW_POLISH_0.7.6.md)。按用户要求，当前`0.7.6-flow-cover`移除页面适配/确认控件：单击曲目选中，双击直接解析并播放，底层流适配自动接入。列表/封面/单击不打断当前歌曲；真实发声、完整官方扫码、网易云实网取流和整单自动播放仍未完成验收。
+没有把猜测的宿主类名写成可用 Hook。已生成一个明确不提供播放功能的被动宿主检查 `.spmod`。
+
+## 设计入口
+
+- [完整设计](docs/DESIGN.md)：交互、在线播放链路、词图机制、存储、安全、开发顺序。
+- [NeriPlayer 对齐清单](docs/NERIPLAYER_PARITY.md)：精确来源、实际优先级、默认值及待移植项。
+- [Salt 宿主适配约定](docs/SALT_HOST_ADAPTER.md)：公开 API 缺口、适配验证与失效降级。
+- [Steam 1.19.3 实际核验](docs/HOST_AUDIT_1.19.3.md)：已找到的队列／流／封面入口及验证边界。
+- [播放底层进度与联调边界](docs/PLAYBACK_PROGRESS.md)：本机传输、流适配、会话组装及下一步接线。
+- [实验包与手动试听](docs/EXPERIMENTAL_PLAYBACK.md)：独立权限构建、真实引擎接线及 2 秒本机测试音。
+- [B站解析进度](docs/BILIBILI_PROGRESS.md)：匿名协议、DNS 固定 HTTPS、分 P、音质、实网探测与未完成项。
+- [Salt 原生侧栏与页面](docs/NATIVE_UI_PROGRESS.md)：两行平台入口、宿主样式、原生二维码与界面验收。
+- [听歌桌与单曲播放](docs/LIBRARY_PLAYBACK_PROGRESS.md)：发现/个人/收藏分页、本机动作门禁、明确原生提交与手动验收。
+- [网易云歌曲解析](docs/NETEASE_PROGRESS.md)：精确身份、EAPI、免费完整资源门禁与单字节探测。
+- [二维码登录与会话安全](docs/LOGIN_PROGRESS.md)：双端二维码、账号校验、DPAPI、退出竞态与手动验收。
+- [第三方说明](THIRD_PARTY_NOTICES.md)：参考版本与移植代码许可。
+
+## 核心方向
+
+采用“插件内多源核心 + 可替换 Salt 宿主适配层”，音频最终由 Salt 播放，
+保留 Salt 的队列、音效、输出设备和歌词页；不嵌入另一套播放器。
+B 站每个分 P 是独立媒体项，网易云按歌曲 ID 取流和词图。
+保留 NeriPlayer 的指定歌词源、CC 字幕、AMLL 补全和手动词图保护语义。
+
+关键约束：SPW Workshop API `0.1.0-dev22` **没有**在线媒体入队、URL 解析回调或封面写入接口。
+公开的曲库写权限目前只是预留。需要先验证目标 Salt 安装版本的宿主入口，
+或等待官方在线媒体扩展点，才能完成“使用 Salt 原生播放链路”的实现。
+
+## 已落地
+
+| 内容 | 状态 |
+| --- | --- |
+| 设计文档和版本固定 | 完成 |
+| 平台歌曲身份、B 站 CID 分 P 隔离 | 核心已实现并测试 |
+| 外部歌词时长门禁、AMLL 非对称时长门禁 | 已移植并测试 |
+| 在线歌词主路径的来源选择策略 | 部分移植并测试；不含调用者资格判断和实际解析 |
+| B 站封面缩略图 URL 规则 | 已移植并测试 |
+| 换曲／换账号／停用后的过期结果隔离 | 核心已实现并测试 |
+| Salt 主类、清单、配置预览、Gradle Wrapper | 已用真实宿主包和 JDK 25 编译被动检查包；尚未验证宿主加载 |
+| Steam 1.19.3 宿主 profile | 17 类指纹与入口检查、真实媒体对象字段往返测试通过；无实际播放 |
+| 私有本机 Range 传输 | 已实现；123 项离线检查与真实宿主随机读取测试通过，仅依赖 java.base |
+| 可逆原生流适配 | 已实现；46 项事务／真实 nullable Result ABI 检查通过；未在运行中的音频引擎安装 |
+| 账号级播放会话 | 已实现；33 项组装检查通过；真实媒体／HTTP 读取，模拟引擎与队列 |
+| 显式实验引擎接线／本机测试音 | 33 项接线与 23 项诊断检查通过；实验包已构建，未验证真实加载／发声 |
+| DNS 固定 HTTPS／请求取消 | 144 项离线检查；GET/HEAD与受限登录POST、多Set-Cookie、无全局账号／代理；java.base实网探测通过 |
+| B站解析／音轨选择／长度探测 | 152 项协议与 15 项异步检查；默认匿名或使用已验证账号；Cookie不发往CDN；截图确认提交，自动开始播放待新版验收 |
+| 双平台二维码登录／会话 | 48 项协议、46 项竞态／存储、原生界面契约，真实Windows DPAPI测试凭据往返；真实扫码确认待验收 |
+| 网易云歌曲详情／EAPI取址／长度探测 | 237 项协议、32 项共享后台生命周期与真实宿主reader检查通过；免费完整资源门禁；真实网易云取流待验收 |
+| 发现／个人歌单／喜欢／收藏与双击单曲播放 | 121项目录、38项工作流、59项播放意图和30项模拟原生桥接通过；截图确认B站视频列表/音轨准备，实播待验收 |
+| Salt 原生侧栏、平台页与扫码界面 | 截图确认侧栏与平台页；50项分派、12项绑定和75项离屏渲染/鼠标手势通过；完整官方扫码仍需验收 |
+| 原生在线列表封面 | 52项假图片HTTP/真实解码检查，离屏验证封面像素；列表不落盘、不带Cookie；播放封面另用临时标签文件，14项实际宿主读图/解码检查通过 |
+| 搜索、整单自动连播、词图下载 | 待实现 |
+
+## 测试
+
+核心使用 Java 17+，无第三方测试框架，不需要网络或 Salt。
+
+```powershell
+.\scripts\test-core.ps1 -JdkHome 'C:\Path\To\jdk-17'
+```
+
+也可在已配置完整 Gradle 工程的环境中执行：
+
+```powershell
+.\gradlew.bat :core:contractTest
+```
+
+普通 `test` 任务不是这组主函数契约测试的入口；`contractTest` 已接入 `check`。
+本次使用本机 JDK 17 运行独立脚本验证，不代表完整 Salt 插件已构建或可播放。
+
+本次结果：`PASS: 70 core contract checks`。JSON 配置和参考版本文件已做格式检查。
+Gradle Wrapper 测试在下载分发包时遇到本机 JVM 的 `PKIX` 证书链错误，
+尚未进入 Gradle 构建；未关闭 TLS 校验或修改系统证书。
+当前默认构建 JDK 为 21；本次已在工作区 `.tools/` 准备经官方 SHA-256 核验的便携 JDK 25，
+没有修改系统 Java 安装或全局环境变量。利用真实宿主包完成了不经 Gradle 的本地检查包构建。
+
+## 本机宿主检查包
+
+已核验用户提供的 Steam Salt **1.19.3**。`ffmpeg-x64.dll` 实际也是应用 ZIP/JAR classpath，
+可只读作为编译依赖，不需要改动安装包。原生队列、流拦截接口和封面入口已确认存在，
+已实现带合法上游头的本机 Range 转发、可逆拦截器注册及播放会话，
+被动主类不接管引擎／队列。独立实验包提供显式接线及本机测试音入口，
+仍没有实际安装或完成发声验证；详细边界见实验包文档。
+
+```powershell
+.\scripts\build-local.ps1 `
+  -SaltHome 'D:\SteamLibrary\steamapps\common\Salt Player for Windows' `
+  -JdkHome '.\.tools\jdk25\zulu25.38.109-ca-jdk25.0.5.0.3-win_x64'
+```
+
+产物：`plugin/build/libs/plugin-io.github.yghfv.saltneri.online-0.1.0-hostprobe.spmod`。
+可在 Salt 的 Mod 管理页本地导入检查包，启用后从插件配置“查看接入状态”读取被动检查结果。
+**未自动安装／启用，且此包不播放歌曲、不修改队列、不读取账号或安装 Hook。**
+
+源码检查与测试入口：
+
+```powershell
+python scripts/inspect-salt.py 'D:\SteamLibrary\steamapps\common\Salt Player for Windows' --output plugin/build/host-inspection.json
+python scripts/test-inspector.py
+```
+
+当前证据为 70 项核心、123 项传输、46 项拦截器、26 项会话检查、6 组检查脚本单元测试，
+以及对真实宿主的指纹／媒体字段往返和 HTTP Range 探测／跳读／缓存／EOF 测试。
+传输检查另在 `--limit-modules=java.base` 下重复执行。完整本地构建会自动运行全部插件检查。
+新增 33 项引擎接线和 23 项诊断检查，两种包均进行权限／配置／依赖隔离检查。
+另有 144 项 HTTPS／取消、40 项 JSON、152 项 B站协议、15 项异步过期发布检查，以及双端登录／退出／本机二维码页检查，均在 java.base 下复测。
+网易云新增237项协议与32项双平台共享后台发布检查，另有独立.NET EAPI加密向量和真实Salt HTTP reader fixture贯穿验证；没有运行真实网易云歌曲请求。
+双平台 fixture 的实际租约另贯穿真实回环和 Salt HTTP reader；公网单字节探测独立记录，不混入默认离线测试。
+这不是已完成 PF4J 加载、在线播放、拖动或词图显示联调的证明。
+
+## 插件构建
+
+Salt API `dev22` 以 Java 25 编译，完整工程需要 JDK 25。
+Wrapper 固定为官方示例所用 Gradle `9.8.0`，包含分发包 SHA-256 校验。
+JitPack 插件 ID 映射已按官网配置。
+
+```powershell
+$env:JAVA_HOME = 'C:\Path\To\jdk-25'
+.\gradlew.bat :plugin:plugin -PsaltHostPackage="D:\SteamLibrary\steamapps\common\Salt Player for Windows\app\ffmpeg-x64.dll"
+```
+
+预期输出：`plugin/build/libs/plugin-io.github.yghfv.saltneri.online-0.1.0-dev.spmod`。
+**该产物也只是预览骨架，启用时会明确提示在线适配尚未接通。**
+配置中的来源、AMLL 和 CC 选项为预留，不在当前骨架中生效；不收集账号凭据。
+
+## 下一步
+
+本机版本、安装包和已安装的 WebDAV 参考包已经取得只读核验，不需要再次提供同一目录。
+已为真实引擎读取／普通回调／显式测试音编写接线并生成独立实验包。
+当前实验包版本为`0.7.6-flow-cover`，提供Salt内侧栏、二维码、发现/个人/收藏列表及缩略图；单击曲目选中，双击直接播放，不再显示适配/确认按钮。列表/封面/单击不播放，原有配置中的resolve-only/prepare按钮保持只读。
+通过Salt“模组管理”本地导入 `plugin/build/libs/plugin-io.github.yghfv.saltneri.online-0.7.6-flow-cover.spmod`，同ID旧包不要同时启用；无需把源码放进播放器安装目录。
+接下来验收列表图片和SUBMITTED之后的实际发声与设备重建。安全错误码和验收步骤见[原生UI进度](docs/NATIVE_UI_PROGRESS.md)。播放栏封面已接入，需从列表重新双击；歌词、搜索、整单自动连播和租约续期仍待实现。默认记住登录与升级行为见[0.7.6流程说明](docs/FLOW_POLISH_0.7.6.md)。
+不把“入口存在／可编译”当作在线播放完成；未知宿主版本仍拒绝接入。
+
+项目源码采用 GPL-3.0-or-later，见 [LICENSE](LICENSE)。移植 NeriPlayer 时保留来源和许可；
+与闭源宿主的分发、链接许可问题应在发布前核对，不能仅凭“插件”名称推定许可兼容。

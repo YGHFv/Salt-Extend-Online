@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
+
+# These upstream sources are fingerprinted byte-for-byte, including CRLF and spaces.
+plugin/src/main/java/io/nayuki/qrcodegen/*.java -text whitespace=-blank-at-eol
+licenses/QR-Code-generator-MIT.txt -text whitespace=-blank-at-eol

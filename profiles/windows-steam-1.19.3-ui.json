@@ -1,0 +1,2952 @@
+{
+  "profileId": "windows-steam-1.19.3-ui",
+  "verificationLevel": "static-metadata-only",
+  "liveUiVerified": false,
+  "kotlinCompiler": "2.4.0",
+  "classes": [
+    {
+      "name": "androidx.compose.ui.\u0b1a",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "c75c4b5617babb33ac12ab98e532cf8fd4cf306ad45a1d5b910b4ffa482752f4",
+      "fields": [],
+      "methods": [
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/Modifier;FLandroidx/compose/ui/\u05d0;Landroidx/compose/runtime/Composer;II)V",
+          "access": 25
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u09df$\u0528;FLandroidx/compose/ui/\u05d0;Landroidx/compose/runtime/Composer;II)V",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u052a;Landroidx/compose/runtime/Composer;I)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u0529;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/\u05d0;Landroidx/compose/runtime/Composer;II)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/voxzen/data/entity/Playlist;FLandroidx/compose/runtime/Composer;I)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u05dc;Lcom/xuncorp/voxzen/data/entity/Playlist;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/Composer;I)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u0924;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/runtime/Composer;I)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u09b8;Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;)Z",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;Z)V",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/lifecycle/viewmodel/CreationExtras;)Landroidx/compose/ui/\u05d0;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/\u09df;FLandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/Modifier;FLandroidx/compose/ui/\u05d0;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/lifecycle/viewmodel/CreationExtras;)Landroidx/compose/ui/\u05d0;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u09df$\u0528;Landroidx/compose/ui/\u02a9;Landroidx/compose/foundation/lazy/LazyListScope;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u09df$\u0528;FLandroidx/compose/ui/\u05d0;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/Navigator;Landroidx/compose/ui/\u063a$\u052a;Landroidx/compose/ui/\u09b8;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u098c;Landroidx/compose/ui/graphics/painter/Painter;ZLandroidx/compose/ui/graphics/painter/Painter;Landroidx/compose/foundation/layout/BoxScope;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u052a;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Landroidx/lifecycle/viewmodel/CreationExtras;)Landroidx/compose/ui/\u05d0;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/Navigator;Landroidx/compose/ui/\u063a$\u0529;)Z",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u05dc;Lcom/xuncorp/voxzen/ui/navigation/Navigator;Landroidx/compose/ui/\u063a$\u0529;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u05dc;Landroidx/compose/ui/\u05d0;Landroidx/compose/ui/\u063a$\u0529;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;Z)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;Z)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u05dc;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u0529;Lcom/xuncorp/voxzen/ui/navigation/Navigator;Landroidx/compose/ui/\u09b8;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/ui/\u05dc;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u0529;Landroidx/compose/ui/\u0ab2;Landroidx/compose/foundation/layout/BoxScope;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u0529;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/\u05d0;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcoil3/request/ImageRequest;)Lcoil3/request/ImageRequest;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/voxzen/data/entity/Playlist;FILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/MutableState;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/MutableState;Landroidx/compose/ui/\u0924;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lkotlin/jvm/functions/Function0;Landroidx/compose/runtime/MutableState;Landroidx/compose/ui/\u0924;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u05dc;Lcom/xuncorp/voxzen/data/entity/Playlist;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u052a;Landroidx/compose/runtime/Composer;I)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u063a$\u0529;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;I)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)V",
+          "access": 4121
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u0b1a$\u052e",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "kotlin.jvm.functions.Function4"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "022c397814fae6a208a7aec35f57cebc52da9eff9609981d2492fac55606ce4f",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Ljava/util/List;",
+          "access": 4098
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Landroidx/compose/ui/\u02a9;",
+          "access": 4098
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/util/List;Landroidx/compose/ui/\u02a9;)V",
+          "access": 1
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4113
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u063a$\u052a",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "androidx.compose.ui.\u063a"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "a3916a33309ef3853782a76affda9c84a0e38d349057ec4401d289d6b5f46335",
+      "fields": [
+        {
+          "name": "\u0528",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;)V",
+          "access": 1
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;",
+          "access": 17
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "hashCode",
+          "descriptor": "()I",
+          "access": 17
+        },
+        {
+          "name": "equals",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 4113
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.ScreenRoute$ModConfigContent",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "com.xuncorp.voxzen.ui.navigation.ScreenRoute"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "54285e6712ef4458695921dd9cab761569f661d990e3425ba9e4527d93694036",
+      "fields": [
+        {
+          "name": "Companion",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModConfigContent$Companion;",
+          "access": 25
+        },
+        {
+          "name": "pluginId",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/lang/String;)V",
+          "access": 1
+        },
+        {
+          "name": "getPluginId",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "component1",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "copy",
+          "descriptor": "(Ljava/lang/String;)Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModConfigContent;",
+          "access": 17
+        },
+        {
+          "name": "copy$default",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModConfigContent;Ljava/lang/String;ILjava/lang/Object;)Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModConfigContent;",
+          "access": 4105
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "hashCode",
+          "descriptor": "()I",
+          "access": 17
+        },
+        {
+          "name": "equals",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 17
+        },
+        {
+          "name": "write$Self$Voxzen_composeApp",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModConfigContent;Lkotlinx/serialization/encoding/CompositeEncoder;Lkotlinx/serialization/descriptors/SerialDescriptor;)V",
+          "access": 4121
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(ILjava/lang/String;Lkotlinx/serialization/internal/SerializationConstructorMarker;)V",
+          "access": 4097
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.ScreenRoute$MusicLibrary",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "com.xuncorp.voxzen.ui.navigation.ScreenRoute"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "b9ed26e1c95c89dacec6a5ff3714993d85d4e8e46824b349647d53a83b6fb37b",
+      "fields": [
+        {
+          "name": "INSTANCE",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$MusicLibrary;",
+          "access": 25
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        },
+        {
+          "name": "$cachedSerializer$delegate",
+          "descriptor": "Lkotlin/Lazy;",
+          "access": 4122
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 2
+        },
+        {
+          "name": "serializer",
+          "descriptor": "()Lkotlinx/serialization/KSerializer;",
+          "access": 17
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "hashCode",
+          "descriptor": "()I",
+          "access": 17
+        },
+        {
+          "name": "equals",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 17
+        },
+        {
+          "name": "get$cachedSerializer",
+          "descriptor": "()Lkotlinx/serialization/KSerializer;",
+          "access": 4114
+        },
+        {
+          "name": "_init_$_anonymous_",
+          "descriptor": "()Lkotlinx/serialization/KSerializer;",
+          "access": 4122
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.ScreenRoute",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "androidx.navigation3.runtime.NavKey"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1537,
+      "sha256": "0c6010e815e8ff9d52c3df3da11bea516e46c4a1d464f56bd3b2db34dc7a2f42",
+      "fields": [
+        {
+          "name": "Companion",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Companion;",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.AppNavigationKt",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "e0a7370e1e8311a8ef5a4581bfd368a72f148d4bb5737a49b2064d23094edd75",
+      "fields": [
+        {
+          "name": "IosNavigationTransitionDurationMillis",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "IosNavigationDimmingAlpha",
+          "descriptor": "F",
+          "access": 25
+        },
+        {
+          "name": "IosNavigationTransitionEasing",
+          "descriptor": "Landroidx/compose/animation/core/CubicBezierEasing;",
+          "access": 26
+        },
+        {
+          "name": "IosNavigationDimmingColor",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "LocalNavigator",
+          "descriptor": "Landroidx/compose/runtime/ProvidableCompositionLocal;",
+          "access": 26
+        },
+        {
+          "name": "LocalNavHostSharedTransitionScope",
+          "descriptor": "Landroidx/compose/runtime/ProvidableCompositionLocal;",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "getLocalNavigator",
+          "descriptor": "()Landroidx/compose/runtime/ProvidableCompositionLocal;",
+          "access": 25
+        },
+        {
+          "name": "getLocalNavHostSharedTransitionScope",
+          "descriptor": "()Landroidx/compose/runtime/ProvidableCompositionLocal;",
+          "access": 25
+        },
+        {
+          "name": "getLocalNavHostSharedTransitionScope$annotations",
+          "descriptor": "()V",
+          "access": 4105
+        },
+        {
+          "name": "AppNavigation",
+          "descriptor": "(Landroidx/compose/runtime/Composer;I)V",
+          "access": 25
+        },
+        {
+          "name": "Content",
+          "descriptor": "(Landroidx/compose/runtime/Composer;I)V",
+          "access": 26
+        },
+        {
+          "name": "transientOverlayRetentionNavEntryDecorator",
+          "descriptor": "()Landroidx/navigation3/runtime/NavEntryDecorator;",
+          "access": 25
+        },
+        {
+          "name": "platformTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function1;",
+          "access": 26
+        },
+        {
+          "name": "platformPopTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function1;",
+          "access": 26
+        },
+        {
+          "name": "platformPredictivePopTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function2;",
+          "access": 26
+        },
+        {
+          "name": "iosTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function1;",
+          "access": 26
+        },
+        {
+          "name": "iosPopTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function1;",
+          "access": 26
+        },
+        {
+          "name": "iosPredictivePopTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function2;",
+          "access": 26
+        },
+        {
+          "name": "voxzenTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function1;",
+          "access": 26
+        },
+        {
+          "name": "voxzenPopTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function1;",
+          "access": 26
+        },
+        {
+          "name": "voxzenPredictivePopTransitionSpec",
+          "descriptor": "()Lkotlin/jvm/functions/Function2;",
+          "access": 26
+        },
+        {
+          "name": "rememberSaveableStateHolderNavEntryDecorator",
+          "descriptor": "(Landroidx/compose/runtime/saveable/SaveableStateHolder;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;II)Lcom/xuncorp/voxzen/ui/navigation/SaveableStateHolderNavEntryDecorator;",
+          "access": 26
+        },
+        {
+          "name": "LocalNavigator$lambda$0",
+          "descriptor": "()Lcom/xuncorp/voxzen/ui/navigation/Navigator;",
+          "access": 26
+        },
+        {
+          "name": "LocalNavHostSharedTransitionScope$lambda$0",
+          "descriptor": "()Landroidx/compose/animation/SharedTransitionScope;",
+          "access": 26
+        },
+        {
+          "name": "AppNavigation$lambda$0",
+          "descriptor": "(ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "Content$lambda$1$0",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 26
+        },
+        {
+          "name": "Content$lambda$3$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/Navigator;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "Content$lambda$4",
+          "descriptor": "(ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "iosTransitionSpec$lambda$0$0",
+          "descriptor": "(I)I",
+          "access": 26
+        },
+        {
+          "name": "iosTransitionSpec$lambda$0",
+          "descriptor": "(Landroidx/compose/animation/AnimatedContentTransitionScope;)Landroidx/compose/animation/ContentTransform;",
+          "access": 26
+        },
+        {
+          "name": "iosPopTransitionSpec$lambda$0$0",
+          "descriptor": "(I)I",
+          "access": 26
+        },
+        {
+          "name": "iosPopTransitionSpec$lambda$0",
+          "descriptor": "(Landroidx/compose/animation/AnimatedContentTransitionScope;)Landroidx/compose/animation/ContentTransform;",
+          "access": 26
+        },
+        {
+          "name": "iosPredictivePopTransitionSpec$lambda$0$0",
+          "descriptor": "(I)I",
+          "access": 26
+        },
+        {
+          "name": "iosPredictivePopTransitionSpec$lambda$0",
+          "descriptor": "(Landroidx/compose/animation/AnimatedContentTransitionScope;I)Landroidx/compose/animation/ContentTransform;",
+          "access": 26
+        },
+        {
+          "name": "voxzenTransitionSpec$lambda$0$0",
+          "descriptor": "(Landroidx/compose/ui/unit/IntSize;)Landroidx/compose/ui/unit/IntOffset;",
+          "access": 26
+        },
+        {
+          "name": "voxzenTransitionSpec$lambda$0",
+          "descriptor": "(Landroidx/compose/animation/AnimatedContentTransitionScope;)Landroidx/compose/animation/ContentTransform;",
+          "access": 26
+        },
+        {
+          "name": "voxzenPopTransitionSpec$lambda$0$0",
+          "descriptor": "(Landroidx/compose/ui/unit/IntSize;)Landroidx/compose/ui/unit/IntOffset;",
+          "access": 26
+        },
+        {
+          "name": "voxzenPopTransitionSpec$lambda$0",
+          "descriptor": "(Landroidx/compose/animation/AnimatedContentTransitionScope;)Landroidx/compose/animation/ContentTransform;",
+          "access": 26
+        },
+        {
+          "name": "voxzenPredictivePopTransitionSpec$lambda$0$0",
+          "descriptor": "(Landroidx/compose/ui/unit/IntSize;)Landroidx/compose/ui/unit/IntOffset;",
+          "access": 26
+        },
+        {
+          "name": "voxzenPredictivePopTransitionSpec$lambda$0",
+          "descriptor": "(Landroidx/compose/animation/AnimatedContentTransitionScope;I)Landroidx/compose/animation/ContentTransform;",
+          "access": 26
+        },
+        {
+          "name": "rememberSaveableStateHolderNavEntryDecorator$lambda$0$0",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 26
+        },
+        {
+          "name": "access$Content",
+          "descriptor": "(Landroidx/compose/runtime/Composer;I)V",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.Navigator",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "b2ff59fdcf956e95a1499025b9d6529ce3179261f6c12350a8ca317588751341",
+      "fields": [
+        {
+          "name": "initRoute",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;",
+          "access": 18
+        },
+        {
+          "name": "topLevelRoutes",
+          "descriptor": "Ljava/util/Set;",
+          "access": 18
+        },
+        {
+          "name": "navBackStack",
+          "descriptor": "Landroidx/navigation3/runtime/NavBackStack;",
+          "access": 18
+        },
+        {
+          "name": "playerSheetState",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/component/PlayerSheetState;",
+          "access": 18
+        },
+        {
+          "name": "forwardStack",
+          "descriptor": "Ljava/util/List;",
+          "access": 18
+        },
+        {
+          "name": "playerSheetRequests",
+          "descriptor": "Lkotlinx/coroutines/channels/Channel;",
+          "access": 18
+        },
+        {
+          "name": "playerSheetEvents",
+          "descriptor": "Lkotlinx/coroutines/flow/Flow;",
+          "access": 18
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;Ljava/util/Set;Landroidx/navigation3/runtime/NavBackStack;Lcom/xuncorp/voxzen/ui/component/PlayerSheetState;)V",
+          "access": 1
+        },
+        {
+          "name": "getInitRoute",
+          "descriptor": "()Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;",
+          "access": 17
+        },
+        {
+          "name": "getTopLevelRoutes",
+          "descriptor": "()Ljava/util/Set;",
+          "access": 17
+        },
+        {
+          "name": "getNavBackStack",
+          "descriptor": "()Landroidx/navigation3/runtime/NavBackStack;",
+          "access": 17
+        },
+        {
+          "name": "getPlayerSheetState",
+          "descriptor": "()Lcom/xuncorp/voxzen/ui/component/PlayerSheetState;",
+          "access": 17
+        },
+        {
+          "name": "getPlayerSheetEvents$Voxzen_composeApp",
+          "descriptor": "()Lkotlinx/coroutines/flow/Flow;",
+          "access": 17
+        },
+        {
+          "name": "navigate",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;)V",
+          "access": 17
+        },
+        {
+          "name": "replace",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute;)V",
+          "access": 17
+        },
+        {
+          "name": "back",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "forward",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "expandPlayer",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "collapsePlayer",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u04cc",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "d3425220ccc2fdfb960ca6d04c9e8dd6ab94f42a8d119ae78d20b3ba37535b28",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/runtime/ProvidableCompositionLocal;",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u09f1;Landroidx/compose/ui/\u0ab2;)Landroidx/compose/ui/\u0ab2;",
+          "access": 25
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Landroidx/compose/runtime/ProvidableCompositionLocal;",
+          "access": 25
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u098c;",
+          "access": 25
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;ZLandroidx/compose/ui/Modifier;ZLandroidx/compose/ui/Modifier;Landroidx/compose/ui/graphics/Color;Landroidx/compose/ui/\u0ab2;Lkotlin/jvm/functions/Function3;Landroidx/compose/runtime/Composer;II)V",
+          "access": 25
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Landroidx/compose/ui/\u098c;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;ZLandroidx/compose/ui/Modifier;ZLandroidx/compose/ui/Modifier;Landroidx/compose/ui/graphics/Color;Landroidx/compose/ui/\u0ab2;Lkotlin/jvm/functions/Function3;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u02b0",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "809dd0511313f76bb3ee445958397e489bb5e7c857e933c17bf2d3180eabbd34",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u02b0;",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 2
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u02e4;",
+          "access": 9
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u0374;",
+          "access": 9
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u02b2;",
+          "access": 9
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u02e1;",
+          "access": 9
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u02ee;",
+          "access": 9
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u07f4;",
+          "access": 9
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)Landroidx/compose/ui/\u093d;",
+          "access": 9
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u0374",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "21061a02c1e51c33e9b6fe9cbc717f94c5a8460179380e361d502911e1e53dc4",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u0374$\u037f;",
+          "access": 25
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "\u0781",
+          "descriptor": "J",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(JJJJJJJJJJJ)V",
+          "access": 2
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(JJJJJJJJJJJB)V",
+          "access": 4097
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "()J",
+          "access": 4121
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "()J",
+          "access": 4121
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "()J",
+          "access": 4121
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "()J",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u02b2",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "9fc16e8a34740341e11238c2123b7f4163ca3bba1d0f922b204571f475214ed9",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/text/TextStyle;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Landroidx/compose/ui/text/TextStyle;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Landroidx/compose/ui/text/TextStyle;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Landroidx/compose/ui/text/TextStyle;",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Landroidx/compose/ui/text/TextStyle;Landroidx/compose/ui/text/TextStyle;Landroidx/compose/ui/text/TextStyle;Landroidx/compose/ui/text/TextStyle;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Landroidx/compose/ui/text/TextStyle;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Landroidx/compose/ui/text/TextStyle;",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Landroidx/compose/ui/text/TextStyle;",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()Landroidx/compose/ui/text/TextStyle;",
+          "access": 17
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u02ee",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "25d10a357824efe64acff4a521b4719b6f891ed015c8cddfa2c146f76b808f44",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u02ee$\u037f;",
+          "access": 25
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Landroidx/compose/ui/graphics/Shape;Landroidx/compose/ui/graphics/Shape;Landroidx/compose/ui/graphics/Shape;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Landroidx/compose/ui/graphics/Shape;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Landroidx/compose/ui/graphics/Shape;",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Landroidx/compose/ui/graphics/Shape;",
+          "access": 17
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u02e1",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "704adaf86f7c1cc91e686f07f80847a6db59467faf9725972c4c0c49e1283064",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u02e1$\u037f;",
+          "access": 25
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "Landroidx/compose/runtime/MutableState;",
+          "access": 18
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "Landroidx/compose/runtime/State;",
+          "access": 18
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "Landroidx/compose/runtime/State;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "F",
+          "access": 26
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "F",
+          "access": 26
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "F",
+          "access": 26
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "F",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(FFFFFF)V",
+          "access": 2
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "()Landroidx/compose/ui/\u07f5;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(FF)Landroidx/compose/ui/\u07f5;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(F)Landroidx/compose/ui/\u07f5;",
+          "access": 26
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(FFFFFFB)V",
+          "access": 4097
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "()F",
+          "access": 4121
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "()F",
+          "access": 4121
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "()F",
+          "access": 4121
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "()F",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.foundation.text.BasicTextKt",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 55,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "e1893be61c40c86a5bacc882530579e3e49788bc2171e5130933069457de39a6",
+      "fields": [],
+      "methods": [
+        {
+          "name": "BasicText-RWo7tUw",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILandroidx/compose/ui/graphics/ColorProducer;Landroidx/compose/foundation/text/TextAutoSize;Landroidx/compose/runtime/Composer;II)V",
+          "access": 25
+        },
+        {
+          "name": "BasicText-CL7eQgs",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILjava/util/Map;Landroidx/compose/ui/graphics/ColorProducer;Landroidx/compose/foundation/text/TextAutoSize;Landroidx/compose/runtime/Composer;III)V",
+          "access": 25
+        },
+        {
+          "name": "BasicText-VhcvRP8",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILandroidx/compose/ui/graphics/ColorProducer;Landroidx/compose/runtime/Composer;II)V",
+          "access": 4121
+        },
+        {
+          "name": "BasicText-RWo7tUw",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILjava/util/Map;Landroidx/compose/ui/graphics/ColorProducer;Landroidx/compose/runtime/Composer;II)V",
+          "access": 4121
+        },
+        {
+          "name": "BasicText-BpD7jsM",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZILandroidx/compose/runtime/Composer;II)V",
+          "access": 4121
+        },
+        {
+          "name": "BasicText-4YKlhWE",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZILjava/util/Map;Landroidx/compose/runtime/Composer;II)V",
+          "access": 4121
+        },
+        {
+          "name": "BasicText-4YKlhWE",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILandroidx/compose/runtime/Composer;II)V",
+          "access": 4121
+        },
+        {
+          "name": "BasicText-VhcvRP8",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILjava/util/Map;Landroidx/compose/runtime/Composer;II)V",
+          "access": 4121
+        },
+        {
+          "name": "selectionIdSaver",
+          "descriptor": "(Landroidx/compose/foundation/text/selection/SelectionRegistrar;)Landroidx/compose/runtime/saveable/Saver;",
+          "access": 26
+        },
+        {
+          "name": "measureWithTextRangeMeasureConstraints",
+          "descriptor": "(Ljava/util/List;Lkotlin/jvm/functions/Function0;)Ljava/util/List;",
+          "access": 26
+        },
+        {
+          "name": "textModifier-CL7eQgs",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILandroidx/compose/ui/text/font/FontFamily$Resolver;Ljava/util/List;Lkotlin/jvm/functions/Function1;Landroidx/compose/foundation/text/modifiers/SelectionController;Landroidx/compose/ui/graphics/ColorProducer;Lkotlin/jvm/functions/Function1;Landroidx/compose/foundation/text/TextAutoSize;)Landroidx/compose/ui/Modifier;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent-11Od_4g",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Lkotlin/jvm/functions/Function1;ZLjava/util/Map;Landroidx/compose/ui/text/TextStyle;IZIILandroidx/compose/ui/text/font/FontFamily$Resolver;Landroidx/compose/foundation/text/modifiers/SelectionController;Landroidx/compose/ui/graphics/ColorProducer;Lkotlin/jvm/functions/Function1;Landroidx/compose/foundation/text/TextAutoSize;Landroidx/compose/runtime/Composer;III)V",
+          "access": 26
+        },
+        {
+          "name": "BasicText_RWo7tUw$lambda$0$0",
+          "descriptor": "(Landroidx/compose/foundation/text/selection/SelectionRegistrar;)J",
+          "access": 26
+        },
+        {
+          "name": "BasicText_RWo7tUw$lambda$2",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILandroidx/compose/ui/graphics/ColorProducer;Landroidx/compose/foundation/text/TextAutoSize;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_CL7eQgs$lambda$0$0",
+          "descriptor": "(Landroidx/compose/foundation/text/selection/SelectionRegistrar;)J",
+          "access": 26
+        },
+        {
+          "name": "BasicText_CL7eQgs$lambda$5$0",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;Landroidx/compose/foundation/text/modifiers/TextAnnotatedStringNode$TextSubstitutionValue;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_CL7eQgs$lambda$3",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;)Landroidx/compose/ui/text/AnnotatedString;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_CL7eQgs$lambda$4",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;Landroidx/compose/ui/text/AnnotatedString;)V",
+          "access": 26
+        },
+        {
+          "name": "BasicText_CL7eQgs$lambda$6",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILjava/util/Map;Landroidx/compose/ui/graphics/ColorProducer;Landroidx/compose/foundation/text/TextAutoSize;IIILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_VhcvRP8$lambda$0",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILandroidx/compose/ui/graphics/ColorProducer;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_RWo7tUw$lambda$3",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILjava/util/Map;Landroidx/compose/ui/graphics/ColorProducer;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_BpD7jsM$lambda$0",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIIILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_4YKlhWE$lambda$0",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZILjava/util/Map;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_4YKlhWE$lambda$1",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIIIILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "BasicText_VhcvRP8$lambda$1",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/TextStyle;Lkotlin/jvm/functions/Function1;IZIILjava/util/Map;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "selectionIdSaver$lambda$0",
+          "descriptor": "(Landroidx/compose/foundation/text/selection/SelectionRegistrar;Landroidx/compose/runtime/saveable/SaverScope;J)Ljava/lang/Long;",
+          "access": 26
+        },
+        {
+          "name": "selectionIdSaver$lambda$1",
+          "descriptor": "(J)Ljava/lang/Long;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$1$0",
+          "descriptor": "(Landroidx/compose/foundation/text/TextLinkScope;Landroidx/compose/ui/text/AnnotatedString;)Landroidx/compose/ui/text/AnnotatedString;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$2$0",
+          "descriptor": "(Landroidx/compose/ui/text/AnnotatedString;)Landroidx/compose/ui/text/AnnotatedString;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$4$0",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;Ljava/util/List;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$6$0",
+          "descriptor": "(Landroidx/compose/foundation/text/TextLinkScope;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/text/TextLayoutResult;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$7$0",
+          "descriptor": "(Landroidx/compose/foundation/text/TextLinkScope;)Z",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$8$0",
+          "descriptor": "(Landroidx/compose/foundation/text/TextLinkScope;)Z",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$9$0",
+          "descriptor": "(Landroidx/compose/runtime/MutableState;)Ljava/util/List;",
+          "access": 26
+        },
+        {
+          "name": "LayoutWithLinksAndInlineContent_11Od_4g$lambda$10",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Landroidx/compose/ui/text/AnnotatedString;Lkotlin/jvm/functions/Function1;ZLjava/util/Map;Landroidx/compose/ui/text/TextStyle;IZIILandroidx/compose/ui/text/font/FontFamily$Resolver;Landroidx/compose/foundation/text/modifiers/SelectionController;Landroidx/compose/ui/graphics/ColorProducer;Lkotlin/jvm/functions/Function1;Landroidx/compose/foundation/text/TextAutoSize;IIILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "access$measureWithTextRangeMeasureConstraints",
+          "descriptor": "(Ljava/util/List;Lkotlin/jvm/functions/Function0;)Ljava/util/List;",
+          "access": 4121
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.foundation.CanvasKt",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 55,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "f6459aa3a7211379bc942a6f1c9b92ee97c1518bea397e8938289bf3ff09fd36",
+      "fields": [],
+      "methods": [
+        {
+          "name": "Canvas",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;I)V",
+          "access": 25
+        },
+        {
+          "name": "Canvas",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Ljava/lang/String;Lkotlin/jvm/functions/Function1;Landroidx/compose/runtime/Composer;I)V",
+          "access": 25
+        },
+        {
+          "name": "Canvas$lambda$0",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Lkotlin/jvm/functions/Function1;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "Canvas$lambda$1$0",
+          "descriptor": "(Ljava/lang/String;Landroidx/compose/ui/semantics/SemanticsPropertyReceiver;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "Canvas$lambda$2",
+          "descriptor": "(Landroidx/compose/ui/Modifier;Ljava/lang/String;Lkotlin/jvm/functions/Function1;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        }
+      ]
+    },
+    {
+      "name": "androidx.navigation3.runtime.NavEntry",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 55,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "fad4df90e1d21613000879b02bf07a6d51d2e79bc520ee8328677bbfd85ca20c",
+      "fields": [
+        {
+          "name": "key",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "contentKey",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "metadata",
+          "descriptor": "Ljava/util/Map;",
+          "access": 18
+        },
+        {
+          "name": "content",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 18
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/Map;Lkotlin/jvm/functions/Function3;)V",
+          "access": 1
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/Map;Lkotlin/jvm/functions/Function3;ILkotlin/jvm/internal/DefaultConstructorMarker;)V",
+          "access": 4097
+        },
+        {
+          "name": "getContentKey",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "getMetadata",
+          "descriptor": "()Ljava/util/Map;",
+          "access": 17
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(Landroidx/navigation3/runtime/NavEntry;Lkotlin/jvm/functions/Function3;)V",
+          "access": 1
+        },
+        {
+          "name": "Content",
+          "descriptor": "(Landroidx/compose/runtime/Composer;I)V",
+          "access": 17
+        },
+        {
+          "name": "equals",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 17
+        },
+        {
+          "name": "hashCode",
+          "descriptor": "()I",
+          "access": 17
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "Content$lambda$0",
+          "descriptor": "(Landroidx/navigation3/runtime/NavEntry;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.ComposableSingletons$AppNavigation_desktopKt",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "bc2770b6a0efeb47b65d129f98425cdfad19474907524f31d865f3396099683c",
+      "fields": [
+        {
+          "name": "INSTANCE",
+          "descriptor": "Lcom/xuncorp/voxzen/ui/navigation/ComposableSingletons$AppNavigation_desktopKt;",
+          "access": 25
+        },
+        {
+          "name": "lambda$1608510488",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1577504941",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1251406604",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1838783345",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1873345971",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1087054481",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-91475386",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-845828370",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$314328345",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$34895035",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$272526662",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$778954608",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1640259893",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$88891047",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1495578149",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$958359315",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1189550015",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1545275298",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-760613238",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$929356149",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$977379242",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1561384336",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1387888761",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$75984513",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$399761592",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-417780429",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-15017357",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1438673047",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$480685837",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1031051902",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1460516368",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1516667463",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-717697609",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$637492187",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1675346647",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-179265950",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1712962605",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-2141966498",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$2099154709",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$13532902",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1464720939",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1628897398",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$208234591",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1516157550",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1766944297",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1825020798",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1605156558",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$503931661",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1989238043",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1111465819",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$1207522129",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        },
+        {
+          "name": "lambda$-1618320758",
+          "descriptor": "Lkotlin/jvm/functions/Function3;",
+          "access": 10
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 1
+        },
+        {
+          "name": "getLambda$1608510488$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1577504941$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1251406604$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1838783345$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1873345971$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1087054481$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-91475386$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-845828370$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$314328345$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$34895035$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$272526662$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$778954608$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1640259893$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$88891047$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1495578149$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$958359315$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1189550015$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1545275298$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-760613238$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$929356149$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$977379242$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1561384336$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1387888761$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$75984513$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$399761592$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-417780429$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-15017357$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1438673047$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$480685837$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1031051902$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1460516368$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1516667463$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-717697609$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$637492187$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1675346647$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-179265950$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1712962605$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-2141966498$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$2099154709$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$13532902$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1464720939$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1628897398$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$208234591$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1516157550$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1766944297$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1825020798$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1605156558$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$503931661$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1989238043$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1111465819$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$1207522129$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "getLambda$-1618320758$Voxzen_composeApp",
+          "descriptor": "()Lkotlin/jvm/functions/Function3;",
+          "access": 17
+        },
+        {
+          "name": "lambda_1608510488$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$TrackSort;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1577504941$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$TrackInformation;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1251406604$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$MusicVideos;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1838783345$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$VST;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1873345971$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Appearance;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1087054481$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Cast;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__91475386$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$CastPairing;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__845828370$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$AudioEngine;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_314328345$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$MusicLibrary;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_34895035$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$SoundEffects;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_272526662$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Artist;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_778954608$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ArtistContent;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1640259893$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$EditArtist;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_88891047$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Folder;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1495578149$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$KeyboardShortcut;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_958359315$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$EditHotkey;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1189550015$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ResetHotKey;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1545275298$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Genre;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__760613238$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$GenreContent;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_929356149$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$FormatSupport;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_977379242$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Language;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1561384336$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Dev;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1387888761$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Cache;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_75984513$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Workshop;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_399761592$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$WorkshopPublisher;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__417780429$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$NewWorkshopMod;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__15017357$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$UpdateWorkshopMod;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1438673047$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Laboratory;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_480685837$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Accessibility;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1031051902$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$LyricsRetrievalOrder;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1460516368$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$SteamAccount;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1516667463$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$More;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__717697609$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$DxgiCompatMode;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_637492187$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ImageLibrary;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1675346647$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModManagement;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__179265950$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$EnableMod;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1712962605$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$AppData;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__2141966498$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$CDToolkit;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_2099154709$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$CustomFolder;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_13532902$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$PlaylistContent;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1464720939$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$PlaylistTrackSort;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1628897398$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ImportPlaylist;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_208234591$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Foobar2000PlaylistImport;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1516157550$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Render;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1766944297$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$EditPlaylist;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1825020798$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$HasUnreadableTrack;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1605156558$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$ModConfigContent;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_503931661$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$FolderContent;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1989238043$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$Tag;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1111465819$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$HelpAndFeedback;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda_1207522129$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$NewPlaylist;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda__1618320758$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/navigation/ScreenRoute$PlaybackSpeed;Landroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.runtime.internal.ComposableLambdaImpl",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "androidx.compose.runtime.internal.ComposableLambda"
+      ],
+      "majorVersion": 55,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "5d0efd837a3779ad76cb811270a6c9e848b12aa1837d67deca5f43f854445452",
+      "fields": [
+        {
+          "name": "key",
+          "descriptor": "I",
+          "access": 18
+        },
+        {
+          "name": "tracked",
+          "descriptor": "Z",
+          "access": 18
+        },
+        {
+          "name": "_block",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 2
+        },
+        {
+          "name": "scope",
+          "descriptor": "Landroidx/compose/runtime/RecomposeScope;",
+          "access": 2
+        },
+        {
+          "name": "scopes",
+          "descriptor": "Ljava/util/List;",
+          "access": 2
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(IZLjava/lang/Object;)V",
+          "access": 1
+        },
+        {
+          "name": "getKey",
+          "descriptor": "()I",
+          "access": 17
+        },
+        {
+          "name": "trackWrite",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "trackRead",
+          "descriptor": "(Landroidx/compose/runtime/Composer;)V",
+          "access": 18
+        },
+        {
+          "name": "update",
+          "descriptor": "(Ljava/lang/Object;)V",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;I)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Landroidx/compose/runtime/Composer;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "invoke$lambda$0",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$1",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$2",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$3",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$4",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$5",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$6",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$7",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$8",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$9",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$10",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$11",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$12",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$13",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$14",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$15",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$16",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke$lambda$17",
+          "descriptor": "(Landroidx/compose/runtime/internal/ComposableLambdaImpl;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;IILandroidx/compose/runtime/Composer;I)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "invoke",
+          "descriptor": "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 4177
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.navigation.AppNavigation_desktopKt",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "057fcd59940761dc0be074f8c97345899858386ce531f92fb36857dbe98c76ab",
+      "fields": [
+        {
+          "name": "DefaultDialogSceneStrategy",
+          "descriptor": "Ljava/util/Map;",
+          "access": 26
+        },
+        {
+          "name": "PairingDialogSceneStrategy",
+          "descriptor": "Ljava/util/Map;",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "appNavigationBuilder",
+          "descriptor": "(Landroidx/navigation3/runtime/EntryProviderScope;)V",
+          "access": 25
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    }
+  ]
+}

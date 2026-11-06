@@ -1,0 +1,4596 @@
+{
+  "schemaVersion": 1,
+  "profileId": "windows-steam-1.19.3",
+  "os": "windows",
+  "channel": "Steam",
+  "spwVersion": "1.19.3",
+  "packageName": "ffmpeg-x64.dll",
+  "packageSha256": "75eb9f7185acbbb2302fbcf3356d70f08958a410d2eaf32443abedddafa0e9a0",
+  "verificationLevel": "static-metadata-only",
+  "livePlaybackVerified": false,
+  "classes": [
+    {
+      "name": "com.xuncorp.pisces.PiscesMediaItem",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "java.io.Serializable"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "d565592c4a43eee91824b8fa01cdaeb39a98db2f418590ffbc053c3f64cd9168",
+      "fields": [
+        {
+          "name": "\u0528",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.pisces.PiscesPlayer",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1057,
+      "sha256": "2ce46088303f535dc32f4f5fdf3a4f970761d26be9d89966d2bc30b89f82dcbc",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u018c;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Lkotlinx/coroutines/channels/Channel;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Lkotlinx/coroutines/channels/Channel;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Ljava/util/List;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "Ljava/util/Set;",
+          "access": 18
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$\u0588;",
+          "access": 18
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "Ljava/util/Set;",
+          "access": 18
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "Lkotlinx/coroutines/CoroutineScope;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "Ljava/util/concurrent/atomic/AtomicReference;",
+          "access": 18
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "Ljava/util/List;",
+          "access": 18
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "Ljava/util/concurrent/atomic/AtomicBoolean;",
+          "access": 18
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "Lkotlinx/coroutines/CompletableDeferred;",
+          "access": 18
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "Ljava/util/concurrent/atomic/AtomicReference;",
+          "access": 18
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "Ljava/util/concurrent/atomic/AtomicBoolean;",
+          "access": 18
+        },
+        {
+          "name": "\u0781",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesMediaItem;",
+          "access": 66
+        },
+        {
+          "name": "\u0782",
+          "descriptor": "I",
+          "access": 18
+        },
+        {
+          "name": "\u0783",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Mode;",
+          "access": 66
+        },
+        {
+          "name": "\u0784",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$State;",
+          "access": 66
+        },
+        {
+          "name": "\u0785",
+          "descriptor": "Lcom/xuncorp/pisces/\u0785;",
+          "access": 66
+        },
+        {
+          "name": "\u0786",
+          "descriptor": "F",
+          "access": 66
+        },
+        {
+          "name": "\u0787",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;",
+          "access": 66
+        },
+        {
+          "name": "\u0788",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;",
+          "access": 66
+        },
+        {
+          "name": "\u0789",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$SrcQuality;",
+          "access": 66
+        },
+        {
+          "name": "\u078a",
+          "descriptor": "F",
+          "access": 66
+        },
+        {
+          "name": "\u078b",
+          "descriptor": "F",
+          "access": 66
+        },
+        {
+          "name": "\u078c",
+          "descriptor": "Lcom/xuncorp/pisces/data/\u052a;",
+          "access": 66
+        },
+        {
+          "name": "\u078d",
+          "descriptor": "Z",
+          "access": 66
+        },
+        {
+          "name": "\u078e",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$\u0529;",
+          "access": 66
+        },
+        {
+          "name": "\u078f",
+          "descriptor": "Ljava/lang/String;",
+          "access": 66
+        },
+        {
+          "name": "\u0790",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$\u0780;",
+          "access": 66
+        },
+        {
+          "name": "\u0791",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/pisces/PlatformContext;Lcom/xuncorp/pisces/PiscesPlayer$Properties;)V",
+          "access": 1
+        },
+        {
+          "name": "\u0786",
+          "descriptor": "()Lkotlinx/coroutines/CoroutineScope;",
+          "access": 20
+        },
+        {
+          "name": "\u0787",
+          "descriptor": "()Z",
+          "access": 17
+        },
+        {
+          "name": "\u0788",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesMediaItem;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0789",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Mode;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;)V",
+          "access": 20
+        },
+        {
+          "name": "\u078a",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$State;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$State;)V",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$State;Z)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$State;Lkotlin/jvm/functions/Function1;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$State;)V",
+          "access": 20
+        },
+        {
+          "name": "\u078b",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0785;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0785;)V",
+          "access": 20
+        },
+        {
+          "name": "\u078c",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(F)V",
+          "access": 20
+        },
+        {
+          "name": "\u078d",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;)V",
+          "access": 20
+        },
+        {
+          "name": "\u078e",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;)V",
+          "access": 20
+        },
+        {
+          "name": "\u078f",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$SrcQuality;",
+          "access": 17
+        },
+        {
+          "name": "\u0790",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(F)V",
+          "access": 20
+        },
+        {
+          "name": "\u0791",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(F)V",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/data/\u052a;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0792",
+          "descriptor": "()Z",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Z)V",
+          "access": 20
+        },
+        {
+          "name": "\u0793",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0794",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$\u0780;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u0782;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ZLkotlin/jvm/functions/Function0;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;)V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u058f;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/util/List;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;ILjava/lang/String;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u058f;ILjava/lang/String;Lcom/xuncorp/pisces/PiscesPlayer$\u0789;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ILkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u0795",
+          "descriptor": "()V",
+          "access": 20
+        },
+        {
+          "name": "\u0796",
+          "descriptor": "()V",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0785;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0785;)V",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Z)V",
+          "access": 4
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()V",
+          "access": 4
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;)V",
+          "access": 20
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0785;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0797",
+          "descriptor": "()V",
+          "access": 20
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "()V",
+          "access": 1025
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(J)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Ljava/lang/Object;",
+          "access": 4105
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(JZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;JZLkotlin/coroutines/Continuation;I)Ljava/lang/Object;",
+          "access": 4105
+        },
+        {
+          "name": "\u0798",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u0799",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u079a",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u079b",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4
+        },
+        {
+          "name": "\u079c",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(J)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(JZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u079d",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u079e",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Z)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "()Z",
+          "access": 1025
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "()J",
+          "access": 1025
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "()J",
+          "access": 1025
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "()Lcom/xuncorp/pisces/\u037f;",
+          "access": 1025
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "()[F",
+          "access": 1025
+        },
+        {
+          "name": "\u0781",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 1025
+        },
+        {
+          "name": "\u0782",
+          "descriptor": "()Ljava/util/List;",
+          "access": 1025
+        },
+        {
+          "name": "\u0783",
+          "descriptor": "()Ljava/util/List;",
+          "access": 1
+        },
+        {
+          "name": "\u0784",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0781;",
+          "access": 1025
+        },
+        {
+          "name": "\u0785",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0620;",
+          "access": 1
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$\u0620;",
+          "access": 1025
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1025
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Ljava/lang/String;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(F)V",
+          "access": 1025
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1028
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(F)V",
+          "access": 1025
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(F)V",
+          "access": 1025
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/data/\u052a;)V",
+          "access": 1025
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Z)V",
+          "access": 1025
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u0529;)V",
+          "access": 20
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)V",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u0780;)V",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$State;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$State;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Ljava/lang/Throwable;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052c;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052c;Ljava/lang/Throwable;)Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlinx/coroutines/Job;)Z",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u0782;)Z",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lkotlinx/coroutines/Job;Lcom/xuncorp/pisces/PiscesPlayer$\u058f;Ljava/lang/Throwable;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;Ljava/util/List;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Ljava/lang/String;ILjava/lang/String;)Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(I)Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0785;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0785;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u0529;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesMediaItem;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u058f;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Ljava/util/List;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Lkotlinx/coroutines/CompletableDeferred;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Ljava/lang/String;ILjava/lang/String;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Lkotlinx/coroutines/channels/Channel;",
+          "access": 4121
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Lkotlinx/coroutines/channels/Channel;",
+          "access": 4121
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Lkotlinx/coroutines/Job;",
+          "access": 4121
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Z",
+          "access": 4121
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Ljava/util/concurrent/atomic/AtomicReference;",
+          "access": 4121
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u0782;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u0782;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Ljava/util/Set;",
+          "access": 4121
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Lcom/xuncorp/pisces/PiscesPlayer$\u0588;",
+          "access": 4121
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Ljava/util/Set;",
+          "access": 4121
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)Lkotlinx/coroutines/Job;",
+          "access": 4121
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u0560;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;Lcom/xuncorp/pisces/PiscesPlayer$\u052c;Ljava/lang/Throwable;)V",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.pisces.PiscesPlayer$Properties",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "796213075cab90e2e409a3661479a0a4737778514c3a8b453106dca17b95f550",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Mode;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "F",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;",
+          "access": 18
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$SrcQuality;",
+          "access": 18
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "F",
+          "access": 18
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "Lcom/xuncorp/pisces/data/\u052a;",
+          "access": 18
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "Ljava/util/List;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "Z",
+          "access": 18
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "F",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;Ljava/lang/String;FLcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;Lcom/xuncorp/pisces/PiscesPlayer$SrcQuality;FLcom/xuncorp/pisces/data/\u052a;Ljava/util/List;Z)V",
+          "access": 2
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;Ljava/lang/String;FLcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;Lcom/xuncorp/pisces/PiscesPlayer$SrcQuality;FLcom/xuncorp/pisces/data/\u052a;Ljava/util/List;ZI)V",
+          "access": 4097
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Mode;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;",
+          "access": 17
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$SrcQuality;",
+          "access": 17
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "()Lcom/xuncorp/pisces/data/\u052a;",
+          "access": 17
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "()Ljava/util/List;",
+          "access": 17
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "()Z",
+          "access": 17
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "hashCode",
+          "descriptor": "()I",
+          "access": 17
+        },
+        {
+          "name": "equals",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 17
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.pisces.\u0528",
+      "superclass": "com.xuncorp.pisces.PiscesPlayer",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "65d9925f33d3f94a2349810aea68b53f5582f236f69442d11792095a4ada9646",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Lcom/xuncorp/pisces/PlatformContext;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Properties;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Lcom/xuncorp/pisces/\u0529;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Landroidx/compose/ui/\u018c;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "Lcom/xuncorp/pisces/\u0787;",
+          "access": 66
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "Lcom/xuncorp/pisces/\u0787;",
+          "access": 66
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "Landroidx/compose/ui/\u0715;",
+          "access": 18
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "Landroidx/compose/ui/\u010d;",
+          "access": 18
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "Landroidx/compose/ui/\u043a;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "Landroidx/compose/ui/\u0baa;",
+          "access": 66
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "Landroidx/compose/ui/\u0283;",
+          "access": 66
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 66
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "Landroidx/compose/ui/\u0454;",
+          "access": 18
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "Landroidx/compose/ui/\u013f;",
+          "access": 18
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "Landroidx/compose/ui/\u0420;",
+          "access": 18
+        },
+        {
+          "name": "\u0781",
+          "descriptor": "Ljava/util/Map;",
+          "access": 18
+        },
+        {
+          "name": "\u0782",
+          "descriptor": "Landroidx/compose/ui/\u017a;",
+          "access": 18
+        },
+        {
+          "name": "\u0783",
+          "descriptor": "I",
+          "access": 66
+        },
+        {
+          "name": "\u0784",
+          "descriptor": "Landroidx/compose/ui/\u0477;",
+          "access": 66
+        },
+        {
+          "name": "\u0785",
+          "descriptor": "Landroidx/compose/ui/\u03a1;",
+          "access": 66
+        },
+        {
+          "name": "\u0786",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "\u0787",
+          "descriptor": "Ljava/lang/String;",
+          "access": 2
+        },
+        {
+          "name": "\u0788",
+          "descriptor": "I",
+          "access": 2
+        },
+        {
+          "name": "\u0789",
+          "descriptor": "Lcom/xuncorp/pisces/\u0528$\u0787;",
+          "access": 18
+        },
+        {
+          "name": "\u078a",
+          "descriptor": "I",
+          "access": 2
+        },
+        {
+          "name": "\u078b",
+          "descriptor": "I",
+          "access": 2
+        },
+        {
+          "name": "\u078c",
+          "descriptor": "Ljava/util/List;",
+          "access": 2
+        },
+        {
+          "name": "\u078d",
+          "descriptor": "Lcom/xuncorp/pisces/data/\u052a;",
+          "access": 2
+        },
+        {
+          "name": "\u078e",
+          "descriptor": "Lcom/xuncorp/pisces/data/\u052a;",
+          "access": 2
+        },
+        {
+          "name": "\u078f",
+          "descriptor": "Ljava/lang/Long;",
+          "access": 2
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/pisces/PlatformContext;Lcom/xuncorp/pisces/PiscesPlayer$Properties;Lcom/xuncorp/pisces/\u0529;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0529;",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)Lcom/xuncorp/pisces/\u0787;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u0baa;Lcom/xuncorp/pisces/\u0787;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Z)V",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()V",
+          "access": 20
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Landroidx/compose/ui/\u0715;",
+          "access": 17
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "()Landroidx/compose/ui/\u010d;",
+          "access": 17
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "()Landroidx/compose/ui/\u043a;",
+          "access": 17
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "()Landroidx/compose/ui/\u0baa;",
+          "access": 17
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "()Landroidx/compose/ui/\u0283;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052f;Lcom/xuncorp/pisces/\u0784;)V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;)V",
+          "access": 17
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "()Lkotlinx/coroutines/CoroutineScope;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;)V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Z)V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ILkotlin/jvm/functions/Function0;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(IIILkotlin/jvm/functions/Function0;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ILjava/util/List;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/data/\u052a;IILjava/util/List;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ILcom/xuncorp/pisces/data/\u052a;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u079f",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "\u07a0",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "\u07a1",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ILcom/xuncorp/pisces/PiscesMediaItem;Landroidx/compose/ui/\u0baa;Landroidx/compose/ui/\u0283;)Z",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u0477;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u03a1;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u0477;Landroidx/compose/ui/\u0283;)V",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/ui/\u03a1;)V",
+          "access": 18
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Z)Landroidx/compose/ui/\u0477;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u0529;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/util/List;Lcom/xuncorp/pisces/PiscesPlayer$State;)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;ZIZZLjava/lang/Long;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Ljava/lang/String;ZIZZLjava/lang/Long;Lkotlin/coroutines/Continuation;I)Ljava/lang/Object;",
+          "access": 4104
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(ZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Ljava/lang/Long;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesMediaItem;Lcom/xuncorp/pisces/\u0528$\u07a5;)Ljava/lang/Object;",
+          "access": 4104
+        },
+        {
+          "name": "\u07a2",
+          "descriptor": "()Z",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(JLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(JZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/Object;Lkotlin/coroutines/jvm/internal/ContinuationImpl;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(JZLkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "()Z",
+          "access": 17
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$\u0620;",
+          "access": 17
+        },
+        {
+          "name": "\u07a3",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$\u0781;",
+          "access": 2
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u07a4",
+          "descriptor": "()Landroidx/compose/ui/\u0baa;",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(F)V",
+          "access": 17
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(F)V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)V",
+          "access": 4104
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(F)V",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(F)V",
+          "access": 17
+        },
+        {
+          "name": "\u07a5",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/data/\u052a;)V",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/data/\u052a;)V",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Z)V",
+          "access": 17
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "()Lcom/xuncorp/pisces/\u037f;",
+          "access": 17
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "()[F",
+          "access": 17
+        },
+        {
+          "name": "\u0781",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u0782",
+          "descriptor": "()Ljava/util/List;",
+          "access": 17
+        },
+        {
+          "name": "\u0783",
+          "descriptor": "()Ljava/util/List;",
+          "access": 17
+        },
+        {
+          "name": "\u0784",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0781;",
+          "access": 17
+        },
+        {
+          "name": "\u0785",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0620;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;)Z",
+          "access": 18
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 20
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/data/\u052a;IILjava/util/List;ILjava/util/List;Ljava/lang/Throwable;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u07b1",
+          "descriptor": "()Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0787$\u052a;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/\u0787$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u0baa;III)V",
+          "access": 26
+        },
+        {
+          "name": "\u07fe",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052f;Lcom/xuncorp/pisces/\u0784;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(I)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u07ff",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0860",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(I)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0477;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0787;Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0477;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(JLcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528$\u0529;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Ljava/util/List;Lcom/xuncorp/pisces/PiscesPlayer$State;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;ZIZ)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(J)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0861",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0862",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0620",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0863",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0864",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0865",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0866",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/Result;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0283;Landroidx/compose/ui/\u0baa;Landroidx/compose/ui/\u053f$\u037f;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0867",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/Integer;Ljava/lang/Integer;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0868",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0869",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0780",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u086a",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0870",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0871",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0872",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(JZ)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0873",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0874",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u0283;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0875",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0876",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0877",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0878",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0879",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0781",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u087a",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Ljava/lang/Object;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0782",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u087b",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0783",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u087c",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0784",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u087d",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u087e",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(JZ)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u087f",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(JLcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0880",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0881",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;F)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "(F)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0882",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0883",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Ljava/lang/String;F)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Ljava/lang/String;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0785",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0786",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/data/\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0884",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0885",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Z)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0886",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$\u052a;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "\u0887",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Ljava/lang/String;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Ljava/lang/String;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u0889",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lcom/xuncorp/pisces/PiscesPlayer$\u0529;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/util/Map;",
+          "access": 4121
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Landroidx/compose/ui/\u0454;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Ljava/lang/String;Landroidx/compose/ui/\u0507;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;ILcom/xuncorp/pisces/PiscesMediaItem;Landroidx/compose/ui/\u0baa;Landroidx/compose/ui/\u0283;)Z",
+          "access": 4121
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)I",
+          "access": 4121
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/String;",
+          "access": 4121
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Landroidx/compose/ui/\u013f;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;I)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Ljava/lang/String;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Landroidx/compose/ui/\u018c;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0477;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Landroidx/compose/ui/\u0420;",
+          "access": 4121
+        },
+        {
+          "name": "\u052f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Landroidx/compose/ui/\u0477;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0477;Landroidx/compose/ui/\u0283;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0477;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u0477;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u052c",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u052d",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u052e",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u0560",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u0588",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "\u058f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Lcom/xuncorp/pisces/\u0787;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Ljava/util/List;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u05ef",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;)Landroidx/compose/ui/\u03a1;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u03a1;)V",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/pisces/\u0528;Landroidx/compose/ui/\u03a1;)V",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u015b",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1537,
+      "sha256": "e0fa72cba8425ce0f6838aa9319caa05c3bc90839ce4fb14fe3278664e568f66",
+      "fields": [],
+      "methods": [
+        {
+          "name": "createStream-_2kQ-ls",
+          "descriptor": "(Lcom/xuncorp/pisces/PlatformContext;Lcom/xuncorp/pisces/PiscesMediaItem;JJILkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1025
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u0454",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "b727b2b398a3969fcd80e282e2b7fc1c26a04cc9f4629f5e16a42b4600b71a9f",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u0715;",
+          "access": 18
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Lcom/xuncorp/pisces/PlatformContext;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Ljava/util/List;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Landroidx/compose/ui/\u0c97;",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Landroidx/compose/ui/\u0715;Lcom/xuncorp/pisces/PlatformContext;Ljava/util/List;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u017a",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "71115c43db8d2ac8bb0151604271725395c1feeef227d91a4b99208ecd94eac2",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u017a$\u037f;",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Landroidx/compose/ui/\u0715;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Lcom/xuncorp/pisces/PlatformContext;",
+          "access": 18
+        },
+        {
+          "name": "\u052a",
+          "descriptor": "Ljava/util/List;",
+          "access": 18
+        },
+        {
+          "name": "\u052b",
+          "descriptor": "[B",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Landroidx/compose/ui/\u0715;Lcom/xuncorp/pisces/PlatformContext;Ljava/util/List;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Landroidx/compose/ui/\u017a;)Landroidx/compose/ui/\u0715;",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Landroidx/compose/ui/\u017a;)Lcom/xuncorp/pisces/PlatformContext;",
+          "access": 4121
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "(Landroidx/compose/ui/\u017a;)Ljava/util/List;",
+          "access": 4121
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Landroidx/compose/ui/\u017a$\u037f;",
+          "access": 4121
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()[B",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.service.PlaybackController",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "com.xuncorp.pisces.PiscesMediaController"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "753ff00802ef1bfe5885f33c7fd6b7e3fd59f3d520cb80fc94fde319e862559a",
+      "fields": [
+        {
+          "name": "INSTANCE",
+          "descriptor": "Lcom/xuncorp/voxzen/service/PlaybackController;",
+          "access": 25
+        },
+        {
+          "name": "scope",
+          "descriptor": "Lkotlinx/coroutines/CoroutineScope;",
+          "access": 26
+        },
+        {
+          "name": "mutex",
+          "descriptor": "Lkotlinx/coroutines/sync/Mutex;",
+          "access": 26
+        },
+        {
+          "name": "service",
+          "descriptor": "Lcom/xuncorp/voxzen/service/PlaybackService;",
+          "access": 26
+        },
+        {
+          "name": "musicVideoAudioSwitcher",
+          "descriptor": "Lcom/xuncorp/voxzen/service/musicvideo/MusicVideoAudioSwitcher;",
+          "access": 26
+        },
+        {
+          "name": "playbackQueueState",
+          "descriptor": "Lkotlinx/coroutines/flow/StateFlow;",
+          "access": 26
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 2
+        },
+        {
+          "name": "getPlaybackQueueState",
+          "descriptor": "()Lkotlinx/coroutines/flow/StateFlow;",
+          "access": 17
+        },
+        {
+          "name": "getPlaybackQueueState$annotations",
+          "descriptor": "()V",
+          "access": 4105
+        },
+        {
+          "name": "init",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "prepare",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "play",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "pause",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "stop",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "releaseAudioEngine",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "release",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "releaseAndAwait",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "seekTo",
+          "descriptor": "(J)V",
+          "access": 17
+        },
+        {
+          "name": "seekToQueued",
+          "descriptor": "(J)V",
+          "access": 17
+        },
+        {
+          "name": "previous",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "next",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "getCurrentDeviceId",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "getDevices",
+          "descriptor": "()Ljava/util/List;",
+          "access": 17
+        },
+        {
+          "name": "getOutputDevices",
+          "descriptor": "()Ljava/util/List;",
+          "access": 17
+        },
+        {
+          "name": "getPiscesCd",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0781;",
+          "access": 17
+        },
+        {
+          "name": "getPiscesInfo",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$\u0620;",
+          "access": 17
+        },
+        {
+          "name": "changeMode",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Mode;)V",
+          "access": 17
+        },
+        {
+          "name": "changeDevice",
+          "descriptor": "(Ljava/lang/String;)V",
+          "access": 17
+        },
+        {
+          "name": "changeSpeed",
+          "descriptor": "(F)V",
+          "access": 17
+        },
+        {
+          "name": "changeVolume",
+          "descriptor": "(F)V",
+          "access": 17
+        },
+        {
+          "name": "changeGain",
+          "descriptor": "(F)V",
+          "access": 17
+        },
+        {
+          "name": "changeEQ",
+          "descriptor": "(Lcom/xuncorp/pisces/data/\u052a;)V",
+          "access": 17
+        },
+        {
+          "name": "changeAutoMixEnabled",
+          "descriptor": "(Z)V",
+          "access": 17
+        },
+        {
+          "name": "applyReplayGain",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "changeExclusiveProperties",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$ExclusiveProperties;)V",
+          "access": 17
+        },
+        {
+          "name": "changeAsioProperties",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer$Properties$AsioProperties;)V",
+          "access": 17
+        },
+        {
+          "name": "getPiscesAsio",
+          "descriptor": "()Lcom/xuncorp/pisces/\u0620;",
+          "access": 17
+        },
+        {
+          "name": "setPlaybackQueue",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 17
+        },
+        {
+          "name": "setPlaybackQueue",
+          "descriptor": "(Ljava/util/List;I)V",
+          "access": 17
+        },
+        {
+          "name": "dispatchCastCommand",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackCommand;)V",
+          "access": 17
+        },
+        {
+          "name": "getPlayerState",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$State;",
+          "access": 17
+        },
+        {
+          "name": "changePlaybackMode",
+          "descriptor": "(Lcom/xuncorp/spc/core/queue/PlaybackQueue$Mode;)V",
+          "access": 17
+        },
+        {
+          "name": "changePlaybackMode",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "removeMediaItems",
+          "descriptor": "([Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 145
+        },
+        {
+          "name": "removeMediaItemsAndAwait",
+          "descriptor": "([Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "updateMediaItems",
+          "descriptor": "([Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 145
+        },
+        {
+          "name": "refreshCurrentCover",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "playMusicAt",
+          "descriptor": "(IZ)V",
+          "access": 17
+        },
+        {
+          "name": "clearPlaybackQueue",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "stopAndClearPlaybackQueue",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "addToPlay",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 17
+        },
+        {
+          "name": "setPlaybackAudioSource",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;JZ)V",
+          "access": 17
+        },
+        {
+          "name": "getPlaybackSpeed",
+          "descriptor": "()F",
+          "access": 17
+        },
+        {
+          "name": "addToPlayNext",
+          "descriptor": "(Lcom/xuncorp/spc/core/queue/PlaybackQueue$\u037f;[Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 145
+        },
+        {
+          "name": "moveMediaItem",
+          "descriptor": "(II)V",
+          "access": 17
+        },
+        {
+          "name": "requestUpdateRichPresence",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "reloadCastLyrics",
+          "descriptor": "(Ljava/lang/String;)V",
+          "access": 17
+        },
+        {
+          "name": "initFromDisk",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "playOrPause",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "changeSpeed$lambda$0",
+          "descriptor": "(FLandroidx/compose/ui/\u0c13;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "changeVolume$lambda$0",
+          "descriptor": "(FLandroidx/compose/ui/\u0c13;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.service.PlaybackService",
+      "superclass": "androidx.compose.ui.\u0aae",
+      "interfaces": [
+        "com.xuncorp.voxzen.service.PlaybackServiceContract"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "8a3433c8807fc38556143f7949af55736d038516888dea72893fcd0a5c2d1b9e",
+      "fields": [
+        {
+          "name": "Companion",
+          "descriptor": "Lcom/xuncorp/voxzen/service/PlaybackService$Companion;",
+          "access": 25
+        },
+        {
+          "name": "log",
+          "descriptor": "Lcom/xuncorp/voxzen/log/VLog;",
+          "access": 18
+        },
+        {
+          "name": "serviceScope",
+          "descriptor": "Lkotlinx/coroutines/CoroutineScope;",
+          "access": 18
+        },
+        {
+          "name": "listenRecorder",
+          "descriptor": "Lcom/xuncorp/voxzen/service/listen/ListenRecorder;",
+          "access": 18
+        },
+        {
+          "name": "playbackQueue",
+          "descriptor": "Lcom/xuncorp/spc/core/queue/PlaybackQueue;",
+          "access": 18
+        },
+        {
+          "name": "playbackQueueState",
+          "descriptor": "Lkotlinx/coroutines/flow/StateFlow;",
+          "access": 18
+        },
+        {
+          "name": "lyricsEmitter",
+          "descriptor": "Lcom/xuncorp/spc/lyrics/\u0529;",
+          "access": 18
+        },
+        {
+          "name": "defaultCoverFile",
+          "descriptor": "Ljava/io/File;",
+          "access": 18
+        },
+        {
+          "name": "imageBitmapOwner",
+          "descriptor": "Lcom/xuncorp/voxzen/image/RefCountedImageBitmap;",
+          "access": 66
+        },
+        {
+          "name": "imageBitmapOwnerLock",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "jmtcCoverFileCache",
+          "descriptor": "Lcom/xuncorp/voxzen/image/JmtcCoverFileCache;",
+          "access": 18
+        },
+        {
+          "name": "onLoadedJob",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "onCurrentMediaItemDataRefreshedJob",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "onErrorJob",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "lyricsLoader",
+          "descriptor": "Lcom/xuncorp/voxzen/service/PlaybackLyricsLoader;",
+          "access": 18
+        },
+        {
+          "name": "imageDecodeMutex",
+          "descriptor": "Lkotlinx/coroutines/sync/Mutex;",
+          "access": 18
+        },
+        {
+          "name": "playbackQueueMutex",
+          "descriptor": "Lkotlinx/coroutines/sync/Mutex;",
+          "access": 18
+        },
+        {
+          "name": "playbackCommandChannel",
+          "descriptor": "Lkotlinx/coroutines/channels/Channel;",
+          "access": 18
+        },
+        {
+          "name": "sourceSwitchObserver",
+          "descriptor": "Lcom/xuncorp/voxzen/service/PlaybackSourceSwitchObserver;",
+          "access": 2
+        },
+        {
+          "name": "pendingSeek",
+          "descriptor": "Lcom/xuncorp/voxzen/service/PlaybackService$PendingSeek;",
+          "access": 2
+        },
+        {
+          "name": "audioVisualizerPipeline",
+          "descriptor": "Landroidx/compose/ui/\u0b2c;",
+          "access": 18
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        },
+        {
+          "name": "TAG",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "DEFAULT_COVER_FILENAME",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "PLAYBACK_QUEUE_COMMAND_TIMEOUT_MILLIS",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "STOP_AND_CLEAR_TIMEOUT_MILLIS",
+          "descriptor": "J",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 1
+        },
+        {
+          "name": "getPlaybackQueueState",
+          "descriptor": "()Lkotlinx/coroutines/flow/StateFlow;",
+          "access": 17
+        },
+        {
+          "name": "getSourceSwitchObserver$Voxzen_composeApp",
+          "descriptor": "()Lcom/xuncorp/voxzen/service/PlaybackSourceSwitchObserver;",
+          "access": 17
+        },
+        {
+          "name": "setSourceSwitchObserver$Voxzen_composeApp",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackSourceSwitchObserver;)V",
+          "access": 17
+        },
+        {
+          "name": "release",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "releaseAndAwait",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "observeJmtcPlaybackMode",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "changePlaybackModeFromJmtc",
+          "descriptor": "(Lcom/xuncorp/spc/core/queue/PlaybackQueue$Mode;)V",
+          "access": 18
+        },
+        {
+          "name": "updateImageBitmap",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "observeCoverTier",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "refreshCurrentCover",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "updateJMTC",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "loadLyrics",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "onGetPlayerInitProperties",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Properties;",
+          "access": 20
+        },
+        {
+          "name": "onPlayerSet",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)V",
+          "access": 20
+        },
+        {
+          "name": "setPlaybackQueue",
+          "descriptor": "(Ljava/util/List;I)V",
+          "access": 17
+        },
+        {
+          "name": "enqueuePlaybackQueue",
+          "descriptor": "(Ljava/util/List;IZZ)V",
+          "access": 18
+        },
+        {
+          "name": "dispatchCastCommand",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackCommand;)V",
+          "access": 17
+        },
+        {
+          "name": "stopAndClearPlaybackQueue",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "updateProgress",
+          "descriptor": "(JJ)V",
+          "access": 17
+        },
+        {
+          "name": "updateFftData",
+          "descriptor": "([F)V",
+          "access": 17
+        },
+        {
+          "name": "prepare",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "releaseAudioEngine",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "seekToQueued",
+          "descriptor": "(J)V",
+          "access": 17
+        },
+        {
+          "name": "seekPlayerTo",
+          "descriptor": "(J)V",
+          "access": 17
+        },
+        {
+          "name": "play",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "pause",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "previous",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "next",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "changePlaybackMode",
+          "descriptor": "(Lcom/xuncorp/spc/core/queue/PlaybackQueue$Mode;)V",
+          "access": 17
+        },
+        {
+          "name": "changePlaybackMode",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "removeMediaItems",
+          "descriptor": "([Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 145
+        },
+        {
+          "name": "removeMediaItemsAndAwait",
+          "descriptor": "([Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "clearPlaybackQueue",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "updateMediaItems",
+          "descriptor": "([Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 145
+        },
+        {
+          "name": "applyReplayGain",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "applyReplayGain",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "playMusicAt",
+          "descriptor": "(IZ)V",
+          "access": 17
+        },
+        {
+          "name": "addToPlay",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 17
+        },
+        {
+          "name": "moveMediaItem",
+          "descriptor": "(II)V",
+          "access": 17
+        },
+        {
+          "name": "addToPlayNext",
+          "descriptor": "(Lcom/xuncorp/spc/core/queue/PlaybackQueue$\u037f;[Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 145
+        },
+        {
+          "name": "requestUpdateRichPresence",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "reloadCastLyrics",
+          "descriptor": "(Ljava/lang/String;)V",
+          "access": 17
+        },
+        {
+          "name": "releaseLyrics$Voxzen_composeApp",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "initFromDisk",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "processPlaybackCommands",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "handlePlaybackCommandFailure",
+          "descriptor": "(Lkotlinx/coroutines/CompletableDeferred;Ljava/lang/Throwable;)V",
+          "access": 18
+        },
+        {
+          "name": "updateCurrentPlayerMediaItem",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 18
+        },
+        {
+          "name": "schedulePendingSeek",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "playbackQueue$lambda$0",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;Lcom/xuncorp/pisces/PiscesMediaItem;)Z",
+          "access": 26
+        },
+        {
+          "name": "playbackQueue$lambda$1",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesMediaItem;)Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "lyricsEmitter$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)J",
+          "access": 26
+        },
+        {
+          "name": "lyricsEmitter$lambda$1",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)F",
+          "access": 26
+        },
+        {
+          "name": "lyricsEmitter$lambda$2",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Z",
+          "access": 26
+        },
+        {
+          "name": "lyricsEmitter$lambda$3",
+          "descriptor": "(Lcom/xuncorp/spc/lyrics/\u052b;ILcom/xuncorp/spc/lyrics/\u0528;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lyricsEmitter$lambda$4",
+          "descriptor": "(J)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lyricsEmitter$lambda$5",
+          "descriptor": "(J)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lyricsLoader$lambda$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/spc/lyrics/\u0528;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lyricsLoader$lambda$1",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Ljava/lang/Throwable;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$0",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$1",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$2",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$3",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$4",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$5",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Ljava/lang/Long;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$6",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Ljava/lang/Double;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$7",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Ljava/lang/Double;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$8",
+          "descriptor": "()V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$9",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Ljava/lang/Boolean;)V",
+          "access": 26
+        },
+        {
+          "name": "lambda$0$10",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Landroidx/compose/ui/\u0c13$\u037f;)V",
+          "access": 26
+        },
+        {
+          "name": "access$getLog$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/voxzen/log/VLog;",
+          "access": 4121
+        },
+        {
+          "name": "access$getListenRecorder$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/voxzen/service/listen/ListenRecorder;",
+          "access": 4121
+        },
+        {
+          "name": "access$getServiceScope$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lkotlinx/coroutines/CoroutineScope;",
+          "access": 4121
+        },
+        {
+          "name": "access$getPlaybackQueue$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/spc/core/queue/PlaybackQueue;",
+          "access": 4121
+        },
+        {
+          "name": "access$updateImageBitmap",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "access$getImageDecodeMutex$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lkotlinx/coroutines/sync/Mutex;",
+          "access": 4121
+        },
+        {
+          "name": "access$getImageBitmapOwnerLock$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "access$getImageBitmapOwner$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/voxzen/image/RefCountedImageBitmap;",
+          "access": 4121
+        },
+        {
+          "name": "access$setImageBitmapOwner$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/voxzen/image/RefCountedImageBitmap;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$updateJMTC",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "access$getJmtcCoverFileCache$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/voxzen/image/JmtcCoverFileCache;",
+          "access": 4121
+        },
+        {
+          "name": "access$getDefaultCoverFile$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Ljava/io/File;",
+          "access": 4121
+        },
+        {
+          "name": "access$loadLyrics",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "access$getLyricsLoader$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/voxzen/service/PlaybackLyricsLoader;",
+          "access": 4121
+        },
+        {
+          "name": "access$setPendingSeek$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/voxzen/service/PlaybackService$PendingSeek;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$getOnLoadedJob$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lkotlinx/coroutines/Job;",
+          "access": 4121
+        },
+        {
+          "name": "access$setOnLoadedJob$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lkotlinx/coroutines/Job;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$applyReplayGain",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/pisces/PiscesMediaItem;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "access$getOnCurrentMediaItemDataRefreshedJob$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lkotlinx/coroutines/Job;",
+          "access": 4121
+        },
+        {
+          "name": "access$setOnCurrentMediaItemDataRefreshedJob$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lkotlinx/coroutines/Job;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$getLyricsEmitter$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/spc/lyrics/\u0529;",
+          "access": 4121
+        },
+        {
+          "name": "access$schedulePendingSeek",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$getOnErrorJob$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lkotlinx/coroutines/Job;",
+          "access": 4121
+        },
+        {
+          "name": "access$setOnErrorJob$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lkotlinx/coroutines/Job;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$getPlaybackQueueMutex$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lkotlinx/coroutines/sync/Mutex;",
+          "access": 4121
+        },
+        {
+          "name": "access$processPlaybackCommands",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4121
+        },
+        {
+          "name": "access$updateCurrentPlayerMediaItem",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/pisces/PiscesMediaItem;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$getPendingSeek$p",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;)Lcom/xuncorp/voxzen/service/PlaybackService$PendingSeek;",
+          "access": 4121
+        },
+        {
+          "name": "access$changePlaybackModeFromJmtc",
+          "descriptor": "(Lcom/xuncorp/voxzen/service/PlaybackService;Lcom/xuncorp/spc/core/queue/PlaybackQueue$Mode;)V",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "androidx.compose.ui.\u0aae",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1057,
+      "sha256": "c69a5d5ac155b93e56b7308878ffc692242f6abf55f5ba65b2a0883f0b1cc1a9",
+      "fields": [
+        {
+          "name": "context",
+          "descriptor": "Lcom/xuncorp/pisces/PlatformContext;",
+          "access": 18
+        },
+        {
+          "name": "properties",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer$Properties;",
+          "access": 18
+        },
+        {
+          "name": "logger",
+          "descriptor": "Landroidx/compose/ui/\u018c;",
+          "access": 18
+        },
+        {
+          "name": "serviceJob",
+          "descriptor": "Lkotlinx/coroutines/CompletableJob;",
+          "access": 18
+        },
+        {
+          "name": "scope",
+          "descriptor": "Lkotlinx/coroutines/CoroutineScope;",
+          "access": 18
+        },
+        {
+          "name": "updatePlayerProgressJob",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "updatePlayerMeteringJob",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "updateFrontCoverJob",
+          "descriptor": "Lkotlinx/coroutines/Job;",
+          "access": 2
+        },
+        {
+          "name": "frontCover",
+          "descriptor": "[B",
+          "access": 2
+        },
+        {
+          "name": "released",
+          "descriptor": "Ljava/util/concurrent/atomic/AtomicBoolean;",
+          "access": 18
+        },
+        {
+          "name": "playerCallback",
+          "descriptor": "Landroidx/compose/ui/\u0aae$\u0529;",
+          "access": 18
+        },
+        {
+          "name": "player",
+          "descriptor": "Lcom/xuncorp/pisces/PiscesPlayer;",
+          "access": 18
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Lcom/xuncorp/pisces/PlatformContext;Lcom/xuncorp/pisces/PiscesPlayer$Properties;)V",
+          "access": 1
+        },
+        {
+          "name": "getPlayer",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer;",
+          "access": 17
+        },
+        {
+          "name": "getPlayer$annotations",
+          "descriptor": "()V",
+          "access": 4105
+        },
+        {
+          "name": "onGetPlayerInitProperties",
+          "descriptor": "()Lcom/xuncorp/pisces/PiscesPlayer$Properties;",
+          "access": 1028
+        },
+        {
+          "name": "onPlayerSet",
+          "descriptor": "(Lcom/xuncorp/pisces/PiscesPlayer;)V",
+          "access": 1028
+        },
+        {
+          "name": "setPlaybackQueue",
+          "descriptor": "(Ljava/util/List;I)V",
+          "access": 1025
+        },
+        {
+          "name": "release",
+          "descriptor": "()V",
+          "access": 1
+        },
+        {
+          "name": "releaseAndAwait",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 1
+        },
+        {
+          "name": "releaseAndAwait$suspendImpl",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 4104
+        },
+        {
+          "name": "stopMonitoring",
+          "descriptor": "()Z",
+          "access": 18
+        },
+        {
+          "name": "onRelease",
+          "descriptor": "()V",
+          "access": 4
+        },
+        {
+          "name": "updateProgress",
+          "descriptor": "(JJ)V",
+          "access": 1
+        },
+        {
+          "name": "updateProgress$default",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;JJILjava/lang/Object;)V",
+          "access": 4105
+        },
+        {
+          "name": "updateAudioLevel",
+          "descriptor": "(Lcom/xuncorp/pisces/\u037f;)V",
+          "access": 1
+        },
+        {
+          "name": "updateAudioLevel$default",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;Lcom/xuncorp/pisces/\u037f;ILjava/lang/Object;)V",
+          "access": 4105
+        },
+        {
+          "name": "updateFftData",
+          "descriptor": "([F)V",
+          "access": 1
+        },
+        {
+          "name": "updateFftData$default",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;[FILjava/lang/Object;)V",
+          "access": 4105
+        },
+        {
+          "name": "launchPlayerCycleUpdateJob",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "cancelPlayerCycleUpdateJob",
+          "descriptor": "()V",
+          "access": 18
+        },
+        {
+          "name": "runOnMainThread",
+          "descriptor": "(Lkotlin/jvm/functions/Function0;)V",
+          "access": 18
+        },
+        {
+          "name": "logger$lambda$0",
+          "descriptor": "()Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "_init_$lambda$0",
+          "descriptor": "()Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "stopMonitoring$lambda$0",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)Lkotlin/Unit;",
+          "access": 26
+        },
+        {
+          "name": "access$getReleased$p",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)Ljava/util/concurrent/atomic/AtomicBoolean;",
+          "access": 4121
+        },
+        {
+          "name": "access$getLogger$p",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)Landroidx/compose/ui/\u018c;",
+          "access": 4121
+        },
+        {
+          "name": "access$getUpdateFrontCoverJob$p",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)Lkotlinx/coroutines/Job;",
+          "access": 4121
+        },
+        {
+          "name": "access$setFrontCover$p",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;[B)V",
+          "access": 4121
+        },
+        {
+          "name": "access$setUpdateFrontCoverJob$p",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;Lkotlinx/coroutines/Job;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$getScope$p",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)Lkotlinx/coroutines/CoroutineScope;",
+          "access": 4121
+        },
+        {
+          "name": "access$cancelPlayerCycleUpdateJob",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)V",
+          "access": 4121
+        },
+        {
+          "name": "access$launchPlayerCycleUpdateJob",
+          "descriptor": "(Landroidx/compose/ui/\u0aae;)V",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.cast.HttpRangeBassStream",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "b8ad58d7d68d59d0a88ba92600641fbf8da282c163d87f6b9e1ee9a1b18cc4f6",
+      "fields": [
+        {
+          "name": "INSTANCE",
+          "descriptor": "Lcom/xuncorp/voxzen/cast/HttpRangeBassStream;",
+          "access": 25
+        },
+        {
+          "name": "activeStreams",
+          "descriptor": "Ljava/util/concurrent/ConcurrentHashMap;",
+          "access": 26
+        },
+        {
+          "name": "openingStreams",
+          "descriptor": "Ljava/util/concurrent/ConcurrentHashMap$KeySetView;",
+          "access": 26
+        },
+        {
+          "name": "library$delegate",
+          "descriptor": "Lkotlin/Lazy;",
+          "access": 26
+        },
+        {
+          "name": "TAG",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "DEFAULT_CALLBACK_BUFFER_SIZE",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "MAX_CALLBACK_READ_SIZE",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "CALLBACK_TIMEOUT_MILLIS",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "CALLBACK_DRAIN_TIMEOUT_MILLIS",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 2
+        },
+        {
+          "name": "getLibrary",
+          "descriptor": "()Lcom/xuncorp/voxzen/cast/BassFileUserLibrary;",
+          "access": 18
+        },
+        {
+          "name": "create-0E7RQCE",
+          "descriptor": "(Ljava/lang/String;ILcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "create-BWLJW6A$Voxzen_composeApp",
+          "descriptor": "(Ljava/lang/String;ILcom/xuncorp/voxzen/cast/BassFileStreamRuntime;Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "create-BWLJW6A$Voxzen_composeApp$default",
+          "descriptor": "(Lcom/xuncorp/voxzen/cast/HttpRangeBassStream;Ljava/lang/String;ILcom/xuncorp/voxzen/cast/BassFileStreamRuntime;Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;ILjava/lang/Object;)Ljava/lang/Object;",
+          "access": 4105
+        },
+        {
+          "name": "defaultRuntime",
+          "descriptor": "()Lcom/xuncorp/voxzen/cast/BassFileStreamRuntime;",
+          "access": 18
+        },
+        {
+          "name": "abortActiveStreams",
+          "descriptor": "(Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;)V",
+          "access": 17
+        },
+        {
+          "name": "abortActiveStreams$default",
+          "descriptor": "(Lcom/xuncorp/voxzen/cast/HttpRangeBassStream;Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;ILjava/lang/Object;)V",
+          "access": 4105
+        },
+        {
+          "name": "library_delegate$lambda$0",
+          "descriptor": "()Lcom/xuncorp/voxzen/cast/BassFileUserLibrary;",
+          "access": 26
+        },
+        {
+          "name": "defaultRuntime$lambda$0",
+          "descriptor": "(ILcom/xuncorp/voxzen/cast/BassFileProcs;)I",
+          "access": 26
+        },
+        {
+          "name": "access$getActiveStreams$p",
+          "descriptor": "()Ljava/util/concurrent/ConcurrentHashMap;",
+          "access": 4121
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.cast.HttpRangeSource",
+      "superclass": "java.lang.Object",
+      "interfaces": [
+        "java.io.Closeable"
+      ],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "808c260f50deee05f3a029399822322f4bb4c3d58ff0fa6c9674d466de56375e",
+      "fields": [
+        {
+          "name": "Companion",
+          "descriptor": "Lcom/xuncorp/voxzen/cast/HttpRangeSource$Companion;",
+          "access": 25
+        },
+        {
+          "name": "uri",
+          "descriptor": "Ljava/net/URI;",
+          "access": 18
+        },
+        {
+          "name": "length",
+          "descriptor": "J",
+          "access": 18
+        },
+        {
+          "name": "connectTimeoutMillis",
+          "descriptor": "I",
+          "access": 18
+        },
+        {
+          "name": "readTimeoutMillis",
+          "descriptor": "I",
+          "access": 18
+        },
+        {
+          "name": "lock",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "cachePath",
+          "descriptor": "Ljava/nio/file/Path;",
+          "access": 18
+        },
+        {
+          "name": "cacheChannel",
+          "descriptor": "Ljava/nio/channels/FileChannel;",
+          "access": 18
+        },
+        {
+          "name": "cachedRanges",
+          "descriptor": "Ljava/util/TreeMap;",
+          "access": 18
+        },
+        {
+          "name": "pendingConnection",
+          "descriptor": "Ljava/net/HttpURLConnection;",
+          "access": 66
+        },
+        {
+          "name": "pendingInput",
+          "descriptor": "Ljava/io/BufferedInputStream;",
+          "access": 66
+        },
+        {
+          "name": "closed",
+          "descriptor": "Ljava/util/concurrent/atomic/AtomicBoolean;",
+          "access": 18
+        },
+        {
+          "name": "position",
+          "descriptor": "J",
+          "access": 2
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        },
+        {
+          "name": "CONNECT_TIMEOUT_MILLIS",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "READ_TIMEOUT_MILLIS",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "READ_OPERATION_TIMEOUT_MILLIS",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "NETWORK_READ_BUFFER_SIZE",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "HTTP_CACHE_CHUNK_SIZE_BYTES",
+          "descriptor": "J",
+          "access": 26
+        },
+        {
+          "name": "MAX_RECONNECT_ATTEMPTS",
+          "descriptor": "I",
+          "access": 26
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/net/URI;JII)V",
+          "access": 2
+        },
+        {
+          "name": "getLength",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "getPosition",
+          "descriptor": "()J",
+          "access": 17
+        },
+        {
+          "name": "seek",
+          "descriptor": "(J)Z",
+          "access": 17
+        },
+        {
+          "name": "read",
+          "descriptor": "([BII)I",
+          "access": 17
+        },
+        {
+          "name": "read$default",
+          "descriptor": "(Lcom/xuncorp/voxzen/cast/HttpRangeSource;[BIIILjava/lang/Object;)I",
+          "access": 4105
+        },
+        {
+          "name": "readUntil$Voxzen_composeApp",
+          "descriptor": "([BIIJ)I",
+          "access": 17
+        },
+        {
+          "name": "abort",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "close",
+          "descriptor": "()V",
+          "access": 17
+        },
+        {
+          "name": "fetchChunk",
+          "descriptor": "(JJ)V",
+          "access": 18
+        },
+        {
+          "name": "copyRangeToCache",
+          "descriptor": "(Ljava/io/BufferedInputStream;JJJ)V",
+          "access": 18
+        },
+        {
+          "name": "readCache",
+          "descriptor": "([BIIJ)V",
+          "access": 18
+        },
+        {
+          "name": "writeCache",
+          "descriptor": "([BIJ)V",
+          "access": 18
+        },
+        {
+          "name": "cachedEndAt",
+          "descriptor": "(J)J",
+          "access": 18
+        },
+        {
+          "name": "mergeCachedRange",
+          "descriptor": "(JJ)V",
+          "access": 18
+        },
+        {
+          "name": "closePendingRequest",
+          "descriptor": "(Ljava/net/HttpURLConnection;)V",
+          "access": 18
+        },
+        {
+          "name": "closePendingRequest$default",
+          "descriptor": "(Lcom/xuncorp/voxzen/cast/HttpRangeSource;Ljava/net/HttpURLConnection;ILjava/lang/Object;)V",
+          "access": 4104
+        },
+        {
+          "name": "ensureReadable",
+          "descriptor": "(J)V",
+          "access": 18
+        },
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/net/URI;JIILkotlin/jvm/internal/DefaultConstructorMarker;)V",
+          "access": 4097
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.cast.HttpRangeStreamOwner",
+      "superclass": "java.lang.Enum",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 16433,
+      "sha256": "b4c0255c5c6ece7f083ebf649b2e63ac95a5283cb526eaf1841d9e5a3ab7a533",
+      "fields": [
+        {
+          "name": "MusicVideo",
+          "descriptor": "Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 16409
+        },
+        {
+          "name": "RemotePlayback",
+          "descriptor": "Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 16409
+        },
+        {
+          "name": "Unspecified",
+          "descriptor": "Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 16409
+        },
+        {
+          "name": "$VALUES",
+          "descriptor": "[Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 4122
+        },
+        {
+          "name": "$ENTRIES",
+          "descriptor": "Lkotlin/enums/EnumEntries;",
+          "access": 4122
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/lang/String;I)V",
+          "access": 2
+        },
+        {
+          "name": "values",
+          "descriptor": "()[Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 9
+        },
+        {
+          "name": "valueOf",
+          "descriptor": "(Ljava/lang/String;)Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 9
+        },
+        {
+          "name": "getEntries",
+          "descriptor": "()Lkotlin/enums/EnumEntries;",
+          "access": 9
+        },
+        {
+          "name": "$values",
+          "descriptor": "()[Lcom/xuncorp/voxzen/cast/HttpRangeStreamOwner;",
+          "access": 4122
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.tag.TagParser",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "a06035f59988f2f32c5899aea21c75b2da434e35fa9d96473d36f8a19938f635",
+      "fields": [
+        {
+          "name": "INSTANCE",
+          "descriptor": "Lcom/xuncorp/voxzen/tag/TagParser;",
+          "access": 25
+        },
+        {
+          "name": "log",
+          "descriptor": "Lcom/xuncorp/voxzen/log/VLog;",
+          "access": 26
+        },
+        {
+          "name": "saltAudioTagReader$delegate",
+          "descriptor": "Lkotlin/Lazy;",
+          "access": 26
+        },
+        {
+          "name": "jAudioTagReader$delegate",
+          "descriptor": "Lkotlin/Lazy;",
+          "access": 26
+        },
+        {
+          "name": "jAudioSnapshotLock",
+          "descriptor": "Ljava/lang/Object;",
+          "access": 26
+        },
+        {
+          "name": "jAudioSnapshots",
+          "descriptor": "Lkotlin/collections/ArrayDeque;",
+          "access": 26
+        },
+        {
+          "name": "TAG_KEY_REPLAYGAIN_TRACK_GAIN",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "TAG_KEY_REPLAYGAIN_TRACK_PEAK",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "TAG_KEY_REPLAYGAIN_ALBUM_GAIN",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "TAG_KEY_REPLAYGAIN_ALBUM_PEAK",
+          "descriptor": "Ljava/lang/String;",
+          "access": 26
+        },
+        {
+          "name": "JAUDIO_SNAPSHOT_SLOTS",
+          "descriptor": "I",
+          "access": 26
+        },
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 2
+        },
+        {
+          "name": "getSaltAudioTagReader",
+          "descriptor": "()Lcom/xuncorp/voxzen/tag/reader/SaltAudioTagReader;",
+          "access": 18
+        },
+        {
+          "name": "getJAudioTagReader",
+          "descriptor": "()Lcom/xuncorp/voxzen/tag/reader/JAudioTaggerTagReader;",
+          "access": 18
+        },
+        {
+          "name": "readReplayGain",
+          "descriptor": "(Lkotlin/jvm/functions/Function1;)Lcom/xuncorp/voxzen/data/entity/ReplayGain;",
+          "access": 17
+        },
+        {
+          "name": "readLyricsByJAudioTagger-IoAF18A",
+          "descriptor": "(Ljava/io/File;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "readJAudioTagSnapshot",
+          "descriptor": "(Ljava/io/File;)Lcom/xuncorp/voxzen/tag/TagParser$ParsedJAudioTag;",
+          "access": 18
+        },
+        {
+          "name": "extractLyrics",
+          "descriptor": "(Lorg/jaudiotagger/tag/Tag;)Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "readFlacLyricsWithoutPictures-IoAF18A",
+          "descriptor": "(Ljava/io/File;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "readEmbeddedLyrics-IoAF18A",
+          "descriptor": "(Ljava/io/File;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "readFlacArtworkLazily-IoAF18A",
+          "descriptor": "(Ljava/io/File;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "readArtworkBinaryData",
+          "descriptor": "(Ljava/io/File;)[B",
+          "access": 18
+        },
+        {
+          "name": "readTextWithAutoCharset",
+          "descriptor": "([B)Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "tryDecode",
+          "descriptor": "([BLjava/nio/charset/Charset;)Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "readLyricsByLrc-IoAF18A",
+          "descriptor": "(Ljava/io/File;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "readLyricsBySpl-IoAF18A",
+          "descriptor": "(Ljava/io/File;)Ljava/lang/Object;",
+          "access": 18
+        },
+        {
+          "name": "readAudioTag",
+          "descriptor": "(Lcom/xuncorp/spc/v/Vri;)Lcom/xuncorp/voxzen/tag/VoxzenAudioTag;",
+          "access": 17
+        },
+        {
+          "name": "readImage-0E7RQCE",
+          "descriptor": "(Ljava/lang/String;II)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "readLyrics-IoAF18A",
+          "descriptor": "(Lcom/xuncorp/spc/v/Vri;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "readImageToByteArray",
+          "descriptor": "(Lcom/xuncorp/spc/v/Vri;)[B",
+          "access": 17
+        },
+        {
+          "name": "readImageToByteArrayOrThrow$Voxzen_composeApp",
+          "descriptor": "(Lcom/xuncorp/spc/v/Vri;)[B",
+          "access": 17
+        },
+        {
+          "name": "saltAudioTagReader_delegate$lambda$0",
+          "descriptor": "()Lcom/xuncorp/voxzen/tag/reader/SaltAudioTagReader;",
+          "access": 26
+        },
+        {
+          "name": "jAudioTagReader_delegate$lambda$0",
+          "descriptor": "()Lcom/xuncorp/voxzen/tag/reader/JAudioTaggerTagReader;",
+          "access": 26
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.spc.v.Vri",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1057,
+      "sha256": "9edb621b221170e99236c15733758f9678107f77584a6511718771a0cf9853d1",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Lcom/xuncorp/spc/v/Vri$\u037f;",
+          "access": 25
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "Ljava/lang/String;",
+          "access": 18
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "Lkotlin/Lazy;",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Ljava/lang/String;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Lcom/xuncorp/spc/v/Vri$\u0528;",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Lcom/xuncorp/spc/v/Vri;",
+          "access": 17
+        },
+        {
+          "name": "equals",
+          "descriptor": "(Ljava/lang/Object;)Z",
+          "access": 1
+        },
+        {
+          "name": "hashCode",
+          "descriptor": "()I",
+          "access": 1
+        },
+        {
+          "name": "toString",
+          "descriptor": "()Ljava/lang/String;",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/spc/v/Vri;)Lcom/xuncorp/spc/v/Vri$\u0528;",
+          "access": 26
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.spw.workshop.api.WorkshopApi",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1537,
+      "sha256": "1a9cc2aabe9fad76ac6dfd235c0e93df9d54ab059d6868feb2b39ffc09236fa3",
+      "fields": [
+        {
+          "name": "Companion",
+          "descriptor": "Lcom/xuncorp/spw/workshop/api/WorkshopApi$Companion;",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "getPlayback",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Playback;",
+          "access": 1025
+        },
+        {
+          "name": "getUi",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Ui;",
+          "access": 1025
+        },
+        {
+          "name": "getHookRegistrar",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/hook/HookRegistrar;",
+          "access": 1025
+        },
+        {
+          "name": "getHookRegistrar$annotations",
+          "descriptor": "()V",
+          "access": 4105
+        },
+        {
+          "name": "getManager",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Manager;",
+          "access": 1025
+        },
+        {
+          "name": "getLibrary",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Library;",
+          "access": 1025
+        },
+        {
+          "name": "getLibrary$annotations",
+          "descriptor": "()V",
+          "access": 4105
+        },
+        {
+          "name": "ui",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Ui;",
+          "access": 9
+        },
+        {
+          "name": "hookRegistrar",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/hook/HookRegistrar;",
+          "access": 9
+        },
+        {
+          "name": "playback",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Playback;",
+          "access": 9
+        },
+        {
+          "name": "manager",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Manager;",
+          "access": 9
+        },
+        {
+          "name": "library",
+          "descriptor": "()Lcom/xuncorp/spw/workshop/api/WorkshopApi$Library;",
+          "access": 9
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    },
+    {
+      "name": "com.xuncorp.spw.workshop.api.hook.HookRegistrar",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 1057,
+      "sha256": "e5dfbc9cc2439ade9912f16e3306fa5ec514915ea47ef18275c79ce964c3bbd8",
+      "fields": [
+        {
+          "name": "$stable",
+          "descriptor": "I",
+          "access": 25
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "()V",
+          "access": 1
+        },
+        {
+          "name": "hookMethod",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/util/List;Lcom/xuncorp/spw/workshop/api/hook/MethodHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 1025
+        },
+        {
+          "name": "hookMethod",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Lcom/xuncorp/spw/workshop/api/hook/MethodHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "hookMethod",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function1;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "hookMethod$default",
+          "descriptor": "(Lcom/xuncorp/spw/workshop/api/hook/HookRegistrar;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 4105
+        },
+        {
+          "name": "replaceComposable",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILcom/xuncorp/spw/workshop/api/hook/ComposableHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 1025
+        },
+        {
+          "name": "replaceComposable",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/xuncorp/spw/workshop/api/hook/ComposableHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "replaceComposable",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function3;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "replaceComposable$default",
+          "descriptor": "(Lcom/xuncorp/spw/workshop/api/hook/HookRegistrar;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 4105
+        },
+        {
+          "name": "afterComposable",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILcom/xuncorp/spw/workshop/api/hook/ComposableHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 1025
+        },
+        {
+          "name": "afterComposable",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lcom/xuncorp/spw/workshop/api/hook/ComposableHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "afterComposable",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function3;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "afterComposable$default",
+          "descriptor": "(Lcom/xuncorp/spw/workshop/api/hook/HookRegistrar;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function3;ILjava/lang/Object;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 4105
+        },
+        {
+          "name": "appendContent",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Class;Ljava/util/List;ILcom/xuncorp/spw/workshop/api/hook/ContentHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 1025
+        },
+        {
+          "name": "appendContent",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Class;Lcom/xuncorp/spw/workshop/api/hook/ContentHook;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 17
+        },
+        {
+          "name": "appendContent",
+          "descriptor": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function2;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 4113
+        },
+        {
+          "name": "appendContent$default",
+          "descriptor": "(Lcom/xuncorp/spw/workshop/api/hook/HookRegistrar;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/functions/Function2;ILjava/lang/Object;)Lcom/xuncorp/spw/workshop/api/hook/HookHandle;",
+          "access": 4105
+        },
+        {
+          "name": "<clinit>",
+          "descriptor": "()V",
+          "access": 8
+        }
+      ]
+    }
+  ]
+}
