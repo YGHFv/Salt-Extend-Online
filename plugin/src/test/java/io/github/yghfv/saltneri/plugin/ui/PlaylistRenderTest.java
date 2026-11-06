@@ -19,6 +19,23 @@ import static io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest.*;
 public final class PlaylistRenderTest {
     private static int checks;
     private static void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Playlist render "+checks); }
+    private static void navigationRows(ImageComposeScene scene, float density, int width) {
+        var topLabels=List.of("\u53d1\u73b0","\u521b\u5efa\u7684\u6536\u85cf","\u6536\u85cf / \u8ba2\u9605");
+        var bottomLabels=List.of("\u70ed\u95e8\u89c6\u9891","\u97f3\u4e50\u70ed\u95e8\u699c","\u539f\u521b\u699c");
+        float top=-1, bottom=-1, right=-1, buttonWidth=-1;
+        for(int i=0;i<3;i++) {
+            var upper=find(scene,topLabels.get(i),SemanticsActions.INSTANCE.getOnClick());
+            var lower=find(scene,bottomLabels.get(i),SemanticsActions.INSTANCE.getOnClick());
+            check(upper!=null && lower!=null);
+            var a=upper.getBoundsInRoot(); var b=lower.getBoundsInRoot();
+            if(i==0) { top=a.getTop(); bottom=b.getTop(); buttonWidth=a.getWidth(); }
+            check(Math.abs(a.getTop()-top)<=1 && Math.abs(b.getTop()-bottom)<=1);
+            check(a.getLeft()>=right && a.getRight()<=width && a.getBottom()<b.getTop());
+            check(Math.abs(a.getLeft()-b.getLeft())<=1 && Math.abs(a.getWidth()-b.getWidth())<=1);
+            check(a.getWidth()>60*density && Math.abs(a.getWidth()-buttonWidth)<=1);
+            right=a.getRight();
+        }
+    }
     private static void visibleButtons(ImageComposeScene scene, float density) throws Exception {
         try(var image=scene.render(System.nanoTime()); var png=image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
             var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png.getBytes()));
@@ -52,7 +69,7 @@ public final class PlaylistRenderTest {
                 var cached=(Function3<Object,Composer,Integer,Object>)singleton.getMethod(SaltPageContentBinding.GETTER).invoke(singleton.getField("INSTANCE").get(null));
                 Object route=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID+"/native/BILIBILI");
                 var style=Class.forName("androidx.compose.ui.\u04cc").getMethod("\u037f",Composer.class);
-                for(float density:new float[]{1f,1.5f}) for(int logicalWidth:new int[]{740,420}) {
+                for(float density:new float[]{1f,1.5f}) for(int logicalWidth:new int[]{740,580,420}) {
                     int width=Math.round(logicalWidth*density), height=Math.round(820*density);
                     library.browse(AccountPlatform.BILIBILI,Catalog.View.MINE); submitted.set(null); Thread.sleep(100);
                     SwingUtilities.invokeAndWait(()->{
@@ -95,8 +112,11 @@ public final class PlaylistRenderTest {
                             render(scene); check(find(scene,"Song 21",null)!=null && library.snapshot().get("filter").equals("Song 21") && requests.get()==before);
                             click(scene,"\u53d1\u73b0");
                             check(find(scene,"\u6682\u672a\u63a5\u5165",null)==null && find(scene,"\u70ed\u95e8\u89c6\u9891",null)!=null);
+                            navigationRows(scene,density,width);
                             click(scene,"\u97f3\u4e50\u70ed\u95e8\u699c"); check(library.snapshot().get("view").equals("MUSIC_HOT"));
                             click(scene,"\u539f\u521b\u699c"); check(library.snapshot().get("view").equals("MUSIC_ORIGINAL"));
+                            click(scene,"\u6536\u85cf / \u8ba2\u9605"); check(library.snapshot().get("view").equals("SAVED"));
+                            click(scene,"\u521b\u5efa\u7684\u6536\u85cf"); check(library.snapshot().get("view").equals("MINE"));
                         } catch(Exception e){throw new AssertionError(e);} finally {scene.close();}
                     });
                 }

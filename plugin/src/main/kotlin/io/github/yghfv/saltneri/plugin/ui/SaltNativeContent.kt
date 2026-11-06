@@ -140,13 +140,9 @@ private data class NativeButton(val title: String, val selected: Boolean = false
 
 @Composable
 private fun NativeButtons(ui: SaltNativeUi, buttons: List<NativeButton>) {
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        if (maxWidth < 620.dp) Column {
-            buttons.forEach { NativeRow(ui, it.title, it.selected, it.enabled, it.click) }
-        } else Row {
-            buttons.forEach { button ->
-                Box(Modifier.weight(1f)) { NativeRow(ui, button.title, button.selected, button.enabled, button.click) }
-            }
+    Row(Modifier.fillMaxWidth()) {
+        buttons.forEach { button ->
+            Box(Modifier.weight(1f)) { NativeRow(ui, button.title, button.selected, button.enabled, button.click) }
         }
     }
 }
@@ -343,11 +339,11 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                     })
                 }
                 if(platform==AccountPlatform.BILIBILI && catalog?.get("view") in listOf("DISCOVER","MUSIC_HOT","MUSIC_ORIGINAL")) item {
-                    Row(Modifier.fillMaxWidth()) {
-                        listOf(Catalog.View.DISCOVER to "\u70ed\u95e8\u89c6\u9891",Catalog.View.MUSIC_HOT to "\u97f3\u4e50\u70ed\u95e8\u699c",Catalog.View.MUSIC_ORIGINAL to "\u539f\u521b\u699c").forEach { (destination,label) ->
-                            Box(Modifier.weight(1f)) { NativeRow(ui,label,selected=catalog?.get("view")==destination.name,click={action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}}) }
+                    NativeButtons(ui, listOf(Catalog.View.DISCOVER to "\u70ed\u95e8\u89c6\u9891",Catalog.View.MUSIC_HOT to "\u97f3\u4e50\u70ed\u95e8\u699c",Catalog.View.MUSIC_ORIGINAL to "\u539f\u521b\u699c").map { (destination,label) ->
+                        NativeButton(label, catalog?.get("view")==destination.name) {
+                            action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}
                         }
-                    }
+                    })
                 }
                 if (playback?.get("active") == true && (playback["error"] as? String).orEmpty().isNotEmpty()) item {
                     NativeText(ui, playback["error"] as String)
