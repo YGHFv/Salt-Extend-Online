@@ -26,7 +26,7 @@ public final class CatalogClient {
         boolean personal = query.view() == View.MINE || query.view() == View.SAVED || query.platform() == AccountPlatform.BILIBILI && !discover;
         if (personal && (account == null || account.platform() != query.platform())) {
             Stage stage = query.platform() == AccountPlatform.BILIBILI
-                    ? query.view() == View.MINE ? Stage.BILI_CREATED : query.view() == View.SAVED ? Stage.BILI_SAVED : Stage.BILI_CONTENTS
+                    ? query.view() == View.SEARCH ? Stage.BILI_SEARCH : query.view() == View.MINE ? Stage.BILI_CREATED : query.view() == View.SAVED ? Stage.BILI_SAVED : Stage.BILI_CONTENTS
                     : Stage.NET_PLAYLISTS;
             throw CatalogFailure.of(stage, Reason.LOGIN_REQUIRED);
         }
@@ -62,7 +62,7 @@ public final class CatalogClient {
                             cover(AccountPlatform.NETEASE, album instanceof Map<?,?> ? object(album).get("picUrl") : null)));
                 }
             }
-            return page(text(list.get("name")), items, offset + 20 < ids.size());
+            return page(text(list.get("name")), items, offset + 20 < ids.size(), ids.size());
         }
         String path = query.view() == View.DISCOVER ? "/weapi/personalized/playlist" : "/weapi/user/playlist";
         Map<String, Object> parameters = new LinkedHashMap<>(); parameters.put("limit", "20");
@@ -79,11 +79,33 @@ public final class CatalogClient {
             items.add(new Item(Kind.FOLDER, Long.toString(listId), text(list.get("name")), liked ? "Liked songs" : mine ? "Created by you" : "Playlist", number(list.get("trackCount"), 0), true,
                     cover(AccountPlatform.NETEASE, alias(list, "coverImgUrl", "picUrl"))));
         }
-        return page(viewTitle(query), items, query.view() != View.DISCOVER && Boolean.TRUE.equals(root.get("more")));
+        return page(viewTitle(query), items, query.view() != View.DISCOVER && Boolean.TRUE.equals(root.get("more")),
+                query.view() == View.DISCOVER ? items.size() : number(root.get("count"), -1));
     }
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
         if (query.view() == View.DISCOVER) throw new IllegalArgumentException("Bilibili anonymous discovery is not implemented");
         String base = "https://api.bilibili.com";
+        if (query.view() == View.SEARCH) {
+            URI uri = BiliWbi.sign(base + "/x/web-interface/wbi/search/type", Map.of(
+                    "search_type", "video", "keyword", query.keyword(), "page", Integer.toString(query.page()),
+                    "page_size", "20", "order", "totalrank", "duration", "0", "tids", "0"), wbi(http, request), clock.instant().getEpochSecond());
+            var data = object(success(http.json(uri, null, request), 0, http.stage()).get("data"));
+            if (number(data.get("page"), query.page()) != query.page() || number(data.get("pagesize"), 20) != 20) throw invalid();
+            long total = number(data.get("numResults"), -1), count = number(data.get("numPages"), total < 0 ? -1 : Math.max(1, (total + 19) / 20));
+            if (count < 0 || count > Integer.MAX_VALUE) throw invalid();
+            int pages = (int)Math.max(1, Math.min(500, count));
+            List<Item> items = new ArrayList<>(); Set<String> unique = new HashSet<>();
+            for (Object row : bounded(arrayOrEmpty(data.get("result")), 20)) {
+                var video = object(row);
+                if (!"video".equals(video.get("type"))) continue;
+                String bvid = optional(video.get("bvid"));
+                long duration = searchDuration(video.get("duration"));
+                if (!bvid.matches("BV[0-9A-Za-z]{10}") || duration <= 0 || !unique.add(bvid)) continue;
+                items.add(new Item(Kind.TRACK, bvid, searchTitle(text(video.get("title"))), optional(video.get("author")), duration, true,
+                        cover(AccountPlatform.BILIBILI, video.get("pic"))));
+            }
+            return new Page("\u641c\u7d22\uff1a" + query.keyword(), items, query.page() < pages, clock.instant().plusSeconds(300), pages);
+        }
         if (query.view() == View.COLLECTION) {
             var data = collectionData(query, 20, http, request);
             var meta = object(data.get("meta"));
@@ -102,7 +124,7 @@ public final class CatalogClient {
             Boolean more = more(data, query.page(), total);
             if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(collectionData(
                     new Query(query.platform(), query.view(), query.folder(), query.page() + 1, query.owner()), 20, http, request).get("archives")).isEmpty();
-            return page(text(meta.get("name")), items, more && query.page() < 500);
+            return page(text(meta.get("name")), items, more && query.page() < 500, total);
         }
         if (query.view() == View.FOLDER) {
             var data = object(success(http.json(URI.create(base + "/x/v3/fav/resource/list?media_id=" + query.folder() + "&pn=" + query.page() + "&ps=20&order=mtime&platform=web"), null, request), 0, http.stage()).get("data"));
@@ -119,7 +141,7 @@ public final class CatalogClient {
             Boolean more = more(data, query.page(), number(info.get("media_count"), -1));
             if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
                     base + "/x/v3/fav/resource/list?media_id=" + query.folder() + "&pn=" + (query.page() + 1) + "&ps=20&order=mtime&platform=web").get("medias")).isEmpty();
-            return page(text(info.get("title")), items, more && query.page() < 500);
+            return page(text(info.get("title")), items, more && query.page() < 500, number(info.get("media_count"), -1));
         }
         String endpoint = query.view() == View.MINE ? "created/list" : "collected/list";
         var data = object(success(http.json(URI.create(base + "/x/v3/fav/folder/" + endpoint + "?up_mid=" + account.userId() + "&pn=" + query.page() + "&ps=20&platform=web&web_location=333.1387"), null, request), 0, http.stage()).get("data"));
@@ -145,7 +167,7 @@ public final class CatalogClient {
         // Some responses omit totals/flags. Probe at most one page, never crawl or count filtered UI rows.
         if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
                 base + "/x/v3/fav/folder/" + endpoint + "?up_mid=" + account.userId() + "&pn=" + (query.page() + 1) + "&ps=20&platform=web&web_location=333.1387").get("list")).isEmpty();
-        return page(viewTitle(query), items, more && query.page() < 500);
+        return page(viewTitle(query), items, more && query.page() < 500, number(alias(data, "count", "total"), -1));
     }
     private static Boolean more(Map<String, Object> data, int page, long total) throws IOException {
         Object flag = alias(data, "has_more", "more");
@@ -156,16 +178,17 @@ public final class CatalogClient {
     private static Map<String, Object> biliData(CatalogHttp http, RequestScope request, String url) throws IOException {
         return object(success(http.json(URI.create(url), null, request), 0, http.stage()).get("data"));
     }
-    private Map<String, Object> collectionData(Query query, int size, CatalogHttp http, RequestScope request) throws IOException {
+    private String wbi(CatalogHttp http, RequestScope request) throws IOException {
         var nav = biliData(http, request, "https://api.bilibili.com/x/web-interface/nav");
         var keys = object(nav.get("wbi_img"));
-        String mixin;
-        try { mixin = BiliWbi.mixin(text(keys.get("img_url")), text(keys.get("sub_url"))); }
+        try { return BiliWbi.mixin(text(keys.get("img_url")), text(keys.get("sub_url"))); }
         catch (IllegalArgumentException error) { throw invalid(); }
+    }
+    private Map<String, Object> collectionData(Query query, int size, CatalogHttp http, RequestScope request) throws IOException {
         URI uri = BiliWbi.sign("https://api.bilibili.com/x/polymer/web-space/seasons_archives_list", Map.of(
                 "mid", Long.toString(query.owner()), "season_id", Long.toString(query.folder()),
                 "page_num", Integer.toString(query.page()), "page_size", Integer.toString(size), "sort_reverse", "false", "web_location", "333.999"),
-                mixin, clock.instant().getEpochSecond());
+                wbi(http, request), clock.instant().getEpochSecond());
         var data = object(success(http.json(uri, null, request), 0, http.stage()).get("data"));
         var meta = object(data.get("meta"));
         if (id(meta.get("season_id")) != query.folder() || id(meta.get("mid")) != query.owner()) throw invalid();
@@ -196,9 +219,27 @@ public final class CatalogClient {
             case MINE -> query.platform() == AccountPlatform.BILIBILI ? "\u521b\u5efa\u7684\u6536\u85cf\u5939" : "\u6211\u7684\u6b4c\u5355";
             case SAVED -> "\u6536\u85cf / \u8ba2\u9605";
             case FOLDER, COLLECTION -> throw new IllegalArgumentException("Folder title comes from its contents");
+            case SEARCH -> "\u641c\u7d22";
         };
     }
-    private Page page(String title, List<Item> items, boolean more) { return new Page(title, items, more, clock.instant().plusSeconds(300)); }
+    private Page page(String title, List<Item> items, boolean more, long total) {
+        int pages = total < 0 || total == 0 && more ? 0 : (int)Math.max(1, Math.min(500, total / 20 + (total % 20 == 0 ? 0 : 1)));
+        return new Page(title, items, more, clock.instant().plusSeconds(300), pages);
+    }
+    private static long searchDuration(Object value) {
+        if (!(value instanceof String text) || !text.matches("[0-9]{1,6}:[0-9]{2}(:[0-9]{2})?")) return 0;
+        String[] parts = text.split(":"); long seconds = 0;
+        for (int i = 0; i < parts.length; i++) {
+            long n = Long.parseLong(parts[i]); if (i > 0 && n >= 60) return 0;
+            seconds = seconds * 60 + n;
+        }
+        return seconds <= 7 * 24 * 3600 ? seconds * 1000 : 0;
+    }
+    private static String searchTitle(String value) {
+        // API search highlighting is markup, not part of the media title. Never render upstream HTML.
+        return value.replaceAll("<[^>]*>", "").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", "\"").replace("&#39;", "'").replace("&apos;", "'").replace("&nbsp;", " ").replace("&amp;", "&");
+    }
     private static URI cover(AccountPlatform platform, Object value) { return value instanceof String text ? CoverSource.parse(platform, text) : null; }
     private static Map<String, Object> success(Map<String, Object> root, long expected, Stage stage) throws IOException {
         long code = BoundedJson.integer(root.get("code")); if (code != expected) throw CatalogFailure.code(stage, Reason.API, code); return root;

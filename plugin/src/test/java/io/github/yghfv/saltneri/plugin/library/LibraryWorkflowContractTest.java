@@ -88,6 +88,17 @@ public final class LibraryWorkflowContractTest {
                 check(library.resolveCover(covered,request).toString().equals("https://i0.hdslb.com/old.jpg") && fixture.requests.size()==beforeCover);
                 check(library.resolveCover(covered,request,true).toString().equals("https://i0.hdslb.com/first.jpg"));
             }
+            library.search("Music & song"); waitFor(() -> rows(library).size()==1 && library.snapshot().get("view").equals("SEARCH"));
+            check(library.snapshot().get("totalPages").equals(2));
+            String resultToken = (String)rows(library).getFirst().get("token");
+            library.playRow(resultToken,biliSelections::add);
+            check(biliSelections.getLast().id().equals("BV17x411w7KC"));
+            fixture.search = fixture.search.replace("\"page\":1", "\"page\":2");
+            library.turn(1); waitFor(() -> Boolean.TRUE.equals(library.snapshot().get("loaded")));
+            check(library.snapshot().get("page").equals(2) && library.snapshot().get("totalPages").equals(2));
+            check(fixture.requests.getLast().getURL().getQuery().contains("keyword=Music%20%26%20song"));
+            CatalogContractTest.fails(() -> library.playRow(resultToken,biliSelections::add));
+            library.search("Another"); library.invalidate(); check(rows(library).isEmpty());
         } finally { bili.retire(); }
         AtomicInteger coverLookups = new AtomicInteger(); CountDownLatch lookupEntered = new CountDownLatch(1), lookupRelease = new CountDownLatch(1);
         try (LibraryController library = new LibraryController(p -> null, () -> true, t -> { throw new AssertionError("No artwork playback"); }, () -> {}, CatalogContractTest.CLOCK,

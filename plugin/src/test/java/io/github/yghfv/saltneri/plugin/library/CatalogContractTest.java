@@ -50,6 +50,10 @@ public final class CatalogContractTest {
         String collection = "{\"code\":0,\"data\":{\"meta\":{\"season_id\":30,\"mid\":99,\"name\":\"Collection\",\"total\":21},\"page\":{\"total\":21},\"archives\":[{\"aid\":1,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60,\"pic\":\"//i0.hdslb.com/fixture.jpg\"},{\"aid\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
         String identity = "42"; boolean csrf = true;
         String nextCreated;
+        String search = "{\"code\":0,\"data\":{\"page\":1,\"pagesize\":20,\"numResults\":21,\"numPages\":2,\"result\":["
+                + "{\"type\":\"video\",\"bvid\":\"BV17x411w7KC\",\"title\":\"A <em class=\\\"keyword\\\">song</em> &amp; music\",\"author\":\"Artist\",\"duration\":\"04:16\",\"pic\":\"//i0.hdslb.com/song.jpg\"},"
+                + "{\"type\":\"video\",\"bvid\":\"invalid\",\"title\":\"Deleted\",\"duration\":\"00:00\"},"
+                + "{\"type\":\"bili_user\",\"title\":\"Not a video\"}]}}";
         String collectionArtwork = "{\"code\":0,\"data\":{\"meta\":{\"season_id\":30,\"mid\":99,\"cover\":\"\"},\"archives\":[{\"pic\":\"//i0.hdslb.com/first.jpg@96w.webp\"}]}}";
         String failPath = "", statusPath = "", htmlPath = ""; int status = 200; IOException failure;
         final List<Response> requests = new ArrayList<>();
@@ -63,6 +67,7 @@ public final class CatalogContractTest {
                 case "/x/v3/fav/folder/created/list", "/x/v3/fav/folder/collected/list" -> created;
                 case "/x/v3/fav/resource/list" -> resources;
                 case "/x/polymer/web-space/seasons_archives_list" -> collection;
+                case "/x/web-interface/wbi/search/type" -> search;
                 default -> throw new AssertionError("Unexpected endpoint");
             };
             if (uri.getPath().endsWith("/collected/list") && uri.getQuery().contains("pn=2") && nextCreated != null) json = nextCreated;
@@ -100,6 +105,25 @@ public final class CatalogContractTest {
         safeFailure(() -> missingCsrf.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null), Stage.NET_CSRF, Reason.CSRF, null);
         AccountCredentials bili = account(AccountPlatform.BILIBILI);
         try {
+            Fixture results = new Fixture();
+            Query searchQuery = new Query(AccountPlatform.BILIBILI, View.SEARCH, 0, 1, 0, " \u6d1b\u5929\u4f9d & music ");
+            Page found = results.load(searchQuery,bili);
+            check(found.totalPages()==2 && found.hasMore() && found.items().size()==1);
+            check(found.items().getFirst().title().equals("A song & music") && found.items().getFirst().count()==256000);
+            check(found.items().getFirst().target().equals("BV17x411w7KC") && found.items().getFirst().cover()!=null);
+            String signed = results.requests.getLast().getURL().getQuery();
+            check(signed.contains("search_type=video") && signed.contains("keyword=%E6%B4%9B%E5%A4%A9%E4%BE%9D%20%26%20music") && signed.contains("w_rid="));
+            check(!searchQuery.toString().contains("music"));
+            results.search = results.search.replace("\"page\":1", "\"page\":2");
+            check(!results.load(new Query(AccountPlatform.BILIBILI,View.SEARCH,0,2,0,searchQuery.keyword()),bili).hasMore());
+            safeFailure(() -> results.load(searchQuery,bili),Stage.BILI_SEARCH,Reason.RESPONSE,null);
+            results.search = "{\"code\":-412,\"message\":\"SECRET\"}";
+            safeFailure(() -> results.load(searchQuery,bili),Stage.BILI_SEARCH,Reason.API,-412L);
+            safeFailure(() -> results.load(searchQuery,null),Stage.BILI_SEARCH,Reason.LOGIN_REQUIRED,null);
+            for(String invalid : List.of("", " ", "a\nb", "x".repeat(101))) fails(() -> new Query(AccountPlatform.BILIBILI,View.SEARCH,0,1,0,invalid));
+            fails(() -> new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0,"music"));
+            check(new Fixture().load(new Query(AccountPlatform.BILIBILI,View.MINE,0,1),bili).totalPages()==2);
+            check(new Fixture().load(new Query(AccountPlatform.BILIBILI,View.COLLECTION,30,1,99),bili).totalPages()==2);
             Fixture paging = new Fixture();
             for (String flag : List.of("true", "1")) {
                 paging.created = "{\"code\":0,\"data\":{\"has_more\":" + flag + ",\"list\":[{\"id\":20,\"title\":\"One visible row\"}]}}";

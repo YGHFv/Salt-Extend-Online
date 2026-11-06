@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "title": "Salt Extend Online - 原比例封面、合集与固定分页（0.7.8）",
+      "title": "Salt Extend Online - B站搜索、头像账户菜单与列表分页（0.7.9）",
       "config": "config.json",
       "preferences": [
         {

@@ -26,7 +26,7 @@ import org.jetbrains.skia.EncodedImageFormat;
 
 /** Real offscreen Compose/Skia rendering of cached host page content; synthetic account/list only. */
 public final class NativePageRenderTest {
-    private static final class Hooks extends HookRegistrar {
+    static final class Hooks extends HookRegistrar {
         public HookHandle afterComposable(String o, String m, String i, List<String> t, int p, ComposableHook c) {
             return new HookHandle() { public void unhook() {} public void close() {} };
         }
@@ -68,7 +68,7 @@ public final class NativePageRenderTest {
         for (var child : node.getChildren()) { var found = findText(child, text); if (found != null) return found; }
         return node.getConfig().toString().contains(text) ? node : null;
     }
-    private static void tap(ImageComposeScene scene, float x, float y, long time) throws Exception {
+    static void tap(ImageComposeScene scene, float x, float y, long time) throws Exception {
         Class<?> buttons = Class.forName("androidx.compose.ui.input.pointer.PointerButtons"), modifiers = Class.forName("androidx.compose.ui.input.pointer.PointerKeyboardModifiers"),
                 button = Class.forName("androidx.compose.ui.input.pointer.PointerButton"), event = Class.forName("androidx.compose.ui.input.pointer.PointerEventType"),
                 pointer = Class.forName("androidx.compose.ui.input.pointer.PointerType");
@@ -112,7 +112,7 @@ public final class NativePageRenderTest {
                          var items = java.util.stream.IntStream.range(offset, Math.min(offset + 20, total)).mapToObj(index ->
                                  new Catalog.Item(Catalog.Kind.TRACK, "123", index == 0 ? "Synthetic song" : "Song " + index, "Artist", 1, !invalidItems.get(),
                                          URI.create("https://i0.hdslb.com/bfs/archive/fixture.png"))).toList();
-                         return new Catalog.Page("Synthetic playlist", items, offset + 20 < total, clock.instant().plusSeconds(300));
+                         return new Catalog.Page("Synthetic playlist", items, offset + 20 < total, clock.instant().plusSeconds(300), Math.max(1,(total+19)/20));
                      })) {
             NativeDesk desk = new NativeDesk(library, player,
                     p -> new AccountLoginController.Snapshot(qr.get() == 0 ? AccountLoginController.Phase.IDLE : AccountLoginController.Phase.WAITING_SCAN,
@@ -180,7 +180,7 @@ public final class NativePageRenderTest {
                             if (frame == 4) try (Data png = image.encodeToData(EncodedImageFormat.PNG, 100, 0)) {
                                 byte[] bytes = png.getBytes(); var pixels = ImageIO.read(new ByteArrayInputStream(bytes));
                                 int colored = 0;
-                                for (int y = 250; y < 720; y++) for (int x = 20; x < 100; x++) {
+                                for (int y = 70; y < 720; y++) for (int x = 20; x < 140; x++) {
                                     int rgb = pixels.getRGB(x,y) & 0xffffff; if (rgb == 0xdd5500 || rgb == 0x008866) colored++;
                                 }
                                 check(colored > 400); Files.write(output.resolve("cover-prepared-740.png"), bytes);
@@ -259,25 +259,35 @@ public final class NativePageRenderTest {
     }
     private static void assertPager(Function3<Object,Composer,Integer,Object> cached, Object key, int width, boolean expected, LibraryController library) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            // A real window height: the 20-row catalog must not push the pager below the viewport.
+            // Long catalogs scroll to the footer; it must not float over the middle of the list.
             ImageComposeScene scene = new ImageComposeScene(width, 768, DensityKt.Density(1f,1f), LayoutDirection.Ltr, Dispatchers.getUnconfined(),
                     (composer, flags) -> { cached.invoke(key, composer, flags); return Unit.INSTANCE; });
             try {
-                for (int frame=1; frame<=4; frame++) try (Image ignored = scene.render(frame * 16_000_000L)) { }
+                for (int frame=1; frame<=4; frame++) try (Image ignored = scene.render(System.nanoTime())) { }
                 var root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
+                int rows = ((List<?>)library.snapshot().get("items")).size();
+                if (rows == 20) check(findText(root,"\u4e0b\u4e00\u9875") == null);
+                if (expected) {
+                    scrollTo(scene, rows + 4);
+                    root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
+                }
                 check((findText(root,"\u4e0a\u4e00\u9875") != null) == expected);
                 check((findText(root,"\u4e0b\u4e00\u9875") != null) == expected);
                 if (expected) {
                     boolean first = library.snapshot().get("page").equals(1);
                     var target = findText(root, first ? "\u4e0b\u4e00\u9875" : "\u4e0a\u4e00\u9875");
+                    var counter = findText(root, first ? "1/2" : "2/2"); check(counter != null);
+                    check(counter.getBoundsInRoot().getLeft() > findText(root,"\u4e0a\u4e00\u9875").getBoundsInRoot().getLeft());
+                    check(counter.getBoundsInRoot().getRight() < findText(root,"\u4e0b\u4e00\u9875").getBoundsInRoot().getRight());
                     var bounds = target.getBoundsInRoot();
-                    check(bounds.getTop() > 0 && bounds.getBottom() <= 648 && bounds.getLeft() >= 0 && bounds.getRight() <= width);
+                    check(bounds.getTop() > 0 && bounds.getBottom() <= 768 && bounds.getLeft() >= 0 && bounds.getRight() <= width);
                     tap(scene, (bounds.getLeft()+bounds.getRight())/2, (bounds.getTop()+bounds.getBottom())/2, 3000);
                     long until = System.nanoTime()+3_000_000_000L;
                     while ((!library.snapshot().get("page").equals(first ? 2 : 1) || !Boolean.TRUE.equals(library.snapshot().get("loaded"))) && System.nanoTime()<until) Thread.sleep(10);
                     check(library.snapshot().get("page").equals(first ? 2 : 1) && Boolean.TRUE.equals(library.snapshot().get("loaded")));
                     Thread.sleep(450);
-                    try (Image ignored = scene.render(600_000_000L)) {
+                    scrollTo(scene, ((List<?>)library.snapshot().get("items")).size() + 4);
+                    try (Image ignored = scene.render(System.nanoTime())) {
                         var after = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                         check(findText(after,"\u4e0a\u4e00\u9875") != null && findText(after,"\u4e0b\u4e00\u9875") != null);
                     }
@@ -285,5 +295,18 @@ public final class NativePageRenderTest {
             } catch (Exception error) { throw new AssertionError(error);
             } finally { scene.close(); }
         });
+    }
+    private static androidx.compose.ui.semantics.SemanticsNode findAction(androidx.compose.ui.semantics.SemanticsNode node, androidx.compose.ui.semantics.SemanticsPropertyKey<?> key) {
+        if (node.getConfig().contains(key)) return node;
+        for (var child : node.getChildren()) { var found = findAction(child,key); if (found != null) return found; }
+        return null;
+    }
+    private static void scrollTo(ImageComposeScene scene, int index) throws Exception {
+        for (int frame=1; frame<=4; frame++) try (Image ignored=scene.render(System.nanoTime())) { }
+        var key = androidx.compose.ui.semantics.SemanticsActions.INSTANCE.getScrollToIndex();
+        var root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
+        var list = findAction(root,key); check(list != null);
+        check(Boolean.TRUE.equals(list.getConfig().get(key).getAction().invoke(index)));
+        for (int frame=1; frame<=4; frame++) { Thread.sleep(30); try (Image ignored=scene.render(System.nanoTime())) { } }
     }
 }

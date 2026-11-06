@@ -151,6 +151,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             case RESTORE -> restoreLogin(platform);
             case LOGOUT -> logout(platform);
             case CANCEL_LOGIN -> login(platform).cancelLogin();
+            case SWITCH_ACCOUNT -> { logout(platform); login(platform).start(configManager.getConfig().get("auth.remember", true)); }
             case ARM -> arm();
             case STOP -> disarm();
         }

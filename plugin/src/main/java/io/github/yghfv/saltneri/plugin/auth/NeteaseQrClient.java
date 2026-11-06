@@ -56,7 +56,9 @@ public final class NeteaseQrClient implements QrAuthClient {
             if (uid != 0 && uid != profileId) throw new IOException("NetEase account identity mismatch"); uid = profileId;
         }
         if (uid <= 0) throw new IOException("NetEase account verification rejected");
-        request.check(); return new AccountCredentials(AccountPlatform.NETEASE, Long.toString(uid), cookies.snapshot(), clock);
+        Map<String, Object> profile = root.get("profile") == null ? Map.of() : BoundedJson.object(root.get("profile"));
+        request.check(); return new AccountCredentials(AccountPlatform.NETEASE, Long.toString(uid), cookies.snapshot(), clock,
+                AccountCredentials.Profile.from(AccountPlatform.NETEASE, profile.get("nickname"), profile.get("avatarUrl")));
     }
     private AuthHttp.Response post(String path, Map<String, Object> payload, Map<String, String> headers, RequestScope request) throws IOException {
         String query = payload.containsKey("csrf_token") ? "?csrf_token=" + URLEncoder.encode((String)payload.get("csrf_token"), StandardCharsets.UTF_8) : "";

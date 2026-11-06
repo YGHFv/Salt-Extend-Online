@@ -8,7 +8,7 @@ import javax.net.ssl.SSLException;
 
 /** Only allowlisted stages and numeric codes cross into the UI; never retain upstream messages. */
 public final class CatalogFailure extends IOException {
-    public enum Stage { SESSION, BILI_VERIFY, NET_VERIFY, NET_CSRF, BILI_CREATED, BILI_SAVED, BILI_CONTENTS, BILI_COLLECTION,
+    public enum Stage { SESSION, BILI_VERIFY, NET_VERIFY, NET_CSRF, BILI_CREATED, BILI_SAVED, BILI_CONTENTS, BILI_COLLECTION, BILI_SEARCH,
         NET_DISCOVER, NET_PLAYLISTS, NET_CONTENTS, NET_SONGS, UNKNOWN }
     public enum Reason { HTTP, API, RESPONSE, AUTH, LOGIN_REQUIRED, DNS, TLS, TIMEOUT, NETWORK, POLICY, CSRF }
     private final Stage stage;

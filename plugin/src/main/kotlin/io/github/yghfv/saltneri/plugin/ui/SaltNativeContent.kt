@@ -5,26 +5,43 @@ package io.github.yghfv.saltneri.plugin.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.xuncorp.spw.workshop.api.hook.ComposableHook
 import com.xuncorp.spw.workshop.api.hook.UiHookCall
 import io.github.yghfv.saltneri.plugin.auth.AccountPlatform
+import io.github.yghfv.saltneri.plugin.auth.AccountLoginController
 import io.github.yghfv.saltneri.plugin.library.Catalog
 import io.nayuki.qrcodegen.QrCode
 import kotlinx.coroutines.delay
@@ -134,12 +151,88 @@ private fun Cover(ui: SaltNativeUi, token: String) {
 }
 
 @Composable
+private fun HeaderIcon(ui: SaltNativeUi, label: String, search: Boolean, click: () -> Unit) {
+    val color = Color(ui.palette(currentComposer).text().toULong())
+    val draw: (DrawScope) -> Unit = { scope -> with(scope) {
+        val center = Offset(size.width * 0.43f, size.height * 0.43f)
+        if (search) {
+            drawCircle(color, size.width * 0.25f, center, style = Stroke(2.dp.toPx()))
+            drawLine(color, Offset(size.width * 0.62f, size.height * 0.62f), Offset(size.width * 0.88f, size.height * 0.88f), 2.dp.toPx())
+        } else {
+            drawCircle(color, size.width * 0.16f, Offset(size.width / 2, size.height * 0.3f), style = Stroke(2.dp.toPx()))
+            drawArc(color, 180f, 180f, false, Offset(size.width * 0.15f, size.height * 0.55f), Size(size.width * 0.7f, size.height * 0.7f), style = Stroke(2.dp.toPx()))
+        }
+    } }
+    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = click).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        ui.canvas(Modifier.size(22.dp), draw, currentComposer)
+    }
+}
+
+@Composable
+private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: AccountLoginController.Snapshot?, action: (() -> Unit) -> Unit,
+                          search: () -> Unit) {
+    var menu by remember(platform, login?.revision()) { mutableStateOf(false) }
+    val loggedIn = login?.phase() == AccountLoginController.Phase.LOGGED_IN
+    var png by remember(platform, login?.revision()) { mutableStateOf<ByteArray?>(null) }
+    LaunchedEffect(ui, platform, login?.revision(), loggedIn) {
+        if (loggedIn) while (true) { png = ui.avatar(platform, login.revision()); if (png != null) break; delay(350) }
+    }
+    val image = remember(png) { png?.let { try { ui.thumbnail(it) } catch (_: Exception) { null } } }
+    DisposableEffect(image) { onDispose { image?.close() } }
+    val palette = ui.palette(currentComposer)
+    val menuOffset = with(LocalDensity.current) { 44.dp.roundToPx() }
+    Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        NativeText(ui, name(platform), modifier = Modifier.weight(1f), heading = true)
+        if (platform == AccountPlatform.BILIBILI) HeaderIcon(ui, "\u641c\u7d22B\u7ad9", true, search)
+        Spacer(Modifier.width(8.dp))
+        Box {
+            if (loggedIn && image != null) {
+                Image(image.bitmap(), "\u8d26\u53f7\u83dc\u5355", Modifier.size(40.dp).clip(CircleShape).clickable { menu = !menu }, contentScale = ContentScale.Crop)
+            } else HeaderIcon(ui, if (loggedIn) "\u8d26\u53f7\u83dc\u5355" else "\u767b\u5f55\u8d26\u53f7", false) {
+                if (loggedIn) menu = !menu else action { ui.desk().action(platform, NativeDesk.Action.LOGIN) }
+            }
+            if (menu && loggedIn) Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, menuOffset), onDismissRequest = { menu = false },
+                properties = PopupProperties(focusable = true)) {
+                Column(Modifier.width(200.dp).background(Color(palette.pageBackground().toULong()).copy(alpha = 1f), palette.shape())
+                    .border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.3f), palette.shape()).padding(8.dp)) {
+                    val nickname = login.profile().name()
+                    if (nickname.isNotEmpty()) NativeText(ui, nickname, modifier = Modifier.padding(8.dp))
+                    NativeRow(ui, "\u5207\u6362\u8d26\u6237", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.SWITCH_ACCOUNT) } })
+                    NativeRow(ui, "\u9000\u51fa\u767b\u5f55", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) } })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> Unit, submit: (String) -> Unit) {
+    val focus = remember { FocusRequester() }
+    val palette = ui.palette(currentComposer)
+    val search = { if (keyword.isNotBlank()) submit(keyword.trim()) }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        BasicTextField(value = keyword, onValueChange = { if (it.length <= 100 && it.none { c -> c.isISOControl() }) change(it) },
+            modifier = Modifier.weight(1f).border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.5f), palette.shape())
+                .padding(12.dp).focusRequester(focus).semantics { contentDescription = "B\u7ad9\u641c\u7d22\u8f93\u5165" },
+            textStyle = palette.main().copy(color = Color(palette.text().toULong())), singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }),
+            cursorBrush = SolidColor(Color(palette.accent().toULong())), decorationBox = { field ->
+                Box { if (keyword.isEmpty()) NativeText(ui, "\u641c\u7d22 B\u7ad9\u89c6\u9891", true); field() }
+            })
+        Box(Modifier.width(88.dp)) { NativeRow(ui, "\u641c\u7d22", enabled = keyword.isNotBlank(), click = search) }
+    }
+}
+
+@Composable
 private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     var state by remember(ui, platform) { mutableStateOf<NativeDesk.State?>(null) }
     var error by remember(ui, platform) { mutableStateOf("") }
     var enabled by remember(ui) { mutableStateOf(ui.available()) }
     var view by remember(platform) { mutableStateOf(if (platform == AccountPlatform.BILIBILI) Catalog.View.MINE else Catalog.View.DISCOVER) }
     var selectedRow by remember(platform) { mutableStateOf("") }
+    var searching by remember(platform) { mutableStateOf(false) }
+    var searchText by remember(platform) { mutableStateOf("") }
     val action: (() -> Unit) -> Unit = { block ->
         try { block(); error = "" }
         catch (failure: Exception) { error = "\u64cd\u4f5c\u672a\u5b8c\u6210\uff08${failure.javaClass.simpleName}\uff09\uff0c\u8bf7\u68c0\u67e5\u6388\u6743\u548c\u5b9e\u9a8c\u9002\u914d\u72b6\u6001\u3002" }
@@ -165,26 +258,22 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         listState.scrollToItem(0)
     }
     // Salt paints the window backdrop below navigation; an opaque page would hide its effects.
-    Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, bottom = 120.dp)) {
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
-            contentPadding = PaddingValues(top = 28.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp), state = listState,
+            contentPadding = PaddingValues(top = 28.dp, bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                NativeText(ui, name(platform), modifier = Modifier.padding(bottom = 12.dp), heading = true)
+                AccountHeader(ui, platform, login, action) { searching = !searching }
             }
             if (!enabled) {
                 item { NativeText(ui, "\u539f\u751f\u9875\u9762\u5df2\u505c\u7528\uff0c\u8bf7\u8fd4\u56de\u5e76\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u3002") }
             } else {
-                item {
+                if (searching && platform == AccountPlatform.BILIBILI) item {
+                    SearchInput(ui, searchText, { searchText = it }) { keyword -> action { ui.desk().search(keyword); view = Catalog.View.SEARCH } }
+                }
+                if (login?.phase() != AccountLoginController.Phase.LOGGED_IN) item {
                     Column(Modifier.padding(8.dp)) {
                         if (login?.phase()?.name in listOf("CREATING", "WAITING_SCAN", "WAITING_CONFIRMATION", "EXPIRED", "ERROR")) {
                             NativeText(ui, login?.status() ?: "", modifier = Modifier.padding(8.dp))
                         }
-                        NativeButtons(ui, listOf(
-                            NativeButton("\u626b\u7801\u767b\u5f55") { action { ui.desk().action(platform, NativeDesk.Action.LOGIN) } },
-                            NativeButton("\u9000\u51fa\u8d26\u53f7", enabled = login?.phase()?.name == "LOGGED_IN") {
-                                action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) }
-                            }
-                        ))
                         login?.qrContent()?.let { uri ->
                             Qr(ui, uri.toASCIIString())
                             NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
@@ -232,18 +321,21 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         }
                     }
                 }
+                val page = (catalog?.get("page") as? Number)?.toInt() ?: 1
+                val total = (catalog?.get("totalPages") as? Number)?.toInt() ?: 0
+                val previous = page > 1
+                val next = catalog?.get("more") == true
+                if (previous || next) item(key = "pagination") {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog?.get("loaded") == true,
+                            click = { action { ui.desk().page(-1) } }) }
+                        NativeText(ui, "$page/${if (total > 0) total.toString() else "?"}", modifier = Modifier.padding(horizontal = 16.dp))
+                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog?.get("loaded") == true,
+                            click = { action { ui.desk().page(1) } }) }
+                    }
+                }
             }
         }
-        val previous = (catalog?.get("page") as? Number)?.toInt()?.let { it > 1 } == true
-        val next = catalog?.get("more") == true
-        // Keep navigation above Salt's mini-player, outside the scrolling catalog.
-        if (enabled && (previous || next)) Row(Modifier.fillMaxWidth()) {
-            Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog.get("loaded") == true,
-                click = { action { ui.desk().page(-1) } }) }
-            Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog.get("loaded") == true,
-                click = { action { ui.desk().page(1) } }) }
-        }
-    }
 }
 
 @Composable

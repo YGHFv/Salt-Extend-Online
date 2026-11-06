@@ -63,7 +63,8 @@ public final class BiliQrClient implements QrAuthClient {
         long mid = BoundedJson.integer(data.get("mid")); if (mid <= 0) throw invalid();
         String cookieId = cookies.value(NAV, "DedeUserID");
         if (!cookieId.isEmpty() && !cookieId.equals(Long.toString(mid))) throw new IOException("Bilibili account identity mismatch");
-        request.check(); return new AccountCredentials(AccountPlatform.BILIBILI, Long.toString(mid), cookies.snapshot(), clock);
+        request.check(); return new AccountCredentials(AccountPlatform.BILIBILI, Long.toString(mid), cookies.snapshot(), clock,
+                AccountCredentials.Profile.from(AccountPlatform.BILIBILI, data.get("uname"), data.get("face")));
     }
     @Override public AccountCredentials verify(AccountCredentials saved, RequestScope request) throws IOException {
         if (saved.platform() != AccountPlatform.BILIBILI) throw invalid();

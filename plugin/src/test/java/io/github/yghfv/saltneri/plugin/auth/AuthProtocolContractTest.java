@@ -64,7 +64,7 @@ public final class AuthProtocolContractTest {
             else if (uri.getPath().endsWith("poll")) {
                 int code = new int[]{86101,86090,0}[polls[0]++]; json = "{\"code\":0,\"data\":{\"code\":" + code + "}}";
                 if (code == 0) cookies = List.of("SESSDATA=COOKIE_SECRET; Domain=.bilibili.com; Path=/; Secure; Max-Age=3600", "DedeUserID=42; Domain=.bilibili.com; Path=/; Secure");
-            } else json = "{\"code\":0,\"data\":{\"isLogin\":true,\"mid\":42}}";
+            } else json = "{\"code\":0,\"data\":{\"isLogin\":true,\"mid\":42,\"uname\":\"Fixture user\",\"face\":\"//i0.hdslb.com/avatar.jpg@96w.webp\"}}";
             Response response = new Response(uri, json, cookies, null); requests.add(response); return response;
         });
         try (BiliQrClient client = new BiliQrClient(CLOCK, biliHttp); RequestScope scope = new RequestScope(() -> true)) {
@@ -72,10 +72,18 @@ public final class AuthProtocolContractTest {
             check(client.poll(session, scope).state() == QrAuthClient.State.WAITING_SCAN);
             check(client.poll(session, scope).state() == QrAuthClient.State.WAITING_CONFIRMATION);
             var result = client.poll(session, scope); check(result.state() == QrAuthClient.State.CONFIRMED && result.credentials().userId().equals("42"));
+            check(result.credentials().profile().name().equals("Fixture user"));
+            check(result.credentials().profile().avatar().toString().equals("https://i0.hdslb.com/avatar.jpg"));
+            check(!result.credentials().profile().toString().contains("avatar.jpg"));
+            var restoredProfile = client.verify(result.credentials(), scope);
+            check(restoredProfile.profile().equals(result.credentials().profile()) && !restoredProfile.revision().equals(result.credentials().revision()));
+            restoredProfile.retire();
             check(requests.getLast().getRequestProperty("Cookie").contains("SESSDATA=COOKIE_SECRET"));
             check(requests.stream().allMatch(r -> r.disconnected)); result.credentials().retire();
             check(client.poll(new QrAuthClient.Session(KEY, session.qrContent(), "", CLOCK.instant()), scope).state() == QrAuthClient.State.EXPIRED);
         }
+        check(AccountCredentials.Profile.from(AccountPlatform.BILIBILI,"Bad\nname","https://evil.example/avatar?SECRET").avatar()==null);
+        check(AccountCredentials.Profile.from(AccountPlatform.BILIBILI,"Bad\nname",null).name().isEmpty());
         for (String json : List.of(biliQr().replace("https://passport.bilibili.com", "https://evil.com"), biliQr().replace("qrcode_key=" + KEY, "qrcode_key=wrong"), biliQr().replace("\"code\":0", "\"code\":-412"))) {
             try (BiliQrClient invalid = new BiliQrClient(CLOCK, new AuthHttp((uri,form) -> new Response(uri, json, List.of(), null))); RequestScope scope = new RequestScope(() -> true)) { fails(() -> invalid.create(scope)); }
         }

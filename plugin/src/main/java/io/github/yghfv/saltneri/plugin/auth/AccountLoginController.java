@@ -17,7 +17,8 @@ import java.util.function.Supplier;
 /** QR login and one-shot saved-session restore. All work is bounded and account-revision fenced. */
 public final class AccountLoginController implements AutoCloseable {
     public enum Phase { IDLE, CREATING, WAITING_SCAN, WAITING_CONFIRMATION, LOGGED_IN, EXPIRED, ERROR, CLOSED }
-    public record Snapshot(Phase phase, String status, URI qrContent, String userId) {
+    public record Snapshot(Phase phase, String status, URI qrContent, String userId, AccountCredentials.Profile profile, String revision) {
+        public Snapshot(Phase phase, String status, URI qrContent, String userId) { this(phase, status, qrContent, userId, new AccountCredentials.Profile("", null), ""); }
         @Override public String toString() { return "LoginStatus[" + phase + ", QR and secrets redacted]"; }
     }
     private static final class Operation {
@@ -251,7 +252,8 @@ public final class AccountLoginController implements AutoCloseable {
     }
     public synchronized AccountCredentials credentials() { return account != null && account.isActive() && permitted() && !closed ? account : null; }
     public Snapshot snapshot() {
-        watch(); synchronized (this) { return new Snapshot(phase, status, current != null && current.active.get() && current.session != null ? current.session.qrContent() : null, account == null ? "" : account.userId()); }
+        watch(); synchronized (this) { return new Snapshot(phase, status, current != null && current.active.get() && current.session != null ? current.session.qrContent() : null,
+                account == null ? "" : account.userId(), account == null ? new AccountCredentials.Profile("", null) : account.profile(), account == null ? "" : account.revision()); }
     }
     private void discardOperation() { if (current != null) current.cancel(); current = null; }
     private void retireAccount() { if (account != null) account.retire(); account = null; }

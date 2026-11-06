@@ -49,7 +49,9 @@ public final class AuthLifecycleContractTest {
             controller.start(false);check(old.polling.await(2,TimeUnit.SECONDS));check(controller.snapshot().qrContent()!=null);
             controller.start(true);release.countDown();waitFor(()->controller.credentials()!=null);check(!old.credential.isActive());
             waitFor(()->controller.snapshot().status().contains("saved with Windows"));check(changes.get()>=3);check(controller.credentials()==fresh.credential);
+            check(controller.snapshot().revision().equals(fresh.credential.revision()) && controller.snapshot().profile().equals(fresh.credential.profile()));
             controller.logout();check(!fresh.credential.isActive()&&controller.credentials()==null);waitFor(()->!Files.exists(directory.resolve("saltneri-auth/bilibili.dpapi")));
+            check(controller.snapshot().revision().isEmpty() && controller.snapshot().profile().avatar()==null);
             try{store.load(AccountPlatform.BILIBILI);throw new AssertionError("Logged out restored");}catch(IOException expected){checks++;}
         }finally{release.countDown();}
         FakeClient revoked=new FakeClient(null);permitted.set(true);

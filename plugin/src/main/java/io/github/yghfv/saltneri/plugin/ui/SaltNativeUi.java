@@ -31,6 +31,7 @@ public final class SaltNativeUi implements AutoCloseable {
                           long accent, Shape shape, float padding) { }
     private final NativeDesk desk;
     private final CoverLoader covers;
+    private final CoverLoader avatars;
     private final BooleanSupplier permitted;
     private final List<HookHandle> handles = new ArrayList<>();
     private final Method routeGetter, pluginIdGetter, nativeRow, text, canvas;
@@ -54,7 +55,12 @@ public final class SaltNativeUi implements AutoCloseable {
     }
     @SuppressWarnings("unchecked")
     public SaltNativeUi(ClassLoader host, HookRegistrar hooks, NativeDesk desk, BooleanSupplier permitted, CoverLoader covers) throws Exception {
+        this(host, hooks, desk, permitted, covers, new CoverLoader());
+    }
+    @SuppressWarnings("unchecked")
+    public SaltNativeUi(ClassLoader host, HookRegistrar hooks, NativeDesk desk, BooleanSupplier permitted, CoverLoader covers, CoverLoader avatars) throws Exception {
         this.covers = covers;
+        this.avatars = avatars;
         this.desk = desk; this.permitted = permitted;
         if (!permitted.getAsBoolean()) throw new SecurityException("Native UI permission required");
         verify(host);
@@ -148,6 +154,16 @@ public final class SaltNativeUi implements AutoCloseable {
                 () -> !closed && permitted.getAsBoolean() && desk.currentRow(token));
     }
     public void clearCovers() { covers.clear(); }
+    public byte[] avatar(AccountPlatform platform, String revision) {
+        if (!available()) return null;
+        var account = desk.account(platform);
+        if (!account.revision().equals(revision) || account.phase() != io.github.yghfv.saltneri.plugin.auth.AccountLoginController.Phase.LOGGED_IN) return null;
+        return avatars.request("avatar:" + platform + ":" + revision, account.profile().avatar(), () -> {
+            if (!available()) return false;
+            var current = desk.account(platform);
+            return current.phase() == io.github.yghfv.saltneri.plugin.auth.AccountLoginController.Phase.LOGGED_IN && current.revision().equals(revision);
+        });
+    }
     public record Thumbnail(androidx.compose.ui.graphics.ImageBitmap bitmap, org.jetbrains.skia.Bitmap owner) implements AutoCloseable {
         @Override public void close() { owner.close(); }
     }
@@ -241,7 +257,7 @@ public final class SaltNativeUi implements AutoCloseable {
     public void canvas(Modifier modifier, Object draw, Composer composer) { invoke(canvas, null, modifier, draw, composer, 0); }
     @Override public synchronized void close() {
         closed = true; navigator = null; sidebarStyle.setValue(null); pendingLogin.set(null); pages.clear();
-        covers.close();
+        covers.close(); avatars.close();
         pageBinding.close();
         for (int i = handles.size() - 1; i >= 0; i--) {
             try { handles.get(i).close(); }
