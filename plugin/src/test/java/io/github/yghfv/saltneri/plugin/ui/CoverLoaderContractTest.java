@@ -17,8 +17,11 @@ public final class CoverLoaderContractTest {
     private static void check(boolean value) { checks++; if (!value) throw new AssertionError("Cover check " + checks); }
     private static final URI SOURCE = URI.create("https://i0.hdslb.com/bfs/archive/fixture.png");
     public static byte[] png() throws IOException {
-        var image = new BufferedImage(240, 120, BufferedImage.TYPE_INT_RGB);
-        for (int y = 0; y < 120; y++) for (int x = 0; x < 240; x++) image.setRGB(x, y, x < 120 ? 0xffdd5500 : 0xff008866);
+        return png(240, 120);
+    }
+    public static byte[] png(int width, int height) throws IOException {
+        var image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) image.setRGB(x, y, x < width / 2 ? 0xffdd5500 : 0xff008866);
         var bytes = new ByteArrayOutputStream(); ImageIO.write(image, "png", bytes); return bytes.toByteArray();
     }
     static final class Response extends HttpURLConnection {
@@ -50,6 +53,26 @@ public final class CoverLoaderContractTest {
         check(SOURCE.equals(CoverSource.original(URI.create(SOURCE + "@96w_96h_1c.webp"))));
         check(CoverSource.original(URI.create("https://p1.music.126.net/fixture.jpg?param=96y96")).toString().equals("https://p1.music.126.net/fixture.jpg"));
         check(CoverSource.original(URI.create("https://i0.hdslb.com/fixture.jpg?token=SECRET")) == null);
+        check(CoverSource.parse(AccountPlatform.BILIBILI, " https://i1.biliimg.com/fixture.jpg@100w_100h.webp ").toString().equals("https://i1.biliimg.com/fixture.jpg"));
+        check(CoverSource.parse(AccountPlatform.NETEASE, "https://p1.music.126.net/fixture.jpg?param=200y200").toString().endsWith("/fixture.jpg"));
+        for (int[] shape : new int[][]{{1600,900,1024,576}, {300,1200,256,1024}, {80,120,80,120}}) {
+            byte[] original = png(shape[0], shape[1]);
+            try (CoverLoader loader = new CoverLoader(uri -> new Response(uri, original)); RequestScope scope = new RequestScope(() -> true)) {
+                var image = ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE, scope)));
+                check(image.getWidth() == shape[2] && image.getHeight() == shape[3]);
+                check((image.getRGB(0,0) & 0xffffff) == 0xdd5500 && (image.getRGB(image.getWidth()-1,image.getHeight()-1) & 0xffffff) == 0x008866);
+            }
+        }
+        byte[] webp;
+        try (var image = org.jetbrains.skia.Image.Companion.makeFromEncoded(fixture);
+             var bytes = image.encodeToData(org.jetbrains.skia.EncodedImageFormat.WEBP,100,0)) { webp = bytes.getBytes(); }
+        try (CoverLoader loader = new CoverLoader(uri -> {
+            check(uri.equals(SOURCE)); Response result = new Response(uri, webp); result.type = "image/webp"; return result;
+        }); RequestScope scope = new RequestScope(() -> true)) {
+            var image = ImageIO.read(new ByteArrayInputStream(loader.load(URI.create(SOURCE + "@100w_100h.webp"),scope)));
+            check(image.getWidth() == 168 && image.getHeight() == 84);
+            check((image.getRGB(0,0) >>> 24) == 255);
+        }
         var hd = new BufferedImage(1200, 1200, BufferedImage.TYPE_INT_RGB);
         // Fine stripes would disappear if playback accidentally reused the 96px list thumbnail.
         for (int y = 0; y < 1200; y++) for (int x = 0; x < 1200; x++) hd.setRGB(x, y, (x / 6) % 2 == 0 ? 0xff000000 : 0xffffffff);
@@ -60,10 +83,10 @@ public final class CoverLoaderContractTest {
             int transitions = 0, previous = 0;
             for (int x = 0; x < 1024; x++) { int pixel = (image.getRGB(x, 512) & 255) > 128 ? 1 : 0; if (pixel != previous) transitions++; previous = pixel; }
             check(transitions >= 190);
-            check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == 96);
+            check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == 168);
         }
         try (CoverLoader loader = new CoverLoader(uri -> new Response(uri, fixture)); RequestScope scope = new RequestScope(() -> true)) {
-            check(ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE, scope))).getWidth() == 120);
+            check(ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE, scope))).getWidth() == 240);
         }
         Response hdOversize = new Response(SOURCE, fixture); hdOversize.length = 8 * 1048576L + 1;
         try (CoverLoader loader = new CoverLoader(uri -> hdOversize); RequestScope scope = new RequestScope(() -> true)) {
@@ -71,15 +94,15 @@ public final class CoverLoaderContractTest {
         }
         try (CoverLoader loader = new CoverLoader(uri -> response); RequestScope scope = new RequestScope(() -> true)) {
             byte[] bytes = loader.load(SOURCE, scope); var image = ImageIO.read(new ByteArrayInputStream(bytes));
-            check(image.getWidth() == 96 && image.getHeight() == 96 && bytes.length < 65536);
-            check((image.getRGB(10, 40) & 0xffffff) == 0xdd5500 && (image.getRGB(85, 40) & 0xffffff) == 0x008866);
+            check(image.getWidth() == 168 && image.getHeight() == 84 && bytes.length < 65536);
+            check((image.getRGB(10, 40) & 0xffffff) == 0xdd5500 && (image.getRGB(155, 40) & 0xffffff) == 0x008866);
             check(response.closed && !response.getInstanceFollowRedirects() && response.getRequestProperty("Cookie") == null && response.getRequestProperty("Authorization") == null);
             rejects(() -> loader.load(URI.create("https://evil.example/a"), scope));
         }
         for (int mode = 0; mode < 6; mode++) {
             Response bad = new Response(SOURCE, fixture);
-            switch (mode) { case 0 -> bad.status = 302; case 1 -> bad.type = "text/html"; case 2 -> bad.length = 1048577;
-                case 3 -> bad.bytes = new byte[1048577]; case 4 -> bad.bytes = "COOKIE_SECRET".getBytes(); case 5 -> bad.encoding = "gzip"; }
+            switch (mode) { case 0 -> bad.status = 302; case 1 -> bad.type = "text/html"; case 2 -> bad.length = 4194305;
+                case 3 -> bad.bytes = new byte[4194305]; case 4 -> bad.bytes = "COOKIE_SECRET".getBytes(); case 5 -> bad.encoding = "gzip"; }
             try (CoverLoader loader = new CoverLoader(uri -> bad); RequestScope scope = new RequestScope(() -> true)) { rejects(() -> loader.load(SOURCE, scope)); check(bad.closed); }
         }
         var huge = new BufferedImage(4097, 1, BufferedImage.TYPE_INT_RGB); var hugeBytes = new ByteArrayOutputStream(); ImageIO.write(huge, "png", hugeBytes); huge.flush();
@@ -89,7 +112,7 @@ public final class CoverLoaderContractTest {
         var jpegImage = new BufferedImage(150, 120, BufferedImage.TYPE_INT_RGB); var jpegBytes = new ByteArrayOutputStream(); ImageIO.write(jpegImage, "jpeg", jpegBytes); jpegImage.flush();
         Response jpeg = new Response(SOURCE, jpegBytes.toByteArray()); jpeg.type = "image/jpeg; charset=binary";
         try (CoverLoader loader = new CoverLoader(uri -> jpeg); RequestScope scope = new RequestScope(() -> true)) {
-            check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == 96);
+            check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == 150);
         }
         AtomicInteger opens = new AtomicInteger(); AtomicBoolean active = new AtomicBoolean(true);
         try (CoverLoader loader = new CoverLoader(uri -> { opens.incrementAndGet(); return new Response(uri, fixture); })) {
@@ -101,6 +124,29 @@ public final class CoverLoaderContractTest {
             active.set(false); check(loader.request("row", SOURCE, active::get) == null);
             check(loader.request("no-image", null, () -> true) == null && opens.get() == 1);
             loader.clear(); loader.close(); check(loader.request("closed", SOURCE, () -> true) == null);
+        }
+        AtomicInteger lookups = new AtomicInteger(), lazyOpens = new AtomicInteger();
+        try (CoverLoader loader = new CoverLoader(uri -> { lazyOpens.incrementAndGet(); return new Response(uri,fixture); })) {
+            CoverLoader.Source lookup = scope -> { lookups.incrementAndGet(); return SOURCE; };
+            check(lookups.get() == 0);
+            loader.requestSource("lazy", lookup, () -> true);
+            long end = System.nanoTime()+3_000_000_000L; byte[] result;
+            do { Thread.sleep(10); result = loader.requestSource("lazy", lookup, () -> true); } while (result == null && System.nanoTime() < end);
+            check(result != null && lookups.get() == 1 && lazyOpens.get() == 1);
+            loader.requestSource("lazy", lookup, () -> true); check(lookups.get() == 1);
+        }
+        URI alternate = URI.create("https://i1.hdslb.com/fallback.jpg");
+        AtomicInteger fallbackLookups = new AtomicInteger(), fallbackOpens = new AtomicInteger();
+        try (CoverLoader loader = new CoverLoader(uri -> {
+            fallbackOpens.incrementAndGet(); var result = new Response(uri,fixture); if (uri.equals(SOURCE)) result.status=404; return result;
+        })) {
+            CoverLoader.Source lookup = scope -> { fallbackLookups.incrementAndGet(); return alternate; };
+            loader.requestSource("broken", scope -> SOURCE, lookup, () -> true);
+            long end=System.nanoTime()+3_000_000_000L; byte[] result;
+            do { Thread.sleep(10); result=loader.requestSource("broken",scope -> SOURCE,lookup,() -> true); } while(result==null && System.nanoTime()<end);
+            check(result!=null && fallbackLookups.get()==1 && fallbackOpens.get()==2);
+            loader.requestSource("broken",scope -> SOURCE,lookup,() -> true);
+            check(fallbackLookups.get()==1 && fallbackOpens.get()==2);
         }
         CountDownLatch started = new CountDownLatch(1), release = new CountDownLatch(1); AtomicInteger cancelledOpens = new AtomicInteger();
         try (CoverLoader loader = new CoverLoader(uri -> {

@@ -47,6 +47,15 @@ public final class PlaybackCoverContractTest {
             finally { bitmap.close(); }
         }
         byte[] wrongSize = png.clone(); java.nio.ByteBuffer.wrap(wrongSize,16,4).putInt(2048);
+        byte[] landscape = io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest.png(1024,576);
+        try (PlaybackCoverFile cover = PlaybackCoverFile.create(landscape)) {
+            Class<?> tags = Class.forName("com.xuncorp.voxzen.tag.TagParser"); Object parser = tags.getField("INSTANCE").get(null);
+            var read = tags.getDeclaredMethod("readArtworkBinaryData", File.class); check(read.trySetAccessible());
+            byte[] extracted = (byte[])read.invoke(parser, Path.of(cover.path()).toFile());
+            check(Arrays.equals(landscape, extracted));
+            var image = ImageIO.read(new ByteArrayInputStream(extracted));
+            check(image.getWidth() == 1024 && image.getHeight() == 576);
+        }
         for (byte[] invalid : new byte[][]{new byte[0], new byte[PlaybackCoverFile.MAX_PNG_BYTES + 1], Arrays.copyOf(png,23), wrongSize}) {
             try { PlaybackCoverFile.create(invalid); throw new AssertionError("Bad cover accepted"); }
             catch (IOException expected) { checks++; }

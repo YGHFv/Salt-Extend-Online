@@ -67,15 +67,18 @@ public final class NativeDeskPlaybackContractTest {
             ready(player); String current = (String)player.snapshot().get("token"); desk.confirmPlayback(current);
             check(armed.get() && arms.get() == 1 && queue.get() == 1 && !Boolean.TRUE.equals(player.snapshot().get("ready")));
             check(player.snapshot().get("status").toString().contains("SUBMITTED") && !player.snapshot().toString().contains("URL_SECRET"));
+            check(player.snapshot().get("error").equals(""));
             fails(() -> desk.confirmPlayback(current)); check(arms.get() == 1 && queue.get() == 1);
             ready(player); desk.confirmPlayback((String)player.snapshot().get("token")); check(arms.get() == 1 && queue.get() == 2);
             armed.set(false); failArm.set(true); ready(player); fails(() -> desk.confirmPlayback((String)player.snapshot().get("token")));
             check(queue.get() == 2 && player.snapshot().get("status").toString().contains("ADAPTER_SETUP") && !player.snapshot().toString().contains("SECRET"));
+            check(player.snapshot().get("error").toString().contains("ADAPTER_SETUP"));
             failArm.set(false); duringArm.set(() -> player.invalidate("Revision changed")); ready(player);
             fails(() -> desk.confirmPlayback((String)player.snapshot().get("token"))); check(queue.get() == 2);
             duringArm.set(() -> {}); failQueue.set(true); ready(player); String failed = (String)player.snapshot().get("token");
             fails(() -> desk.confirmPlayback(failed)); check(queue.get() == 3 && !Boolean.TRUE.equals(player.snapshot().get("ready")));
             check(player.snapshot().get("status").toString().contains("QUEUE_SUBMIT") && !player.snapshot().toString().contains("SECRET"));
+            check(player.snapshot().get("error").toString().contains("QUEUE_SUBMIT"));
             fails(() -> desk.confirmPlayback(failed)); check(queue.get() == 3);
             failQueue.set(false); armed.set(false);
             fails(() -> desk.playRow("stale")); check(queue.get() == 3);
@@ -85,7 +88,7 @@ public final class NativeDeskPlaybackContractTest {
             library.accountChanged(AccountPlatform.BILIBILI); check(library.currentRow(row));
             var items = (List<?>)library.snapshot().get("items");
             fails(() -> desk.playRow((String)((Map<?,?>)items.get(1)).get("token")));
-            fails(() -> desk.playRow((String)((Map<?,?>)items.get(2)).get("token")));
+            check(items.size() == 2 && items.stream().allMatch(item -> Boolean.TRUE.equals(((Map<?,?>)item).get("enabled"))));
             check(queue.get() == 3);
             desk.playRow(row); waitFor(() -> queue.get() == 4);
             check(armed.get() && player.snapshot().get("status").toString().contains("SUBMITTED"));

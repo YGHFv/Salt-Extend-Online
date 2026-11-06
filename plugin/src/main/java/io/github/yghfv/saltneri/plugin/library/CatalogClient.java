@@ -85,18 +85,8 @@ public final class CatalogClient {
         if (query.view() == View.DISCOVER) throw new IllegalArgumentException("Bilibili anonymous discovery is not implemented");
         String base = "https://api.bilibili.com";
         if (query.view() == View.COLLECTION) {
-            var nav = object(success(http.json(URI.create(base + "/x/web-interface/nav"), null, request), 0, http.stage()).get("data"));
-            var keys = object(nav.get("wbi_img"));
-            String mixin;
-            try { mixin = BiliWbi.mixin(text(keys.get("img_url")), text(keys.get("sub_url"))); }
-            catch (IllegalArgumentException error) { throw invalid(); }
-            URI uri = BiliWbi.sign(base + "/x/polymer/web-space/seasons_archives_list", Map.of(
-                    "mid", Long.toString(query.owner()), "season_id", Long.toString(query.folder()),
-                    "page_num", Integer.toString(query.page()), "page_size", "20", "sort_reverse", "false", "web_location", "333.999"),
-                    mixin, clock.instant().getEpochSecond());
-            var data = object(success(http.json(uri, null, request), 0, http.stage()).get("data"));
+            var data = collectionData(query, 20, http, request);
             var meta = object(data.get("meta"));
-            if (id(meta.get("season_id")) != query.folder() || id(meta.get("mid")) != query.owner()) throw invalid();
             List<Item> items = new ArrayList<>(); Set<String> unique = new HashSet<>();
             for (Object row : bounded(arrayOrEmpty(data.get("archives")), 20)) {
                 var video = object(row); String bvid = optional(video.get("bvid"));
@@ -107,8 +97,12 @@ public final class CatalogClient {
                 items.add(new Item(Kind.TRACK, target, text(video.get("title")), enabled ? "P1" : "Unavailable video", duration * 1000, enabled,
                         cover(AccountPlatform.BILIBILI, video.get("pic"))));
             }
-            long total = number(object(data.get("page")).get("total"), number(meta.get("total"), items.size()));
-            return page(text(meta.get("name")), items, query.page() * 20L < total);
+            Map<String, Object> paging = data.get("page") == null ? Map.of() : object(data.get("page"));
+            long total = number(paging.get("total"), number(meta.get("total"), -1));
+            Boolean more = more(data, query.page(), total);
+            if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(collectionData(
+                    new Query(query.platform(), query.view(), query.folder(), query.page() + 1, query.owner()), 20, http, request).get("archives")).isEmpty();
+            return page(text(meta.get("name")), items, more && query.page() < 500);
         }
         if (query.view() == View.FOLDER) {
             var data = object(success(http.json(URI.create(base + "/x/v3/fav/resource/list?media_id=" + query.folder() + "&pn=" + query.page() + "&ps=20&order=mtime&platform=web"), null, request), 0, http.stage()).get("data"));
@@ -122,7 +116,10 @@ public final class CatalogClient {
                 items.add(new Item(Kind.TRACK, target, text(video.get("title")), owner + (enabled ? " / P1" : " / unavailable or unsupported"), number(video.get("duration"), 0) * 1000, enabled,
                         cover(AccountPlatform.BILIBILI, video.get("cover"))));
             }
-            return page(text(info.get("title")), items, Boolean.TRUE.equals(data.get("has_more")));
+            Boolean more = more(data, query.page(), number(info.get("media_count"), -1));
+            if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
+                    base + "/x/v3/fav/resource/list?media_id=" + query.folder() + "&pn=" + (query.page() + 1) + "&ps=20&order=mtime&platform=web").get("medias")).isEmpty();
+            return page(text(info.get("title")), items, more && query.page() < 500);
         }
         String endpoint = query.view() == View.MINE ? "created/list" : "collected/list";
         var data = object(success(http.json(URI.create(base + "/x/v3/fav/folder/" + endpoint + "?up_mid=" + account.userId() + "&pn=" + query.page() + "&ps=20&platform=web&web_location=333.1387"), null, request), 0, http.stage()).get("data"));
@@ -142,9 +139,56 @@ public final class CatalogClient {
             String subtitle = isCollection ? (enabled ? "\u89c6\u9891\u5408\u96c6" : "\u5408\u96c6\u5df2\u5931\u6548\u6216\u7f3a\u5c11\u4f5c\u8005\u4fe1\u606f") : enabled ? "\u6536\u85cf\u5939"
                     : "\u672a\u652f\u6301\u7684\u5217\u8868\u7c7b\u578b (type=" + type + ")";
             items.add(new Item(isCollection ? Kind.COLLECTION : Kind.FOLDER, target, text(alias(folder, "title", "name")), subtitle, number(alias(folder, "media_count", "total"), 0), enabled,
-                    cover(AccountPlatform.BILIBILI, folder.get("cover")), isCollection ? owner : 0));
+                    firstCover(AccountPlatform.BILIBILI, folder, "cover", "pic", "cover_url"), isCollection ? owner : 0));
         }
-        long total = number(data.get("count"), items.size()); return page(viewTitle(query), items, query.page() * 20L < total);
+        Boolean more = more(data, query.page(), number(alias(data, "count", "total"), -1));
+        // Some responses omit totals/flags. Probe at most one page, never crawl or count filtered UI rows.
+        if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
+                base + "/x/v3/fav/folder/" + endpoint + "?up_mid=" + account.userId() + "&pn=" + (query.page() + 1) + "&ps=20&platform=web&web_location=333.1387").get("list")).isEmpty();
+        return page(viewTitle(query), items, more && query.page() < 500);
+    }
+    private static Boolean more(Map<String, Object> data, int page, long total) throws IOException {
+        Object flag = alias(data, "has_more", "more");
+        if (flag instanceof Boolean value) return value;
+        if (flag != null) { long value = number(flag, 0); if (value != 0 && value != 1) throw invalid(); return value == 1; }
+        return total <= 0 ? null : page * 20L < total;
+    }
+    private static Map<String, Object> biliData(CatalogHttp http, RequestScope request, String url) throws IOException {
+        return object(success(http.json(URI.create(url), null, request), 0, http.stage()).get("data"));
+    }
+    private Map<String, Object> collectionData(Query query, int size, CatalogHttp http, RequestScope request) throws IOException {
+        var nav = biliData(http, request, "https://api.bilibili.com/x/web-interface/nav");
+        var keys = object(nav.get("wbi_img"));
+        String mixin;
+        try { mixin = BiliWbi.mixin(text(keys.get("img_url")), text(keys.get("sub_url"))); }
+        catch (IllegalArgumentException error) { throw invalid(); }
+        URI uri = BiliWbi.sign("https://api.bilibili.com/x/polymer/web-space/seasons_archives_list", Map.of(
+                "mid", Long.toString(query.owner()), "season_id", Long.toString(query.folder()),
+                "page_num", Integer.toString(query.page()), "page_size", Integer.toString(size), "sort_reverse", "false", "web_location", "333.999"),
+                mixin, clock.instant().getEpochSecond());
+        var data = object(success(http.json(uri, null, request), 0, http.stage()).get("data"));
+        var meta = object(data.get("meta"));
+        if (id(meta.get("season_id")) != query.folder() || id(meta.get("mid")) != query.owner()) throw invalid();
+        return data;
+    }
+    /** Visible collection artwork only: metadata cover, then its first video's picture; no audio resolution. */
+    public URI collectionCover(Query query, RequestScope request) throws IOException {
+        if (query.view() != View.COLLECTION || account == null || account.platform() != AccountPlatform.BILIBILI) throw invalid();
+        try (CatalogHttp http = new CatalogHttp(AccountPlatform.BILIBILI, account, clock, opener)) {
+            http.verify(request);
+            var data = collectionData(query, 1, http, request);
+            URI cover = firstCover(AccountPlatform.BILIBILI, object(data.get("meta")), "cover", "pic");
+            if (cover != null) return cover;
+            for (Object row : bounded(arrayOrEmpty(data.get("archives")), 1)) {
+                cover = firstCover(AccountPlatform.BILIBILI, object(row), "pic", "cover");
+                if (cover != null) return cover;
+            }
+            return null;
+        }
+    }
+    private static URI firstCover(AccountPlatform platform, Map<String, Object> row, String... fields) {
+        for (String field : fields) { URI uri = cover(platform, row.get(field)); if (uri != null) return uri; }
+        return null;
     }
     private static String viewTitle(Query query) {
         return switch (query.view()) {

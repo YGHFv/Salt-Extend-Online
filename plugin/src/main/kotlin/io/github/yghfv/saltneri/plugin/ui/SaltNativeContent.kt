@@ -8,6 +8,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -126,10 +127,9 @@ private fun Cover(ui: SaltNativeUi, token: String) {
     }
     val thumbnail = remember(png) { png?.let { try { ui.thumbnail(it) } catch (_: Exception) { null } } }
     DisposableEffect(thumbnail) { onDispose { thumbnail?.close() } }
-    val palette = ui.palette(currentComposer)
-    Box(Modifier.size(56.dp).background(Color(palette.background().toULong()).copy(alpha = 0.35f), palette.shape()), contentAlignment = androidx.compose.ui.Alignment.Center) {
+    Box(Modifier.width(84.dp).height(56.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
         if (thumbnail == null) NativeText(ui, "\u97f3\u4e50", true)
-        else Image(thumbnail.bitmap(), "\u5c01\u9762", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Image(thumbnail.bitmap(), "\u5c01\u9762", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
     }
 }
 
@@ -156,85 +156,92 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         onDispose { ui.pageLeft(lease); ui.desk().leave(); ui.clearCovers() }
     }
     val palette = ui.palette(currentComposer)
-    val catalog = state?.catalog()
+    val catalog = state?.catalog()?.takeIf { it["platform"] == platform.name }
     val playback = state?.playback()
     val login = state?.login()
-    val rows = if (catalog?.get("platform") == platform.name) catalog["items"] as? List<*> else null
+    val rows = catalog?.get("items") as? List<*>
+    val listState = rememberLazyListState()
+    LaunchedEffect(platform, catalog?.get("view"), catalog?.get("page"), catalog?.get("title")) {
+        listState.scrollToItem(0)
+    }
     // Salt paints the window backdrop below navigation; an opaque page would hide its effects.
-    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        contentPadding = PaddingValues(top = 28.dp, bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            NativeText(ui, name(platform), modifier = Modifier.padding(bottom = 12.dp), heading = true)
-            NativeText(ui, "\u53d1\u73b0 / \u4e2a\u4eba\u6b4c\u5355 / \u6536\u85cf", true)
-            NativeText(ui, "\u5355\u51fb\u6253\u5f00\u6b4c\u5355\uff0c\u53cc\u51fb\u66f2\u76ee\u76f4\u63a5\u64ad\u653e\u3002", true)
+    Column(Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, bottom = 120.dp)) {
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = listState,
+            contentPadding = PaddingValues(top = 28.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                NativeText(ui, name(platform), modifier = Modifier.padding(bottom = 12.dp), heading = true)
+            }
+            if (!enabled) {
+                item { NativeText(ui, "\u539f\u751f\u9875\u9762\u5df2\u505c\u7528\uff0c\u8bf7\u8fd4\u56de\u5e76\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u3002") }
+            } else {
+                item {
+                    Column(Modifier.padding(8.dp)) {
+                        if (login?.phase()?.name in listOf("CREATING", "WAITING_SCAN", "WAITING_CONFIRMATION", "EXPIRED", "ERROR")) {
+                            NativeText(ui, login?.status() ?: "", modifier = Modifier.padding(8.dp))
+                        }
+                        NativeButtons(ui, listOf(
+                            NativeButton("\u626b\u7801\u767b\u5f55") { action { ui.desk().action(platform, NativeDesk.Action.LOGIN) } },
+                            NativeButton("\u9000\u51fa\u8d26\u53f7", enabled = login?.phase()?.name == "LOGGED_IN") {
+                                action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) }
+                            }
+                        ))
+                        login?.qrContent()?.let { uri ->
+                            Qr(ui, uri.toASCIIString())
+                            NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
+                                action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) }
+                            })
+                        }
+                    }
+                }
+                item {
+                    val views = listOf(Catalog.View.DISCOVER to if (platform == AccountPlatform.BILIBILI) "\u53d1\u73b0\uff08\u6682\u672a\u63a5\u5165\uff09" else "\u53d1\u73b0",
+                        Catalog.View.MINE to if (platform == AccountPlatform.NETEASE) "\u6211\u7684\u6b4c\u5355 / \u559c\u6b22" else "\u521b\u5efa\u7684\u6536\u85cf",
+                        Catalog.View.SAVED to "\u6536\u85cf / \u8ba2\u9605")
+                    NativeButtons(ui, views.map { (destination, label) ->
+                        NativeButton(label, view == destination, enabled = platform != AccountPlatform.BILIBILI || destination != Catalog.View.DISCOVER) {
+                            action { ui.desk().browse(platform, destination); view = destination }
+                        }
+                    })
+                }
+                if (playback?.get("active") == true && (playback["error"] as? String).orEmpty().isNotEmpty()) item {
+                    NativeText(ui, playback["error"] as String)
+                }
+                item {
+                    if (error.isNotEmpty()) NativeText(ui, error)
+                    val catalogError = (catalog?.get("error") as? String).orEmpty()
+                    if (catalogError.isNotEmpty()) NativeText(ui, catalogError)
+                    NativeText(ui, catalog?.get("title") as? String ?: "")
+                }
+                rows?.forEach { value ->
+                    val row = value as Map<*, *>
+                    item(key = row["token"] as String) {
+                        val token = row["token"] as String
+                        val track = row["kind"] == "TRACK"
+                        Row(Modifier.fillMaxWidth().background(if (selectedRow == token) Color(palette.background().toULong()).copy(alpha = 0.65f) else Color.Transparent, palette.shape())
+                            .combinedClickable(enabled = row["enabled"] == true, onDoubleClick = if (track) ({ action { ui.desk().playRow(token); selectedRow = token } }) else null,
+                                onClick = { action { if (track) selectedRow = token else ui.desk().choose(token) } }).padding(8.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(32.dp).background(if (selectedRow == token) Color(palette.accent().toULong()) else Color.Transparent))
+                            Spacer(Modifier.width(8.dp))
+                            Cover(ui, token)
+                            Column(Modifier.weight(1f).padding(start = 16.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                val title = row["title"] as String
+                                NativeText(ui, title, modifier = Modifier.fillMaxWidth())
+                                NativeText(ui, row["subtitle"] as String, true, Modifier.fillMaxWidth())
+                            }
+                        }
+                    }
+                }
+            }
         }
-        if (!enabled) {
-            item { NativeText(ui, "\u539f\u751f\u9875\u9762\u5df2\u505c\u7528\uff0c\u8bf7\u8fd4\u56de\u5e76\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u3002") }
-        } else {
-            item {
-                Column(Modifier.padding(8.dp)) {
-                    NativeText(ui, login?.status() ?: "\u8bfb\u53d6\u672c\u63d2\u4ef6\u8d26\u53f7\u72b6\u6001", true, Modifier.padding(8.dp))
-                    NativeButtons(ui, listOf(
-                        NativeButton("\u626b\u7801\u767b\u5f55") { action { ui.desk().action(platform, NativeDesk.Action.LOGIN) } },
-                        NativeButton("\u9000\u51fa\u8d26\u53f7", enabled = login?.phase()?.name == "LOGGED_IN") {
-                            action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) }
-                        }
-                    ))
-                    login?.qrContent()?.let { uri ->
-                        Qr(ui, uri.toASCIIString())
-                        NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
-                            action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) }
-                        })
-                    }
-                }
-            }
-            item {
-                val views = listOf(Catalog.View.DISCOVER to if (platform == AccountPlatform.BILIBILI) "\u53d1\u73b0\uff08\u6682\u672a\u63a5\u5165\uff09" else "\u53d1\u73b0",
-                    Catalog.View.MINE to if (platform == AccountPlatform.NETEASE) "\u6211\u7684\u6b4c\u5355 / \u559c\u6b22" else "\u521b\u5efa\u7684\u6536\u85cf",
-                    Catalog.View.SAVED to "\u6536\u85cf / \u8ba2\u9605")
-                NativeButtons(ui, views.map { (destination, label) ->
-                    NativeButton(label, view == destination, enabled = platform != AccountPlatform.BILIBILI || destination != Catalog.View.DISCOVER) {
-                        action { ui.desk().browse(platform, destination); view = destination }
-                    }
-                })
-            }
-            if (playback?.get("active") == true) item {
-                NativeText(ui, playback["status"] as? String ?: "", true)
-            }
-            item {
-                if (error.isNotEmpty()) NativeText(ui, error)
-                NativeText(ui, catalog?.get("status") as? String ?: "\u8bf7\u9009\u62e9\u680f\u76ee", true)
-                NativeText(ui, catalog?.get("title") as? String ?: "")
-            }
-            rows?.forEach { value ->
-                val row = value as Map<*, *>
-                item(key = row["token"] as String) {
-                    val token = row["token"] as String
-                    val track = row["kind"] == "TRACK"
-                    Row(Modifier.fillMaxWidth().background(if (selectedRow == token) Color(palette.background().toULong()).copy(alpha = 0.65f) else Color.Transparent, palette.shape())
-                        .combinedClickable(enabled = row["enabled"] == true, onDoubleClick = if (track) ({ action { ui.desk().playRow(token); selectedRow = token } }) else null,
-                            onClick = { action { if (track) selectedRow = token else ui.desk().choose(token) } }).padding(8.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Box(Modifier.width(3.dp).height(32.dp).background(if (selectedRow == token) Color(palette.accent().toULong()) else Color.Transparent))
-                        Spacer(Modifier.width(8.dp))
-                        Cover(ui, token)
-                        Column(Modifier.weight(1f).padding(start = 16.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val title = row["title"] as String
-                            NativeText(ui, title, modifier = Modifier.fillMaxWidth())
-                            NativeText(ui, row["subtitle"] as String, true, Modifier.fillMaxWidth())
-                        }
-                    }
-                }
-            }
-            item {
-                val previous = (catalog?.get("page") as? Number)?.toInt()?.let { it > 1 } == true
-                val next = catalog?.get("more") == true
-                if (rows != null && (previous || next)) NativeButtons(ui, listOf(
-                    NativeButton("\u4e0a\u4e00\u9875", enabled = previous) { action { ui.desk().page(-1) } },
-                    NativeButton("\u4e0b\u4e00\u9875", enabled = next) { action { ui.desk().page(1) } }
-                ))
-                NativeText(ui, "\u6bcf\u9875\u6700\u591a 20 \u9879\u3002\u5c01\u9762\u6309\u53ef\u89c1\u9879\u52a0\u8f7d\uff1b\u6682\u65e0\u6574\u5355\u81ea\u52a8\u8fde\u64ad\u548c\u6b4c\u8bcd\u3002", true)
-            }
+        val previous = (catalog?.get("page") as? Number)?.toInt()?.let { it > 1 } == true
+        val next = catalog?.get("more") == true
+        // Keep navigation above Salt's mini-player, outside the scrolling catalog.
+        if (enabled && (previous || next)) Row(Modifier.fillMaxWidth()) {
+            Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog.get("loaded") == true,
+                click = { action { ui.desk().page(-1) } }) }
+            Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog.get("loaded") == true,
+                click = { action { ui.desk().page(1) } }) }
         }
     }
 }

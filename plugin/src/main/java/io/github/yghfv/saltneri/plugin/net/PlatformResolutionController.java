@@ -20,7 +20,7 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
     @FunctionalInterface public interface Resolver<T, Q, R> {
         R resolve(T target, Q quality, String accountScope, RequestScope request) throws Exception;
     }
-    public record Snapshot<R>(String status, R resolved) { }
+    public record Snapshot<R>(String status, R resolved, boolean failed) { }
     private static final class Operation {
         final AtomicBoolean active = new AtomicBoolean(true);
         final AccountCredentials account;
@@ -45,6 +45,7 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
     private boolean closed;
     private String status;
     private R resolved;
+    private boolean failed;
     public PlatformResolutionController(String platform, Function<AccountCredentials, Resolver<T, Q, R>> resolvers,
                                         Supplier<AccountCredentials> accounts, BooleanSupplier authorized, Clock clock,
                                         Function<R, Instant> expiry, Function<R, String> summary, Function<Throwable, String> rejection) {
@@ -65,13 +66,13 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
         if (closed) throw new IllegalStateException(platform + " resolver stopped");
         if (!permitted()) throw new SecurityException("Experimental permission required");
         Objects.requireNonNull(target); Objects.requireNonNull(quality);
-        if (current != null) current.cancel(); current = null; worker.purge(); resolved = null;
+        if (current != null) current.cancel(); current = null; worker.purge(); resolved = null; failed = false;
         AccountCredentials account = accounts.get(); Resolver<T, Q, R> selected = resolvers.apply(account);
         String scope = account == null ? anonymous : account.accountScope();
         Operation operation = new Operation(account, this::permitted); current = operation;
         status = "Resolving " + platform + " in background (" + (account == null ? "anonymous" : "verified account") + "); no queue changes. Check status after completion.";
         try { operation.future = worker.submit(() -> run(operation, target, quality, selected, scope)); }
-        catch (RuntimeException failure) { operation.cancel(); current = null; status = platform + " resolver busy or stopped."; throw failure; }
+        catch (RuntimeException failure) { operation.cancel(); current = null; failed = true; status = platform + " resolver busy or stopped."; throw failure; }
     }
     private void run(Operation operation, T target, Q quality, Resolver<T, Q, R> selected, String scope) {
         try (RequestScope request = operation.request) {
@@ -79,7 +80,7 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
             synchronized (this) {
                 // Recheck under the publication lock, including anonymous -> signed-in replacement.
                 if (!usable(operation)) return;
-                if (!clock.instant().isBefore(expiry.apply(result))) { status = platform + " resolution expired. Resolve again explicitly; nothing played."; return; }
+                if (!clock.instant().isBefore(expiry.apply(result))) { failed = true; status = platform + " resolution expired. Resolve again explicitly; nothing played."; return; }
                 resolved = result; status = summary.apply(result);
             }
         } catch (CancellationException cancelled) { failure(operation, platform + " resolution cancelled or timed out; nothing played."); }
@@ -90,10 +91,10 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
         }
     }
     private synchronized void failure(Operation operation, String detail) {
-        if (!closed && current == operation && operation.active.get()) { resolved = null; status = detail; }
+        if (!closed && current == operation && operation.active.get()) { resolved = null; failed = true; status = detail; }
     }
     public synchronized void invalidate(String detail) {
-        if (current != null) current.cancel(); current = null; worker.purge(); resolved = null; status = detail;
+        if (current != null) current.cancel(); current = null; worker.purge(); resolved = null; failed = false; status = detail;
     }
     public synchronized Snapshot<R> snapshot() {
         if (!closed && !permitted()) invalidate(platform + " resolution unavailable: experimental permission revoked.");
@@ -101,9 +102,9 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
             invalidate(platform + " account revision changed; previous result retired. Resolve explicitly again.");
         }
         if (resolved != null && !clock.instant().isBefore(expiry.apply(resolved))) {
-            resolved = null; status = platform + " resolution expired. Resolve again explicitly; nothing played.";
+            resolved = null; failed = true; status = platform + " resolution expired. Resolve again explicitly; nothing played.";
         }
-        return new Snapshot<>(status, resolved);
+        return new Snapshot<>(status, resolved, failed);
     }
     @Override public synchronized void close() {
         if (closed) return; closed = true; invalidate(platform + " resolver stopped; no queue changes."); worker.shutdownNow();

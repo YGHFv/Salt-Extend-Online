@@ -94,6 +94,7 @@ public final class NativePageRenderTest {
         AtomicInteger requests = new AtomicInteger(), queues = new AtomicInteger(), actions = new AtomicInteger();
         AtomicInteger qr = new AtomicInteger();
         AtomicInteger catalogSize = new AtomicInteger(1);
+        AtomicBoolean invalidItems = new AtomicBoolean(false);
         AtomicBoolean armed = new AtomicBoolean(false);
         Clock clock = Clock.systemUTC();
         Path output = Path.of(System.getProperty("java.io.tmpdir")).resolve("native-ui-render"); Files.createDirectories(output);
@@ -109,7 +110,7 @@ public final class NativePageRenderTest {
                      account -> (query, quality, scope, request) -> {
                          requests.incrementAndGet(); int offset = (query.page() - 1) * 20, total = catalogSize.get();
                          var items = java.util.stream.IntStream.range(offset, Math.min(offset + 20, total)).mapToObj(index ->
-                                 new Catalog.Item(Catalog.Kind.TRACK, "123", index == 0 ? "Synthetic song" : "Song " + index, "Artist", 1, true,
+                                 new Catalog.Item(Catalog.Kind.TRACK, "123", index == 0 ? "Synthetic song" : "Song " + index, "Artist", 1, !invalidItems.get(),
                                          URI.create("https://i0.hdslb.com/bfs/archive/fixture.png"))).toList();
                          return new Catalog.Page("Synthetic playlist", items, offset + 20 < total, clock.instant().plusSeconds(300));
                      })) {
@@ -191,6 +192,8 @@ public final class NativePageRenderTest {
                         var root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                         var titleNode = findText(root,"Synthetic song"); var artistNode = findText(root,"Artist");
                         check(titleNode != null && artistNode != null);
+                        check(findText(root, "\u5217\u8868\u5df2\u8bfb\u53d6") == null && findText(root, "Offline fixture") == null);
+                        check(findText(root, "Resolution does not play") == null);
                         check(findText(root, "\u4e0a\u4e00\u9875") == null && findText(root, "\u4e0b\u4e00\u9875") == null);
                         check(Math.abs(titleNode.getBoundsInRoot().getLeft() - artistNode.getBoundsInRoot().getLeft()) < 1f);
                         try (Image image = scene.render(90_000_000L); Data png = image.encodeToData(EncodedImageFormat.PNG,100,0)) {
@@ -205,6 +208,10 @@ public final class NativePageRenderTest {
                         long until = System.nanoTime() + 3_000_000_000L;
                         while (queues.get() == 0 && System.nanoTime() < until) Thread.sleep(10);
                         check(queues.get() == 1 && actions.get() == 1 && armed.get());
+                        Thread.sleep(450);
+                        try (Image ignored = scene.render(900_000_000L)) {
+                            check(findText(scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode(), "SUBMITTED") == null);
+                        }
                     } catch (Exception error) { throw new AssertionError(error); }
                     finally { scene.close(); }
                 });
@@ -215,7 +222,7 @@ public final class NativePageRenderTest {
                     long ready = System.nanoTime() + 3_000_000_000L;
                     while (!library.snapshot().get("title").equals("Synthetic playlist") && System.nanoTime() < ready) Thread.sleep(10);
                     check(library.snapshot().get("title").equals("Synthetic playlist"));
-                    assertPager(cached, coverKey, width, count > 20);
+                    assertPager(cached, coverKey, width, count > 20, library);
                     if (count > 20) {
                         // Disposal invalidates the catalog; reopen before exercising the last-page route.
                         library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
@@ -224,9 +231,16 @@ public final class NativePageRenderTest {
                         library.turn(1);
                         ready = System.nanoTime() + 3_000_000_000L;
                         while (!library.snapshot().get("title").equals("Synthetic playlist") && System.nanoTime() < ready) Thread.sleep(10);
-                        assertPager(cached, coverKey, width, true);
+                        assertPager(cached, coverKey, width, true, library);
                     }
                 }
+                invalidItems.set(true); catalogSize.set(21);
+                library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
+                long hiddenReady = System.nanoTime()+3_000_000_000L;
+                while (!Boolean.TRUE.equals(library.snapshot().get("loaded")) && System.nanoTime()<hiddenReady) Thread.sleep(10);
+                check(((List<?>)library.snapshot().get("items")).isEmpty() && Boolean.TRUE.equals(library.snapshot().get("more")));
+                assertPager(cached, coverKey, 420, true, library);
+                invalidItems.set(false);
                 for (AccountPlatform platform : AccountPlatform.values()) SwingUtilities.invokeAndWait(() -> {
                     ImageComposeScene scene = new ImageComposeScene(40, 40, DensityKt.Density(1f, 1f), LayoutDirection.Ltr, Dispatchers.getUnconfined(),
                             (composer, flags) -> { PlatformIconsKt.PlatformIcon(ui, platform, composer, 0); return Unit.INSTANCE; });
@@ -243,16 +257,32 @@ public final class NativePageRenderTest {
         }
         System.out.println("PASS: " + checks + " offscreen Compose/Skia renders and single/double mouse gesture checks; fake image/queue, no browser/window, real account/network/audio; synthetic PNGs in " + output);
     }
-    private static void assertPager(Function3<Object,Composer,Integer,Object> cached, Object key, int width, boolean expected) throws Exception {
+    private static void assertPager(Function3<Object,Composer,Integer,Object> cached, Object key, int width, boolean expected, LibraryController library) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            // A tall viewport composes the footer even for a full 20-row LazyColumn.
-            ImageComposeScene scene = new ImageComposeScene(width, 2800, DensityKt.Density(1f,1f), LayoutDirection.Ltr, Dispatchers.getUnconfined(),
+            // A real window height: the 20-row catalog must not push the pager below the viewport.
+            ImageComposeScene scene = new ImageComposeScene(width, 768, DensityKt.Density(1f,1f), LayoutDirection.Ltr, Dispatchers.getUnconfined(),
                     (composer, flags) -> { cached.invoke(key, composer, flags); return Unit.INSTANCE; });
             try {
                 for (int frame=1; frame<=4; frame++) try (Image ignored = scene.render(frame * 16_000_000L)) { }
                 var root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                 check((findText(root,"\u4e0a\u4e00\u9875") != null) == expected);
                 check((findText(root,"\u4e0b\u4e00\u9875") != null) == expected);
+                if (expected) {
+                    boolean first = library.snapshot().get("page").equals(1);
+                    var target = findText(root, first ? "\u4e0b\u4e00\u9875" : "\u4e0a\u4e00\u9875");
+                    var bounds = target.getBoundsInRoot();
+                    check(bounds.getTop() > 0 && bounds.getBottom() <= 648 && bounds.getLeft() >= 0 && bounds.getRight() <= width);
+                    tap(scene, (bounds.getLeft()+bounds.getRight())/2, (bounds.getTop()+bounds.getBottom())/2, 3000);
+                    long until = System.nanoTime()+3_000_000_000L;
+                    while ((!library.snapshot().get("page").equals(first ? 2 : 1) || !Boolean.TRUE.equals(library.snapshot().get("loaded"))) && System.nanoTime()<until) Thread.sleep(10);
+                    check(library.snapshot().get("page").equals(first ? 2 : 1) && Boolean.TRUE.equals(library.snapshot().get("loaded")));
+                    Thread.sleep(450);
+                    try (Image ignored = scene.render(600_000_000L)) {
+                        var after = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
+                        check(findText(after,"\u4e0a\u4e00\u9875") != null && findText(after,"\u4e0b\u4e00\u9875") != null);
+                    }
+                }
+            } catch (Exception error) { throw new AssertionError(error);
             } finally { scene.close(); }
         });
     }

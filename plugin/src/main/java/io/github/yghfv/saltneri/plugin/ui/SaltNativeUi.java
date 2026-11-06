@@ -144,7 +144,8 @@ public final class SaltNativeUi implements AutoCloseable {
     public NativeDesk desk() { return desk; }
     public byte[] cover(String token) {
         if (!available()) return null;
-        return covers.request(token, desk.cover(token), () -> !closed && permitted.getAsBoolean() && desk.currentRow(token));
+        return covers.requestSource(token, scope -> desk.resolveCover(token, scope), scope -> desk.fallbackCover(token, scope),
+                () -> !closed && permitted.getAsBoolean() && desk.currentRow(token));
     }
     public void clearCovers() { covers.clear(); }
     public record Thumbnail(androidx.compose.ui.graphics.ImageBitmap bitmap, org.jetbrains.skia.Bitmap owner) implements AutoCloseable {
@@ -153,7 +154,9 @@ public final class SaltNativeUi implements AutoCloseable {
     public Thumbnail thumbnail(byte[] png) {
         org.jetbrains.skia.Bitmap bitmap = new org.jetbrains.skia.Bitmap();
         try (org.jetbrains.skia.Image image = org.jetbrains.skia.Image.Companion.makeFromEncoded(png)) {
-            if (image.getWidth() != 96 || image.getHeight() != 96 || !bitmap.allocN32Pixels(96, 96, false) || !image.readPixels(bitmap)) {
+            int width = image.getWidth(), height = image.getHeight();
+            if (width < 1 || height < 1 || width > CoverLoader.LIST_EDGE || height > CoverLoader.LIST_EDGE
+                    || !bitmap.allocN32Pixels(width, height, false) || !image.readPixels(bitmap)) {
                 throw new IllegalArgumentException("Invalid thumbnail");
             }
             return new Thumbnail(androidx.compose.ui.graphics.SkiaImageAsset_skikoKt.asComposeImageBitmap(bitmap), bitmap);

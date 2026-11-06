@@ -44,11 +44,12 @@ public final class LibraryWorkflowContractTest {
                 + "{\"season_id\":30,\"name\":\"Collection\",\"type\":21}]}}";
         List<OnlinePlaybackController.Target> biliSelections = new ArrayList<>();
         try (LibraryController library = new LibraryController(p -> bili, () -> true, biliSelections::add, () -> { }, CatalogContractTest.CLOCK,
-                a -> (q,k,s,r) -> new CatalogClient(a, CatalogContractTest.CLOCK, fixture).load(q,r))) {
-            library.browse(AccountPlatform.BILIBILI, View.MINE); waitFor(() -> rows(library).size() == 2);
+                a -> (q,k,s,r) -> new CatalogClient(a, CatalogContractTest.CLOCK, fixture).load(q,r),
+                (a,q,r) -> new CatalogClient(a, CatalogContractTest.CLOCK, fixture).collectionCover(q,r))) {
+            library.browse(AccountPlatform.BILIBILI, View.MINE); waitFor(() -> rows(library).size() == 1);
             check(Boolean.TRUE.equals(rows(library).getFirst().get("enabled")));
-            CatalogContractTest.fails(() -> library.choose((String)rows(library).getLast().get("token")));
-            library.choose((String)rows(library).getFirst().get("token")); waitFor(() -> library.snapshot().get("view").equals("FOLDER") && rows(library).size() == 2);
+            check(!library.snapshot().toString().contains("Collection"));
+            library.choose((String)rows(library).getFirst().get("token")); waitFor(() -> library.snapshot().get("view").equals("FOLDER") && rows(library).size() == 1);
             check(biliSelections.isEmpty());
             library.choose((String)rows(library).getFirst().get("token"));
             check(biliSelections.size() == 1 && biliSelections.getFirst().platform() == AccountPlatform.BILIBILI && biliSelections.getFirst().id().equals("BV17x411w7KC"));
@@ -56,15 +57,21 @@ public final class LibraryWorkflowContractTest {
             library.turn(1); waitFor(() -> library.snapshot().get("status").toString().contains("BILI_CONTENTS/HTTP=412"));
             check(rows(library).isEmpty() && biliSelections.size() == 1);
             check(!library.snapshot().toString().contains("SECRET"));
+            check(library.snapshot().get("error").toString().contains("BILI_CONTENTS/HTTP=412"));
             fixture.created = "{\"code\":0,\"data\":{\"count\":1,\"list\":[{\"id\":900,\"season_id\":30,\"name\":\"Saved collection\",\"upper\":{\"mid\":99}}]}}";
             library.browse(AccountPlatform.BILIBILI, View.SAVED); waitFor(() -> rows(library).size() == 1);
             String collectionToken = (String)rows(library).getFirst().get("token");
-            library.choose(collectionToken); waitFor(() -> library.snapshot().get("view").equals("COLLECTION") && rows(library).size() == 2);
+            check(library.snapshot().get("error").equals(""));
+            try (var request = new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> true)) {
+                check(library.cover(collectionToken) == null);
+                check(library.resolveCover(collectionToken,request).toString().equals("https://i0.hdslb.com/first.jpg"));
+            }
+            library.choose(collectionToken); waitFor(() -> library.snapshot().get("view").equals("COLLECTION") && rows(library).size() == 1);
             check(biliSelections.size() == 1);
             String videoToken = (String)rows(library).getFirst().get("token");
             library.playRow(videoToken, biliSelections::add);
             check(biliSelections.size() == 2 && biliSelections.getLast().id().equals("BV17x411w7KC"));
-            CatalogContractTest.fails(() -> library.playRow((String)rows(library).getLast().get("token"), biliSelections::add));
+            check(!library.snapshot().toString().contains("Deleted"));
             library.turn(1); waitFor(() -> library.snapshot().get("page").equals(2) && !rows(library).isEmpty());
             check(fixture.requests.getLast().getURL().getQuery().contains("mid=99") && fixture.requests.getLast().getURL().getQuery().contains("season_id=30"));
             check(Boolean.FALSE.equals(library.snapshot().get("more")));
@@ -73,7 +80,29 @@ public final class LibraryWorkflowContractTest {
             library.turn(-1); waitFor(() -> library.snapshot().get("page").equals(1) && !rows(library).isEmpty());
             check(Boolean.TRUE.equals(library.snapshot().get("more")));
             CatalogContractTest.fails(() -> library.choose(collectionToken));
+            fixture.created = fixture.created.replace("\"name\":\"Saved collection\"", "\"name\":\"Saved collection\",\"cover\":\"https://i0.hdslb.com/old.jpg\"");
+            library.browse(AccountPlatform.BILIBILI, View.SAVED); waitFor(() -> rows(library).size()==1);
+            String covered = (String)rows(library).getFirst().get("token");
+            int beforeCover = fixture.requests.size();
+            try (var request = new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> true)) {
+                check(library.resolveCover(covered,request).toString().equals("https://i0.hdslb.com/old.jpg") && fixture.requests.size()==beforeCover);
+                check(library.resolveCover(covered,request,true).toString().equals("https://i0.hdslb.com/first.jpg"));
+            }
         } finally { bili.retire(); }
+        AtomicInteger coverLookups = new AtomicInteger(); CountDownLatch lookupEntered = new CountDownLatch(1), lookupRelease = new CountDownLatch(1);
+        try (LibraryController library = new LibraryController(p -> null, () -> true, t -> { throw new AssertionError("No artwork playback"); }, () -> {}, CatalogContractTest.CLOCK,
+                a -> (q,k,s,r) -> new Page("Artwork", List.of(new Item(Kind.COLLECTION,"30","Collection","",1,true,null,99),
+                        new Item(Kind.FOLDER,"40","Deleted","",0,false)), true, CatalogContractTest.CLOCK.instant().plusSeconds(300)),
+                (a,q,r) -> { coverLookups.incrementAndGet(); lookupEntered.countDown(); try { lookupRelease.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                    return URI.create("https://i0.hdslb.com/late.jpg"); })) {
+            library.browse(AccountPlatform.BILIBILI, View.SAVED); waitFor(() -> rows(library).size()==1);
+            check(coverLookups.get()==0 && Boolean.TRUE.equals(library.snapshot().get("more")));
+            String row=(String)rows(library).getFirst().get("token");
+            var task = new java.util.concurrent.FutureTask<URI>(() -> { try(var request=new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> true)) { return library.resolveCover(row,request); } });
+            Thread worker=new Thread(task); worker.start(); check(lookupEntered.await(2,TimeUnit.SECONDS));
+            library.invalidate(); lookupRelease.countDown(); check(task.get(2,TimeUnit.SECONDS)==null);
+            check(coverLookups.get()==1 && rows(library).isEmpty());
+        } finally { lookupRelease.countDown(); }
         try (LibraryController library = new LibraryController(p -> null, () -> true, t -> { throw new AssertionError("Failure must not prepare"); }, () -> { },
                 CatalogContractTest.CLOCK, a -> (q,k,s,r) -> { throw new java.io.IOException("COOKIE_SECRET https://example.invalid/UID_SECRET"); })) {
             library.browse(AccountPlatform.NETEASE, View.DISCOVER);

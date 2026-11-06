@@ -30,6 +30,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
     private AccountCredentials selected;
     private String token = "", status = "No track prepared.";
     private boolean consumed;
+    private boolean submissionFailed;
     private record PlayIntent(String token, Runnable setup, long deadline) { }
     private PlayIntent intent;
     private final ScheduledExecutorService playbackWorker;
@@ -73,7 +74,8 @@ public final class OnlinePlaybackController implements AutoCloseable {
         var state = resolver.snapshot(); Audio audio = state.resolved();
         boolean ready = audio != null && !consumed && accounts.apply(platform) == selected && (selected == null || selected.isActive());
         return java.util.Map.of("status", consumed ? status : intent != null && ready ? "\u6b63\u5728\u64ad\u653e\u6240\u9009\u66f2\u76ee" : state.status(),
-                "ready", ready, "token", ready ? token : "", "title", ready ? audio.metadata().title() : "", "armed", armed.getAsBoolean(), "active", !token.isEmpty());
+                "ready", ready, "token", ready ? token : "", "title", ready ? audio.metadata().title() : "", "armed", armed.getAsBoolean(), "active", !token.isEmpty(),
+                "error", submissionFailed ? status : state.failed() ? state.status() : "");
     }
     public synchronized void playSelected(Target target, Runnable setup) {
         prepare(target);
@@ -98,7 +100,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
         } catch (Exception | LinkageError error) {
             synchronized (this) {
                 if (!setupComplete && token.equals(pending.token()) && !consumed) adapterFailed();
-                else if (setupComplete && token.equals(pending.token()) && !consumed) resolver.invalidate(
+                else if (setupComplete && token.equals(pending.token()) && !consumed) failPreparation(
                         "\u64ad\u653e\u672a\u63d0\u4ea4 [PLAY_STATE_CHANGED]\uff0c\u8bf7\u53cc\u51fb\u66f2\u76ee\u91cd\u8bd5\u3002");
             }
         }
@@ -115,8 +117,9 @@ public final class OnlinePlaybackController implements AutoCloseable {
     }
     public synchronized void adapterFailed() {
         // Retire preparation on setup failure; no queue attempt occurred and no automatic retry is safe.
-        resolver.invalidate("\u64ad\u653e\u9002\u914d\u542f\u7528\u5931\u8d25 [ADAPTER_SETUP]\uff0c\u672a\u63d0\u4ea4\u64ad\u653e\u3002\u8bf7\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u4e0e\u5bbf\u4e3b\u7248\u672c\u540e\u91cd\u65b0\u51c6\u5907\u3002");
+        failPreparation("\u64ad\u653e\u9002\u914d\u542f\u7528\u5931\u8d25 [ADAPTER_SETUP]\uff0c\u672a\u63d0\u4ea4\u64ad\u653e\u3002\u8bf7\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u4e0e\u5bbf\u4e3b\u7248\u672c\u540e\u91cd\u65b0\u51c6\u5907\u3002");
     }
+    private void failPreparation(String detail) { submissionFailed = true; status = detail; resolver.invalidate(detail); }
     public synchronized void play(String capability) throws Exception {
         Audio audio = validatedAudio(capability);
         if (!armed.getAsBoolean()) throw new IllegalStateException("Arm the adapter in Salt first");
@@ -124,9 +127,9 @@ public final class OnlinePlaybackController implements AutoCloseable {
         consumed = true; status = "\u6b63\u5728\u5411 Salt \u63d0\u4ea4\u64ad\u653e\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5";
         try { player.play(audio, () -> authorized.getAsBoolean() && (playingAccount == null || playingAccount.isActive()) && accounts.apply(playingPlatform) == playingAccount);
             status = "\u5df2\u5411 Salt \u63d0\u4ea4\u64ad\u653e [SUBMITTED]\uff1b\u8bf7\u68c0\u67e5\u5e95\u90e8\u64ad\u653e\u5668\u548c\u58f0\u97f3\uff0c\u63d0\u4ea4\u4e0d\u4ee3\u8868\u5df2\u53d1\u58f0\u3002";
-        } catch (Exception | LinkageError failure) { status = "\u64ad\u653e\u63d0\u4ea4\u5931\u8d25 [QUEUE_SUBMIT/" + failure.getClass().getSimpleName() + "]\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5\u3002"; throw failure; }
+        } catch (Exception | LinkageError failure) { submissionFailed = true; status = "\u64ad\u653e\u63d0\u4ea4\u5931\u8d25 [QUEUE_SUBMIT/" + failure.getClass().getSimpleName() + "]\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5\u3002"; throw failure; }
     }
-    public synchronized void invalidate(String detail) { intent = null; token = ""; consumed = false; resolver.invalidate(detail); status = detail; }
+    public synchronized void invalidate(String detail) { intent = null; token = ""; consumed = false; submissionFailed = false; resolver.invalidate(detail); status = detail; }
     public synchronized void accountChanged(AccountPlatform changed) { if (platform == changed) invalidate("Account changed; old preparation retired."); }
     @Override public synchronized void close() { invalidate("Online playback disabled."); playbackWorker.shutdownNow(); resolver.close(); }
 }

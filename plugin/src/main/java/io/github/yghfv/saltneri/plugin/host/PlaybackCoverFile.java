@@ -16,7 +16,7 @@ public final class PlaybackCoverFile implements AutoCloseable {
             throw new IOException("Invalid normalized playback cover");
         }
         int width = java.nio.ByteBuffer.wrap(png, 16, 4).getInt(), height = java.nio.ByteBuffer.wrap(png, 20, 4).getInt();
-        if (width < 1 || width > 1024 || height != width) throw new IOException("Invalid playback cover dimensions");
+        if (width < 1 || width > 1024 || height < 1 || height > 1024) throw new IOException("Invalid playback cover dimensions");
         byte[] picture;
         try (var bytes = new ByteArrayOutputStream(); var out = new DataOutputStream(bytes)) {
             out.writeInt(3); out.writeInt(9); out.writeBytes("image/png"); out.writeInt(0);

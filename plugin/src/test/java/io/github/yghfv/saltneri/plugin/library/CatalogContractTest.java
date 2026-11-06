@@ -49,6 +49,8 @@ public final class CatalogContractTest {
         String resources = "{\"code\":0,\"data\":{\"info\":{\"id\":20,\"title\":\"Favorites\"},\"has_more\":true,\"medias\":[{\"id\":1,\"type\":2,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60},{\"id\":2,\"type\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
         String collection = "{\"code\":0,\"data\":{\"meta\":{\"season_id\":30,\"mid\":99,\"name\":\"Collection\",\"total\":21},\"page\":{\"total\":21},\"archives\":[{\"aid\":1,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60,\"pic\":\"//i0.hdslb.com/fixture.jpg\"},{\"aid\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
         String identity = "42"; boolean csrf = true;
+        String nextCreated;
+        String collectionArtwork = "{\"code\":0,\"data\":{\"meta\":{\"season_id\":30,\"mid\":99,\"cover\":\"\"},\"archives\":[{\"pic\":\"//i0.hdslb.com/first.jpg@96w.webp\"}]}}";
         String failPath = "", statusPath = "", htmlPath = ""; int status = 200; IOException failure;
         final List<Response> requests = new ArrayList<>();
         public HttpURLConnection open(URI uri, byte[] form) throws IOException {
@@ -63,6 +65,8 @@ public final class CatalogContractTest {
                 case "/x/polymer/web-space/seasons_archives_list" -> collection;
                 default -> throw new AssertionError("Unexpected endpoint");
             };
+            if (uri.getPath().endsWith("/collected/list") && uri.getQuery().contains("pn=2") && nextCreated != null) json = nextCreated;
+            if (uri.getPath().endsWith("/seasons_archives_list") && uri.getQuery().contains("page_size=1&")) json = collectionArtwork;
             if (uri.getPath().startsWith("/weapi/") && !uri.getPath().contains("account/get")) { check(form != null); check(uri.getRawQuery().equals("csrf_token=fixture_csrf")); }
             Response response = new Response(uri, json, uri.getPath().equals("/") && csrf ? List.of("__csrf=fixture_csrf; Path=/; Secure") : List.of());
             if (uri.getPath().equals(statusPath)) response.status = status;
@@ -96,6 +100,38 @@ public final class CatalogContractTest {
         safeFailure(() -> missingCsrf.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null), Stage.NET_CSRF, Reason.CSRF, null);
         AccountCredentials bili = account(AccountPlatform.BILIBILI);
         try {
+            Fixture paging = new Fixture();
+            for (String flag : List.of("true", "1")) {
+                paging.created = "{\"code\":0,\"data\":{\"has_more\":" + flag + ",\"list\":[{\"id\":20,\"title\":\"One visible row\"}]}}";
+                check(paging.load(new Query(AccountPlatform.BILIBILI, View.SAVED, 0, 1), bili).hasMore());
+            }
+            String full = java.util.stream.LongStream.rangeClosed(1,20).mapToObj(id -> "{\"id\":"+id+",\"title\":\"Folder\"}").collect(java.util.stream.Collectors.joining(","));
+            paging.created = "{\"code\":0,\"data\":{\"list\":["+full+"]}}";
+            paging.nextCreated = "{\"code\":0,\"data\":{\"list\":[{\"id\":21,\"title\":\"Last\"}]}}";
+            int before = paging.requests.size();
+            check(paging.load(new Query(AccountPlatform.BILIBILI, View.SAVED, 0, 1), bili).hasMore());
+            check(paging.requests.size() == before + 3 && paging.requests.getLast().getURL().getQuery().contains("pn=2"));
+            paging.nextCreated = "{\"code\":0,\"data\":{\"list\":[]}}";
+            check(!paging.load(new Query(AccountPlatform.BILIBILI, View.SAVED, 0, 1), bili).hasMore());
+            paging.created = paging.created.replace("\"list\":", "\"count\":20,\"list\":");
+            before = paging.requests.size();
+            check(!paging.load(new Query(AccountPlatform.BILIBILI, View.SAVED, 0, 1), bili).hasMore());
+            check(paging.requests.size() == before + 2);
+            paging.resources = paging.resources.replace("\"has_more\":true", "\"has_more\":1");
+            check(paging.load(new Query(AccountPlatform.BILIBILI, View.FOLDER, 20, 1), bili).hasMore());
+            paging.resources = paging.resources.replace("\"has_more\":1,", "").replace("\"title\":\"Favorites\"", "\"title\":\"Favorites\",\"media_count\":21");
+            check(paging.load(new Query(AccountPlatform.BILIBILI, View.FOLDER, 20, 1), bili).hasMore());
+            paging.collection = paging.collection.replace("\"page\":{\"total\":21},", "");
+            check(paging.load(new Query(AccountPlatform.BILIBILI, View.COLLECTION, 30, 1, 99), bili).hasMore());
+            try (RequestScope request = new RequestScope(() -> true)) {
+                var client = new CatalogClient(bili, CLOCK, paging); var query = new Query(AccountPlatform.BILIBILI, View.COLLECTION, 30, 1, 99);
+                check(client.collectionCover(query,request).toString().equals("https://i0.hdslb.com/first.jpg"));
+                check(paging.requests.getLast().getURL().getQuery().contains("page_size=1&"));
+                paging.collectionArtwork = paging.collectionArtwork.replace("\"cover\":\"\"", "\"cover\":\"//i1.biliimg.com/meta.jpg\"");
+                check(client.collectionCover(query,request).toString().equals("https://i1.biliimg.com/meta.jpg"));
+                paging.collectionArtwork = paging.collectionArtwork.replace("\"mid\":99", "\"mid\":98");
+                fails(() -> client.collectionCover(query,request));
+            }
             Fixture types = new Fixture();
             types.created = "{\"code\":0,\"data\":{\"count\":7,\"list\":["
                     + "{\"id\":20,\"mid\":42,\"title\":\"Default\",\"type\":1},"

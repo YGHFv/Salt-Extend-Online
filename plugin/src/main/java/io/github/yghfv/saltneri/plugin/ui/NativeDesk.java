@@ -47,6 +47,12 @@ public final class NativeDesk {
         check(); player.play(token);
     }
     public java.net.URI cover(String token) { check(); return library.cover(token); }
+    public java.net.URI resolveCover(String token, io.github.yghfv.saltneri.plugin.net.RequestScope request) throws java.io.IOException {
+        check(); return library.resolveCover(token, request);
+    }
+    public java.net.URI fallbackCover(String token, io.github.yghfv.saltneri.plugin.net.RequestScope request) throws java.io.IOException {
+        check(); return library.resolveCover(token, request, true);
+    }
     public boolean currentRow(String token) { return permitted.getAsBoolean() && library.currentRow(token); }
     public void leave() { library.invalidate(); }
     public void action(AccountPlatform platform, Action action) { check(); actions.accept(platform, action); }

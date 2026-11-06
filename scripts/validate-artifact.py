@@ -36,7 +36,7 @@ def validate(path, experimental):
         if attributes["Plugin-Name"] != "Salt Extend Online":
             raise ValueError("Unexpected mod display name")
         if experimental:
-            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.7.7-online-polish":
+            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.7.8-catalog-artwork":
                 raise ValueError("Experimental permission/version missing")
         elif "Plugin-Permissions" in attributes:
             raise ValueError("Passive artifact requests permissions")

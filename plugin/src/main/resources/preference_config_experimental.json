@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "title": "Salt Extend Online - 高清封面、合集与原生页面（0.7.7）",
+      "title": "Salt Extend Online - 原比例封面、合集与固定分页（0.7.8）",
       "config": "config.json",
       "preferences": [
         {
