@@ -19,6 +19,20 @@ import static io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest.*;
 public final class PlaylistRenderTest {
     private static int checks;
     private static void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Playlist render "+checks); }
+    private static void visibleButtons(ImageComposeScene scene, float density) throws Exception {
+        try(var image=scene.render(System.nanoTime()); var png=image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
+            var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png.getBytes()));
+            for(String label:List.of("\u5168\u90e8\u64ad\u653e","\u6392\u5e8f")) {
+                var node=find(scene,label,null); check(node!=null); var bounds=node.getBoundsInRoot();
+                check(bounds.getWidth()>=label.length()*12*density && bounds.getHeight()>10*density);
+                int ink=0;
+                for(int y=Math.max(0,(int)bounds.getTop());y<Math.min(pixels.getHeight(),(int)bounds.getBottom());y++)
+                    for(int x=Math.max(0,(int)bounds.getLeft());x<Math.min(pixels.getWidth(),(int)bounds.getRight());x++)
+                        if((pixels.getRGB(x,y)>>>24)>200) ink++;
+                check(ink>25*label.length());
+            }
+        }
+    }
     @SuppressWarnings("unchecked") public static void main(String[] args) throws Exception {
         AtomicReference<Throwable> asynchronousFailure=new AtomicReference<>();
         Thread.setDefaultUncaughtExceptionHandler((thread,error)->{ asynchronousFailure.compareAndSet(null,error); error.printStackTrace(); });
@@ -38,35 +52,46 @@ public final class PlaylistRenderTest {
                 var cached=(Function3<Object,Composer,Integer,Object>)singleton.getMethod(SaltPageContentBinding.GETTER).invoke(singleton.getField("INSTANCE").get(null));
                 Object route=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID+"/native/BILIBILI");
                 var style=Class.forName("androidx.compose.ui.\u04cc").getMethod("\u037f",Composer.class);
-                for(int width:new int[]{740,420}) {
+                for(float density:new float[]{1f,1.5f}) for(int logicalWidth:new int[]{740,420}) {
+                    int width=Math.round(logicalWidth*density), height=Math.round(820*density);
                     library.browse(AccountPlatform.BILIBILI,Catalog.View.MINE); submitted.set(null); Thread.sleep(100);
                     SwingUtilities.invokeAndWait(()->{
                         Function3<Object,Composer,Integer,Object> body=(key,composer,flags)->{
                             try { if(ui.sidebarStyle()==null) ui.publishSidebarStyle(style.invoke(null,composer));return cached.invoke(route,composer,flags); }
                             catch(Exception e){throw new AssertionError(e);}
                         };
-                        var scene=new ImageComposeScene(width,820,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{body.invoke(route,c,f);return Unit.INSTANCE;});
+                        var scene=new ImageComposeScene(width,height,DensityKt.Density(density,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{body.invoke(route,c,f);return Unit.INSTANCE;});
                         try {
                             render(scene); check(find(scene,"My collection (21)",null)!=null && find(scene,"Uploader",null)!=null);
                             click(scene,"My collection (21)");
+                            visibleButtons(scene,density);
                             var play=find(scene,"\u64ad\u653e",SemanticsActions.INSTANCE.getOnClick());
                             var search=find(scene,"\u641c\u7d22\u5408\u96c6",null); var sort=find(scene,"\u6392\u5e8f",SemanticsActions.INSTANCE.getOnClick());
                             check(play!=null && search!=null && sort!=null);
                             check(play.getBoundsInRoot().getLeft()<search.getBoundsInRoot().getLeft() && search.getBoundsInRoot().getRight()<=sort.getBoundsInRoot().getRight());
                             check(sort.getBoundsInRoot().getRight()<=width && Math.abs(play.getBoundsInRoot().getTop()-sort.getBoundsInRoot().getTop())<5);
                             click(scene,"\u641c\u7d22\u5408\u96c6");
+                            visibleButtons(scene,density);
                             var set=SemanticsActions.INSTANCE.getSetText(); var input=find(scene,null,set); check(input!=null);
                             var icon=find(scene,"\u641c\u7d22\u5408\u96c6",null).getBoundsInRoot();
-                            check(input.getBoundsInRoot().getRight()<=icon.getLeft() && Math.abs(input.getBoundsInRoot().getTop()-icon.getTop())<15);
+                            check(input.getBoundsInRoot().getRight()<=icon.getLeft() && Math.abs(input.getBoundsInRoot().getTop()-icon.getTop())<15*density);
+                            int beforeToggle=requests.get();
+                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle);
+                            click(scene,"\u641c\u7d22\u5408\u96c6"); input=find(scene,null,set); check(input!=null);
                             input.getConfig().get(set).getAction().invoke(new AnnotatedString("Song 21",List.of(),List.of())); render(scene);
+                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle);
+                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,"Song 21",null)!=null);
                             var ime=SemanticsActions.INSTANCE.getOnImeAction(); find(scene,null,ime).getConfig().get(ime).getAction().invoke(); render(scene);
                             check(find(scene,"Song 21",null)!=null && find(scene,"Song 01",null)==null);
+                            beforeToggle=requests.get();
+                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle && library.snapshot().get("filter").equals("Song 21"));
+                            visibleButtons(scene,density);
                             click(scene,"\u6392\u5e8f"); click(scene,"\u5012\u5e8f");
                             check(library.snapshot().get("sort").equals("REVERSE"));
                             click(scene,"\u64ad\u653e"); render(scene);
                             check(submitted.get()!=null && submitted.get().items().size()==21 && submitted.get().items().getFirst().target().equals("21"));
                             int before=requests.get(); scene.close();
-                            scene=new ImageComposeScene(width,820,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{body.invoke(route,c,f);return Unit.INSTANCE;});
+                            scene=new ImageComposeScene(width,height,DensityKt.Density(density,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{body.invoke(route,c,f);return Unit.INSTANCE;});
                             render(scene); check(find(scene,"Song 21",null)!=null && library.snapshot().get("filter").equals("Song 21") && requests.get()==before);
                             click(scene,"\u53d1\u73b0");
                             check(find(scene,"\u6682\u672a\u63a5\u5165",null)==null && find(scene,"\u70ed\u95e8\u89c6\u9891",null)!=null);

@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -122,6 +123,19 @@ private fun NativeRow(ui: SaltNativeUi, title: String, selected: Boolean = false
     ui.row(title, selected, Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = click), icon, currentComposer)
 }
 
+@Composable
+private fun ToolbarButton(ui: SaltNativeUi, title: String, click: () -> Unit) {
+    val palette = ui.palette(currentComposer)
+    // Salt's full-width navigation row reserves icon/padding space and clips text in compact slots.
+    Box(Modifier.heightIn(min = 36.dp).clip(palette.shape())
+        .background(Color(palette.accent().toULong()).copy(alpha = 0.10f))
+        .border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.3f), palette.shape())
+        .clickable(role = Role.Button, onClick = click).padding(horizontal = 10.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center) {
+        ui.text(title, Modifier, palette.main().copy(fontSize = 14.sp, color = Color(palette.text().toULong())), currentComposer)
+    }
+}
+
 private data class NativeButton(val title: String, val selected: Boolean = false, val enabled: Boolean = true, val click: () -> Unit)
 
 @Composable
@@ -187,9 +201,7 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
         if (platform == AccountPlatform.BILIBILI) {
             if(memory.searching) SearchInput(ui,memory.searchText,{memory.searchText=it},modifier=Modifier.weight(1f)) { keyword -> action {ui.desk().search(keyword);memory.view=Catalog.View.SEARCH} }
             HeaderIcon(ui, "\u641c\u7d22B\u7ad9", true) {
-                if(!memory.searching) memory.searching=true
-                else if(memory.searchText.isNotBlank()) action {ui.desk().search(memory.searchText);memory.view=Catalog.View.SEARCH}
-                else memory.searching=false
+                memory.searching = !memory.searching
             }
         }
         Spacer(Modifier.width(8.dp))
@@ -247,14 +259,14 @@ private fun PlaylistTitle(ui: SaltNativeUi, title: String, count: Long, action: 
     val offset=with(LocalDensity.current) { 40.dp.roundToPx() }
     Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
         NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch) 0.6f else 1f))
-        Box(Modifier.width(64.dp)) { NativeRow(ui,"\u64ad\u653e",click={action {ui.desk().playPlaylist()}}) }
+        ToolbarButton(ui,"\u5168\u90e8\u64ad\u653e") { action {ui.desk().playPlaylist()} }
+        Spacer(Modifier.width(8.dp))
         if(memory.localSearch) SearchInput(ui,memory.localText,{memory.localText=it},true,Modifier.weight(1f)) { keyword -> action {ui.desk().filter(keyword)} }
         HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",true) {
-            if(!memory.localSearch) memory.localSearch=true
-            else action {ui.desk().filter(memory.localText)}
+            memory.localSearch = !memory.localSearch
         }
-        Box(Modifier.width(64.dp)) {
-            NativeRow(ui,"\u6392\u5e8f",click={menu=!menu})
+        Box {
+            ToolbarButton(ui,"\u6392\u5e8f") { menu=!menu }
             if(menu) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={menu=false},properties=PopupProperties(focusable=true)) {
                 Column(Modifier.width(180.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
                     listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f").forEach { (sort,label) ->

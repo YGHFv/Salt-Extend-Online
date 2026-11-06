@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "title": "Salt Extend Online - 合集播放、搜索排序与页面状态保留（0.8.0）",
+      "title": "Salt Extend Online - 合集播放、搜索排序与页面状态保留（0.8.1）",
       "config": "config.json",
       "preferences": [
         {
