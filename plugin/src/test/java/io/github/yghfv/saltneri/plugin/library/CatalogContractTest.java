@@ -42,7 +42,7 @@ public final class CatalogContractTest {
     }
     static final class Fixture implements CatalogHttp.Opener {
         String discovery = "{\"code\":200,\"result\":[{\"id\":10,\"name\":\"Discovery\",\"trackCount\":22}]}";
-        String personal = "{\"code\":200,\"more\":true,\"playlist\":[{\"id\":10,\"name\":\"Liked\",\"trackCount\":22,\"creator\":{\"userId\":42},\"specialType\":5},{\"id\":11,\"name\":\"Mine\",\"creator\":{\"userId\":42}},{\"id\":12,\"name\":\"Saved\",\"creator\":{\"userId\":99},\"subscribed\":true}]}";
+        String personal = "{\"code\":200,\"more\":true,\"playlist\":[{\"id\":10,\"name\":\"Liked\",\"trackCount\":22,\"creator\":{\"userId\":42,\"nickname\":\"Fixture creator\"},\"specialType\":5},{\"id\":11,\"name\":\"Mine\",\"creator\":{\"userId\":42,\"nickname\":\"Fixture creator\"}},{\"id\":12,\"name\":\"Saved\",\"creator\":{\"userId\":99},\"subscribed\":true}]}";
         String detail = "{\"code\":200,\"playlist\":{\"id\":10,\"name\":\"Playlist\",\"trackIds\":[{\"id\":1},{\"id\":2},{\"id\":3}]}}";
         String songs = "{\"code\":200,\"songs\":[{\"id\":2,\"name\":\"Paid\",\"fee\":1,\"dt\":120000,\"ar\":[]},{\"id\":1,\"name\":\"Free\",\"fee\":0,\"duration\":120000,\"artists\":[{\"name\":\"Artist\"}]}]}";
         String created = "{\"code\":0,\"data\":{\"count\":30,\"list\":[{\"id\":20,\"mid\":42,\"title\":\"Favorites\",\"media_count\":5},{\"season_id\":30,\"name\":\"Collection\",\"type\":21}]}}";
@@ -92,7 +92,7 @@ public final class CatalogContractTest {
             try {
                 Fixture fixture = new Fixture(); Page mine = fixture.load(new Query(platform, View.MINE, 0, 1), account);
                 check(mine.items().size() == 2 && mine.hasMore()); check(fixture.requests.getFirst().getRequestProperty("Cookie").contains("COOKIE_SECRET"));
-                if (platform == AccountPlatform.NETEASE) { check(mine.items().getFirst().subtitle().equals("Liked songs")); Page saved = fixture.load(new Query(platform, View.SAVED, 0, 2), account); check(saved.items().size() == 1 && saved.items().getFirst().target().equals("12")); }
+                if (platform == AccountPlatform.NETEASE) { check(mine.items().getFirst().subtitle().equals("Fixture creator")); Page saved = fixture.load(new Query(platform, View.SAVED, 0, 2), account); check(saved.items().size() == 1 && saved.items().getFirst().target().equals("12")); }
                 else { check(mine.items().getFirst().enabled()); check(!mine.items().getLast().enabled()); Page videos = fixture.load(new Query(platform, View.FOLDER, 20, 1), account); check(videos.items().getFirst().target().equals("BV17x411w7KC")); check(videos.items().getFirst().enabled() && !videos.items().getLast().enabled()); }
                 Fixture mismatch = new Fixture(); mismatch.identity = "43"; fails(() -> mismatch.load(new Query(platform, View.MINE, 0, 1), account)); check(mismatch.requests.size() == 1);
                 account.retire(); fails(() -> fixture.load(new Query(platform, View.MINE, 0, 1), account));

@@ -66,11 +66,16 @@ foreach ($test in @(
     'io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest',
     'io.github.yghfv.saltneri.plugin.library.CatalogContractTest',
     'io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest',
+    'io.github.yghfv.saltneri.plugin.library.PlaylistWorkflowContractTest',
+    'io.github.yghfv.saltneri.plugin.library.BiliDiscoveryContractTest',
+    'io.github.yghfv.saltneri.plugin.host.LazyPlaylistContractTest',
+    'io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest',
     'io.github.yghfv.saltneri.plugin.ui.NativeUiContractTest',
     'io.github.yghfv.saltneri.plugin.ui.SaltPageContentBindingContractTest',
     'io.github.yghfv.saltneri.plugin.ui.NativeHookTransformTest',
     'io.github.yghfv.saltneri.plugin.ui.NativePageRenderTest',
     'io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest',
+    'io.github.yghfv.saltneri.plugin.ui.PlaylistRenderTest',
     'io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest',
     'io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest',
     'io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest',
@@ -111,7 +116,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outs
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.7.9-search-account' } else { '0.1.0-hostprobe' }
+$pluginVersion = if ($Experimental) { '0.8.0-playlist-state' } else { '0.1.0-hostprobe' }
 $pluginName = 'Salt Extend Online'
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }

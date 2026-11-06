@@ -14,6 +14,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -170,7 +171,7 @@ private fun HeaderIcon(ui: SaltNativeUi, label: String, search: Boolean, click: 
 
 @Composable
 private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: AccountLoginController.Snapshot?, action: (() -> Unit) -> Unit,
-                          search: () -> Unit) {
+                          memory: PageMemory) {
     var menu by remember(platform, login?.revision()) { mutableStateOf(false) }
     val loggedIn = login?.phase() == AccountLoginController.Phase.LOGGED_IN
     var png by remember(platform, login?.revision()) { mutableStateOf<ByteArray?>(null) }
@@ -182,8 +183,15 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
     val palette = ui.palette(currentComposer)
     val menuOffset = with(LocalDensity.current) { 44.dp.roundToPx() }
     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        NativeText(ui, name(platform), modifier = Modifier.weight(1f), heading = true)
-        if (platform == AccountPlatform.BILIBILI) HeaderIcon(ui, "\u641c\u7d22B\u7ad9", true, search)
+        NativeText(ui, name(platform), modifier = if(memory.searching) Modifier.width(105.dp) else Modifier.weight(1f), heading = true)
+        if (platform == AccountPlatform.BILIBILI) {
+            if(memory.searching) SearchInput(ui,memory.searchText,{memory.searchText=it},modifier=Modifier.weight(1f)) { keyword -> action {ui.desk().search(keyword);memory.view=Catalog.View.SEARCH} }
+            HeaderIcon(ui, "\u641c\u7d22B\u7ad9", true) {
+                if(!memory.searching) memory.searching=true
+                else if(memory.searchText.isNotBlank()) action {ui.desk().search(memory.searchText);memory.view=Catalog.View.SEARCH}
+                else memory.searching=false
+            }
+        }
         Spacer(Modifier.width(8.dp))
         Box {
             if (loggedIn && image != null) {
@@ -206,33 +214,64 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
 }
 
 @Composable
-private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> Unit, submit: (String) -> Unit) {
+private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> Unit, inside: Boolean = false, modifier: Modifier = Modifier, submit: (String) -> Unit) {
     val focus = remember { FocusRequester() }
     val palette = ui.palette(currentComposer)
-    val search = { if (keyword.isNotBlank()) submit(keyword.trim()) }
+    val search = { if (inside || keyword.isNotBlank()) submit(keyword.trim()) }
     LaunchedEffect(Unit) { focus.requestFocus() }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         BasicTextField(value = keyword, onValueChange = { if (it.length <= 100 && it.none { c -> c.isISOControl() }) change(it) },
-            modifier = Modifier.weight(1f).border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.5f), palette.shape())
-                .padding(12.dp).focusRequester(focus).semantics { contentDescription = "B\u7ad9\u641c\u7d22\u8f93\u5165" },
+            modifier = modifier.border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.5f), palette.shape())
+                .padding(horizontal=8.dp,vertical=10.dp).focusRequester(focus).semantics { contentDescription = if(inside) "\u5408\u96c6\u5185\u641c\u7d22\u8f93\u5165" else "B\u7ad9\u641c\u7d22\u8f93\u5165" },
             textStyle = palette.main().copy(color = Color(palette.text().toULong())), singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }),
             cursorBrush = SolidColor(Color(palette.accent().toULong())), decorationBox = { field ->
-                Box { if (keyword.isEmpty()) NativeText(ui, "\u641c\u7d22 B\u7ad9\u89c6\u9891", true); field() }
+                Box { if (keyword.isEmpty()) NativeText(ui, if(inside) "\u5408\u96c6\u5185\u641c\u7d22" else "\u641c\u7d22 B\u7ad9", true); field() }
             })
-        Box(Modifier.width(88.dp)) { NativeRow(ui, "\u641c\u7d22", enabled = keyword.isNotBlank(), click = search) }
+}
+
+private class PageMemory(platform: AccountPlatform) {
+    var view by mutableStateOf(if(platform == AccountPlatform.BILIBILI) Catalog.View.MINE else Catalog.View.DISCOVER)
+    var selectedRow by mutableStateOf("")
+    var searching by mutableStateOf(false)
+    var searchText by mutableStateOf("")
+    var localSearch by mutableStateOf(false)
+    var localText by mutableStateOf("")
+    val list = LazyListState()
+    var location: List<Any?>? = null
+}
+
+@Composable
+private fun PlaylistTitle(ui: SaltNativeUi, title: String, count: Long, action: (() -> Unit) -> Unit, memory: PageMemory) {
+    var menu by remember { mutableStateOf(false) }
+    val palette=ui.palette(currentComposer)
+    val offset=with(LocalDensity.current) { 40.dp.roundToPx() }
+    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
+        NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch) 0.6f else 1f))
+        Box(Modifier.width(64.dp)) { NativeRow(ui,"\u64ad\u653e",click={action {ui.desk().playPlaylist()}}) }
+        if(memory.localSearch) SearchInput(ui,memory.localText,{memory.localText=it},true,Modifier.weight(1f)) { keyword -> action {ui.desk().filter(keyword)} }
+        HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",true) {
+            if(!memory.localSearch) memory.localSearch=true
+            else action {ui.desk().filter(memory.localText)}
+        }
+        Box(Modifier.width(64.dp)) {
+            NativeRow(ui,"\u6392\u5e8f",click={menu=!menu})
+            if(menu) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={menu=false},properties=PopupProperties(focusable=true)) {
+                Column(Modifier.width(180.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
+                    listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f").forEach { (sort,label) ->
+                        NativeRow(ui,label,click={menu=false;action {ui.desk().sort(sort)}})
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
-    var state by remember(ui, platform) { mutableStateOf<NativeDesk.State?>(null) }
+    val memory=remember(ui,platform) { ui.pageMemory(platform) { PageMemory(platform) } as PageMemory }
+    var state by remember(ui, platform) { mutableStateOf<NativeDesk.State?>(if(ui.available()) ui.desk().snapshot(platform) else null) }
     var error by remember(ui, platform) { mutableStateOf("") }
     var enabled by remember(ui) { mutableStateOf(ui.available()) }
-    var view by remember(platform) { mutableStateOf(if (platform == AccountPlatform.BILIBILI) Catalog.View.MINE else Catalog.View.DISCOVER) }
-    var selectedRow by remember(platform) { mutableStateOf("") }
-    var searching by remember(platform) { mutableStateOf(false) }
-    var searchText by remember(platform) { mutableStateOf("") }
     val action: (() -> Unit) -> Unit = { block ->
         try { block(); error = "" }
         catch (failure: Exception) { error = "\u64cd\u4f5c\u672a\u5b8c\u6210\uff08${failure.javaClass.simpleName}\uff09\uff0c\u8bf7\u68c0\u67e5\u6388\u6743\u548c\u5b9e\u9a8c\u9002\u914d\u72b6\u6001\u3002" }
@@ -253,22 +292,21 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     val playback = state?.playback()
     val login = state?.login()
     val rows = catalog?.get("items") as? List<*>
-    val listState = rememberLazyListState()
-    LaunchedEffect(platform, catalog?.get("view"), catalog?.get("page"), catalog?.get("title")) {
-        listState.scrollToItem(0)
+    val listState = memory.list
+    val location=listOf(catalog?.get("view"),catalog?.get("page"),catalog?.get("title"),catalog?.get("filter"),catalog?.get("sort"))
+    LaunchedEffect(location) {
+        // Schedule the next layout rather than forcing remeasure while LazyColumn applies new items.
+        if(memory.location!=location) { memory.location=location; listState.requestScrollToItem(0) }
     }
     // Salt paints the window backdrop below navigation; an opaque page would hide its effects.
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 20.dp), state = listState,
             contentPadding = PaddingValues(top = 28.dp, bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                AccountHeader(ui, platform, login, action) { searching = !searching }
+                AccountHeader(ui, platform, login, action, memory)
             }
             if (!enabled) {
                 item { NativeText(ui, "\u539f\u751f\u9875\u9762\u5df2\u505c\u7528\uff0c\u8bf7\u8fd4\u56de\u5e76\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u3002") }
             } else {
-                if (searching && platform == AccountPlatform.BILIBILI) item {
-                    SearchInput(ui, searchText, { searchText = it }) { keyword -> action { ui.desk().search(keyword); view = Catalog.View.SEARCH } }
-                }
                 if (login?.phase() != AccountLoginController.Phase.LOGGED_IN) item {
                     Column(Modifier.padding(8.dp)) {
                         if (login?.phase()?.name in listOf("CREATING", "WAITING_SCAN", "WAITING_CONFIRMATION", "EXPIRED", "ERROR")) {
@@ -283,14 +321,21 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                     }
                 }
                 item {
-                    val views = listOf(Catalog.View.DISCOVER to if (platform == AccountPlatform.BILIBILI) "\u53d1\u73b0\uff08\u6682\u672a\u63a5\u5165\uff09" else "\u53d1\u73b0",
+                    val views = listOf(Catalog.View.DISCOVER to "\u53d1\u73b0",
                         Catalog.View.MINE to if (platform == AccountPlatform.NETEASE) "\u6211\u7684\u6b4c\u5355 / \u559c\u6b22" else "\u521b\u5efa\u7684\u6536\u85cf",
                         Catalog.View.SAVED to "\u6536\u85cf / \u8ba2\u9605")
                     NativeButtons(ui, views.map { (destination, label) ->
-                        NativeButton(label, view == destination, enabled = platform != AccountPlatform.BILIBILI || destination != Catalog.View.DISCOVER) {
-                            action { ui.desk().browse(platform, destination); view = destination }
+                        NativeButton(label, memory.view == destination) {
+                            action { ui.desk().browse(platform, destination); memory.view = destination; memory.localSearch=false; memory.localText="" }
                         }
                     })
+                }
+                if(platform==AccountPlatform.BILIBILI && catalog?.get("view") in listOf("DISCOVER","MUSIC_HOT","MUSIC_ORIGINAL")) item {
+                    Row(Modifier.fillMaxWidth()) {
+                        listOf(Catalog.View.DISCOVER to "\u70ed\u95e8\u89c6\u9891",Catalog.View.MUSIC_HOT to "\u97f3\u4e50\u70ed\u95e8\u699c",Catalog.View.MUSIC_ORIGINAL to "\u539f\u521b\u699c").forEach { (destination,label) ->
+                            Box(Modifier.weight(1f)) { NativeRow(ui,label,selected=catalog?.get("view")==destination.name,click={action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}}) }
+                        }
+                    }
                 }
                 if (playback?.get("active") == true && (playback["error"] as? String).orEmpty().isNotEmpty()) item {
                     NativeText(ui, playback["error"] as String)
@@ -299,22 +344,29 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                     if (error.isNotEmpty()) NativeText(ui, error)
                     val catalogError = (catalog?.get("error") as? String).orEmpty()
                     if (catalogError.isNotEmpty()) NativeText(ui, catalogError)
-                    NativeText(ui, catalog?.get("title") as? String ?: "")
+                    val title=catalog?.get("title") as? String ?: ""
+                    val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
+                    Column {
+                        if(folder) PlaylistTitle(ui,title,(catalog?.get("totalCount") as? Number)?.toLong() ?: -1,action,memory)
+                        else NativeText(ui,title)
+                        if(catalog?.get("loadingAll")==true) NativeText(ui,"\u6b63\u5728\u8bfb\u53d6\u5b8c\u6574\u5408\u96c6\u2026",true)
+                    }
                 }
                 rows?.forEach { value ->
                     val row = value as Map<*, *>
                     item(key = row["token"] as String) {
                         val token = row["token"] as String
                         val track = row["kind"] == "TRACK"
-                        Row(Modifier.fillMaxWidth().background(if (selectedRow == token) Color(palette.background().toULong()).copy(alpha = 0.65f) else Color.Transparent, palette.shape())
-                            .combinedClickable(enabled = row["enabled"] == true, onDoubleClick = if (track) ({ action { ui.desk().playRow(token); selectedRow = token } }) else null,
-                                onClick = { action { if (track) selectedRow = token else ui.desk().choose(token) } }).padding(8.dp),
+                        Row(Modifier.fillMaxWidth().background(if (memory.selectedRow == token) Color(palette.background().toULong()).copy(alpha = 0.65f) else Color.Transparent, palette.shape())
+                            .combinedClickable(enabled = row["enabled"] == true, onDoubleClick = if (track) ({ action { ui.desk().playRow(token); memory.selectedRow = token } }) else null,
+                                onClick = { action { if (track) memory.selectedRow = token else {ui.desk().choose(token);memory.localSearch=false;memory.localText=""} } }).padding(8.dp),
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Box(Modifier.width(3.dp).height(32.dp).background(if (selectedRow == token) Color(palette.accent().toULong()) else Color.Transparent))
+                            Box(Modifier.width(3.dp).height(32.dp).background(if (memory.selectedRow == token) Color(palette.accent().toULong()) else Color.Transparent))
                             Spacer(Modifier.width(8.dp))
                             Cover(ui, token)
                             Column(Modifier.weight(1f).padding(start = 16.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                val title = row["title"] as String
+                                val count=(row["count"] as? Number)?.toLong() ?: -1
+                                val title = (row["title"] as String) + if(!track && count>=0) " ($count)" else ""
                                 NativeText(ui, title, modifier = Modifier.fillMaxWidth())
                                 NativeText(ui, row["subtitle"] as String, true, Modifier.fillMaxWidth())
                             }

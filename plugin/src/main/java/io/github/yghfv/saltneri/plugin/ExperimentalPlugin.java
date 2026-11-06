@@ -42,6 +42,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile LibraryController library;
     private volatile SaltNativeUi nativeUi;
     private NativeDesk desk;
+    private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
 
     public ExperimentalPlugin(PluginContext context) { super(context); }
 
@@ -76,6 +77,13 @@ public final class ExperimentalPlugin extends SpwPlugin {
             catch (RuntimeException failure) { throw failure; }
             catch (Exception failure) { throw new IllegalStateException("Native action failed", failure); }
         }, () -> generation == started && granted());
+        desk.playlistPlayer(list -> startedOnline.playPlaylist(list, () -> {
+            try { arm(); } catch(Exception failure) { throw new IllegalStateException("Adapter unavailable"); }
+        }, (playlist,valid) -> {
+            Salt1193DiagnosticRuntime current=runtime;
+            if(current==null) throw new IllegalStateException("Adapter unavailable");
+            current.playPlaylist(playlist,valid);
+        }));
         BiliResolutionController startedBili = bili;
         NeteaseResolutionController startedNetease = netease;
         configListener = config -> {
@@ -93,6 +101,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 getPluginContext().getSpwVersion(), getPluginContext().getSpwChannel().name());
         status = profile.detail();
         if (profile.matched() && granted()) {
+            try { mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install(); }
+            catch(RuntimeException | LinkageError failure) { status="Windows media application identity unavailable: "+failure.getClass().getSimpleName(); }
             try { ensureNativeUi(); }
             catch (Exception | LinkageError failure) { status = "Native UI unavailable (" + failure.getClass().getSimpleName() + "). No browser fallback."; }
         }
@@ -199,6 +209,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        if(mediaIdentity!=null) { mediaIdentity.close(); mediaIdentity=null; }
         stopped = true;
         generation = null;
         try { disarm(); }

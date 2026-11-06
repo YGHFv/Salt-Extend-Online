@@ -163,6 +163,8 @@ public final class NativeUiContractTest {
                 check(!desk.snapshot(AccountPlatform.NETEASE).catalog().toString().contains("https://"));
                 check(prepare.get() == 1 && queue.get() == 0);
                 desk.leave();
+                check(desk.cover(token)!=null && desk.currentRow(token) && upstream.get()==1);
+                library.accountChanged(AccountPlatform.NETEASE);
                 check(desk.cover(token) == null && !desk.currentRow(token));
                 try { desk.choose(token); throw new AssertionError("Stale native row accepted"); }
                 catch (IllegalStateException expected) { checks++; }

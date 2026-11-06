@@ -22,7 +22,7 @@ public final class CatalogClient {
     public CatalogClient(AccountCredentials account) { this(account, Clock.systemUTC(), CatalogHttp::openPinned); }
     public CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener) { this.account = account; this.clock = clock; this.opener = opener; }
     public Page load(Query query, RequestScope request) throws IOException {
-        boolean discover = query.view() == View.DISCOVER;
+        boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL;
         boolean personal = query.view() == View.MINE || query.view() == View.SAVED || query.platform() == AccountPlatform.BILIBILI && !discover;
         if (personal && (account == null || account.platform() != query.platform())) {
             Stage stage = query.platform() == AccountPlatform.BILIBILI
@@ -75,15 +75,14 @@ public final class CatalogClient {
             var list = object(row); long listId = id(list.get("id")); if (!unique.add(listId)) throw invalid();
             boolean mine = query.view() != View.DISCOVER && Long.toString(id(object(list.get("creator")).get("userId"))).equals(account.userId());
             if (query.view() == View.MINE && !mine || query.view() == View.SAVED && (mine || !Boolean.TRUE.equals(list.get("subscribed")))) continue;
-            boolean liked = mine && number(list.get("specialType"), 0) == 5;
-            items.add(new Item(Kind.FOLDER, Long.toString(listId), text(list.get("name")), liked ? "Liked songs" : mine ? "Created by you" : "Playlist", number(list.get("trackCount"), 0), true,
+            items.add(new Item(Kind.FOLDER, Long.toString(listId), text(list.get("name")), author(list), number(list.get("trackCount"), -1), true,
                     cover(AccountPlatform.NETEASE, alias(list, "coverImgUrl", "picUrl"))));
         }
         return page(viewTitle(query), items, query.view() != View.DISCOVER && Boolean.TRUE.equals(root.get("more")),
                 query.view() == View.DISCOVER ? items.size() : number(root.get("count"), -1));
     }
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
-        if (query.view() == View.DISCOVER) throw new IllegalArgumentException("Bilibili anonymous discovery is not implemented");
+        if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return BiliDiscovery.load(query,http,request,clock);
         String base = "https://api.bilibili.com";
         if (query.view() == View.SEARCH) {
             URI uri = BiliWbi.sign(base + "/x/web-interface/wbi/search/type", Map.of(
@@ -116,7 +115,7 @@ public final class CatalogClient {
                 boolean enabled = bvid.matches("BV[0-9A-Za-z]{10}") && duration > 0;
                 String target = enabled ? bvid : "unsupported:" + id(video.get("aid"));
                 if (!unique.add(target)) throw invalid();
-                items.add(new Item(Kind.TRACK, target, text(video.get("title")), enabled ? "P1" : "Unavailable video", duration * 1000, enabled,
+                items.add(new Item(Kind.TRACK, target, text(video.get("title")), author(video), duration * 1000, enabled,
                         cover(AccountPlatform.BILIBILI, video.get("pic"))));
             }
             Map<String, Object> paging = data.get("page") == null ? Map.of() : object(data.get("page"));
@@ -158,9 +157,10 @@ public final class CatalogClient {
             if (!isCollection && query.view() == View.MINE && number(folder.get("mid"), Long.parseLong(account.userId())) != Long.parseLong(account.userId())) throw invalid();
             String target = Long.toString(isCollection && collection > 0 ? collection : folderId);
             if (!unique.add((isCollection ? "collection:" : "folder:") + target)) throw invalid();
-            String subtitle = isCollection ? (enabled ? "\u89c6\u9891\u5408\u96c6" : "\u5408\u96c6\u5df2\u5931\u6548\u6216\u7f3a\u5c11\u4f5c\u8005\u4fe1\u606f") : enabled ? "\u6536\u85cf\u5939"
+            String subtitle = enabled ? author(folder)
                     : "\u672a\u652f\u6301\u7684\u5217\u8868\u7c7b\u578b (type=" + type + ")";
-            items.add(new Item(isCollection ? Kind.COLLECTION : Kind.FOLDER, target, text(alias(folder, "title", "name")), subtitle, number(alias(folder, "media_count", "total"), 0), enabled,
+            if (subtitle.isEmpty() && query.view() == View.MINE) subtitle = account.profile().name();
+            items.add(new Item(isCollection ? Kind.COLLECTION : Kind.FOLDER, target, text(alias(folder, "title", "name")), subtitle, number(alias(folder, "media_count", "total"), -1), enabled,
                     firstCover(AccountPlatform.BILIBILI, folder, "cover", "pic", "cover_url"), isCollection ? owner : 0));
         }
         Boolean more = more(data, query.page(), number(alias(data, "count", "total"), -1));
@@ -216,6 +216,8 @@ public final class CatalogClient {
     private static String viewTitle(Query query) {
         return switch (query.view()) {
             case DISCOVER -> "\u53d1\u73b0";
+            case MUSIC_HOT -> "\u97f3\u4e50\u70ed\u95e8\u699c";
+            case MUSIC_ORIGINAL -> "\u97f3\u4e50\u539f\u521b\u699c";
             case MINE -> query.platform() == AccountPlatform.BILIBILI ? "\u521b\u5efa\u7684\u6536\u85cf\u5939" : "\u6211\u7684\u6b4c\u5355";
             case SAVED -> "\u6536\u85cf / \u8ba2\u9605";
             case FOLDER, COLLECTION -> throw new IllegalArgumentException("Folder title comes from its contents");
@@ -224,7 +226,20 @@ public final class CatalogClient {
     }
     private Page page(String title, List<Item> items, boolean more, long total) {
         int pages = total < 0 || total == 0 && more ? 0 : (int)Math.max(1, Math.min(500, total / 20 + (total % 20 == 0 ? 0 : 1)));
-        return new Page(title, items, more, clock.instant().plusSeconds(300), pages);
+        return new Page(title, items, more, clock.instant().plusSeconds(300), pages, total);
+    }
+    private static String author(Map<String, Object> row) throws IOException {
+        for (String field : List.of("upper", "owner", "creator", "author")) {
+            Object value = row.get(field);
+            if (value instanceof String text && !text.isBlank()) return text;
+            if (value instanceof Map<?,?>) {
+                var person = object(value);
+                for (String name : List.of("name", "uname", "nickname")) {
+                    String label = optional(person.get(name)); if (!label.isEmpty()) return label;
+                }
+            }
+        }
+        return optional(alias(row, "uname", "author_name"));
     }
     private static long searchDuration(Object value) {
         if (!(value instanceof String text) || !text.matches("[0-9]{1,6}:[0-9]{2}(:[0-9]{2})?")) return 0;

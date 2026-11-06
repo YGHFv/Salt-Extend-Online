@@ -35,6 +35,8 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
     @FunctionalInterface public interface QueueSink {
         /** Call on the host's appropriate execution context, only after an explicit user action. */
         void addToPlay(Object mediaItem) throws ReflectiveOperationException;
+        default void replace(java.util.List<Object> items) throws ReflectiveOperationException { throw new UnsupportedOperationException("Queue replacement unavailable"); }
+        default void update(Object item) throws ReflectiveOperationException { }
     }
 
     public final class PreparedTrack implements AutoCloseable {
@@ -178,14 +180,39 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
     public static QueueSink nativeQueue(ClassLoader loader, Salt1193Probe.Result profile, BooleanSupplier authorized) {
         requireProfile(profile);
         Objects.requireNonNull(authorized);
-        return item -> {
+        return new QueueSink() {
+          private Object controller() throws ReflectiveOperationException {
+            if (!authorized.getAsBoolean()) throw new SecurityException("CLASS_TRANSFORM not granted");
+            return Class.forName("com.xuncorp.voxzen.service.PlaybackController",false,loader).getField("INSTANCE").get(null);
+          }
+          public void replace(java.util.List<Object> items) throws ReflectiveOperationException {
+            replaceAndPlay(controller(),items,authorized);
+          }
+          public void update(Object item) throws ReflectiveOperationException {
+            Object instance=controller(); Class<?> media=Class.forName("com.xuncorp.pisces.PiscesMediaItem",false,loader);
+            Object array=java.lang.reflect.Array.newInstance(media,1); java.lang.reflect.Array.set(array,0,item);
+            instance.getClass().getMethod("updateMediaItems",array.getClass()).invoke(instance,array);
+            instance.getClass().getMethod("refreshCurrentCover").invoke(instance);
+          }
+          public void addToPlay(Object item) throws ReflectiveOperationException {
             if (!authorized.getAsBoolean()) throw new SecurityException("CLASS_TRANSFORM not granted");
             Class<?> controller = Class.forName("com.xuncorp.voxzen.service.PlaybackController", false, loader);
             Class<?> media = Class.forName("com.xuncorp.pisces.PiscesMediaItem", false, loader);
             if (!media.isInstance(item)) throw new IllegalArgumentException("Not a native media item");
             Object instance = controller.getField("INSTANCE").get(null);
             submitAndPlay(instance, media, item, authorized);
+          }
         };
+    }
+
+    static void replaceAndPlay(Object controller, java.util.List<Object> items, BooleanSupplier authorized) throws ReflectiveOperationException {
+        if (items.isEmpty() || items.size()>10000) throw new IllegalArgumentException("Invalid queue size");
+        if (!authorized.getAsBoolean()) throw new SecurityException("Queue permission revoked");
+        try {
+            controller.getClass().getMethod("setPlaybackQueue",java.util.List.class,int.class).invoke(controller,java.util.List.copyOf(items),0);
+            if (!authorized.getAsBoolean()) throw new SecurityException("Queue permission revoked");
+            controller.getClass().getMethod("play").invoke(controller);
+        } catch (InvocationTargetException failure) { throw new ReflectiveOperationException("Native queue replacement failed"); }
     }
 
     static void submitAndPlay(Object controller, Class<?> media, Object item, BooleanSupplier authorized)

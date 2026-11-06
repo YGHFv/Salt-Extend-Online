@@ -26,9 +26,9 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
         final AccountCredentials account;
         final RequestScope request;
         Future<?> future;
-        Operation(AccountCredentials account, BooleanSupplier authorized) {
+        Operation(AccountCredentials account, BooleanSupplier authorized, long deadlineMillis) {
             this.account = account;
-            request = new RequestScope(() -> active.get() && authorized.getAsBoolean() && (account == null || account.isActive()));
+            request = new RequestScope(() -> active.get() && authorized.getAsBoolean() && (account == null || account.isActive()), deadlineMillis);
         }
         void cancel() { active.set(false); request.close(); if (future != null) future.cancel(true); }
     }
@@ -46,9 +46,17 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
     private String status;
     private R resolved;
     private boolean failed;
+    private final long deadlineMillis;
     public PlatformResolutionController(String platform, Function<AccountCredentials, Resolver<T, Q, R>> resolvers,
                                         Supplier<AccountCredentials> accounts, BooleanSupplier authorized, Clock clock,
                                         Function<R, Instant> expiry, Function<R, String> summary, Function<Throwable, String> rejection) {
+        this(platform, resolvers, accounts, authorized, clock, expiry, summary, rejection, 30000);
+    }
+    public PlatformResolutionController(String platform, Function<AccountCredentials, Resolver<T, Q, R>> resolvers,
+                                        Supplier<AccountCredentials> accounts, BooleanSupplier authorized, Clock clock,
+                                        Function<R, Instant> expiry, Function<R, String> summary, Function<Throwable, String> rejection, long deadlineMillis) {
+        if (deadlineMillis < 1 || deadlineMillis > 300000) throw new IllegalArgumentException("Invalid deadline");
+        this.deadlineMillis = deadlineMillis;
         this.platform = Objects.requireNonNull(platform); this.resolvers = Objects.requireNonNull(resolvers);
         this.accounts = Objects.requireNonNull(accounts); this.authorized = Objects.requireNonNull(authorized); this.clock = Objects.requireNonNull(clock);
         this.expiry = Objects.requireNonNull(expiry); this.summary = Objects.requireNonNull(summary); this.rejection = Objects.requireNonNull(rejection);
@@ -69,7 +77,7 @@ public final class PlatformResolutionController<T, Q, R> implements AutoCloseabl
         if (current != null) current.cancel(); current = null; worker.purge(); resolved = null; failed = false;
         AccountCredentials account = accounts.get(); Resolver<T, Q, R> selected = resolvers.apply(account);
         String scope = account == null ? anonymous : account.accountScope();
-        Operation operation = new Operation(account, this::permitted); current = operation;
+        Operation operation = new Operation(account, this::permitted, deadlineMillis); current = operation;
         status = "Resolving " + platform + " in background (" + (account == null ? "anonymous" : "verified account") + "); no queue changes. Check status after completion.";
         try { operation.future = worker.submit(() -> run(operation, target, quality, selected, scope)); }
         catch (RuntimeException failure) { operation.cancel(); current = null; failed = true; status = platform + " resolver busy or stopped."; throw failure; }

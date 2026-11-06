@@ -32,6 +32,7 @@ The following Java files are ports or adaptations, not independent claims of aut
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseEapi.java` | EAPI framing/AES/MD5 branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/crypto/NeteaseCrypto.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseClient.java` | Song detail/audio parameters of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/client/NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteaseSongMapping.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/playback/parser/NeteasePlaybackResponseParser.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogClient.java` | Read-only favorites/playlist parameters and mapping of the same `BiliClient.kt` and `NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteasePlaylistMapping.kt` |
+| `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/BiliDiscovery.java` | Music chart endpoints/mapping from `BiliClient.kt`; latest-period selection from `app/src/main/java/moe/ouom/neriplayer/ui/viewmodel/tab/bili/BiliMusicHomeRepository.kt`; source priority from `modules/model/src/main/java/moe/ouom/neriplayer/data/model/bilibili/music/BiliMusicModels.kt` |
 
 Arithmetic in the duration ports avoids overflow on invalid, extremely large input while retaining
 upstream results on normal media durations. The selection port is intentionally incomplete:
@@ -60,11 +61,15 @@ retain their original host/domain/path scope and are never sent to a media CDN. 
 fixtures; the fixed EAPI framing vector was independently computed with Windows .NET cryptography.
 No live NetEase song resolution or actual Salt/BASS playback has been verified. See `docs/NETEASE_PROGRESS.md`.
 
-Catalog ports are read-only and page-bounded. They omit remote favorites/playlist writes, eager all-page
-fetches, caches, preheat retries and account/risk-control fallbacks. Liked playlists require the verified
-creator UID and upstream specialType=5, not a guessed first entry. A separate experimental user action
-can now submit prepared platform media to Salt; default startup, catalog loading and preparation never
-play. Host queue submission and audible BASS playback remain unverified. See `docs/LIBRARY_PLAYBACK_PROGRESS.md`.
+Catalog ports are read-only. Ordinary browsing remains page-bounded; explicit collection search,
+sort or play can fetch up to 500 pages / 10000 tracks with an overall deadline. Platform-local
+metadata lives in memory until refresh/revocation, never in a private catalog database. They omit
+remote writes, preheat retries and risk-control fallbacks. Whole-queue playback uses lazy stream
+resolution so later items do not inherit stale signed audio URLs. Discovery uses the mobile rid=3
+chart and latest HOT/ORIGINAL copyright chart, never the obsolete Web ranking/v2 music feed.
+Unlike NeriPlayer's eager official-MV enrichment, this port resolves MV metadata when playing;
+discovery does not request media URLs. Default startup and ordinary catalog loading never play.
+Actual host queue replacement/continuous audible playback remain installation acceptance items.
 
 ## QR Code Generator
 

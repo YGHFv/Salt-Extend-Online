@@ -18,6 +18,8 @@ public final class NativeDesk {
     private final Function<AccountPlatform, AccountLoginController.Snapshot> accounts;
     private final BiConsumer<AccountPlatform, Action> actions;
     private final BooleanSupplier permitted;
+    private Consumer<LibraryController.Playlist> playlistPlayer = list -> { throw new IllegalStateException("Playlist playback not configured"); };
+    public void playlistPlayer(Consumer<LibraryController.Playlist> player) { playlistPlayer=Objects.requireNonNull(player); }
     public NativeDesk(LibraryController library, OnlinePlaybackController player,
                       Function<AccountPlatform, AccountLoginController.Snapshot> accounts,
                       BiConsumer<AccountPlatform, Action> actions, BooleanSupplier permitted) {
@@ -26,10 +28,14 @@ public final class NativeDesk {
     }
     private void check() { if (!permitted.getAsBoolean()) throw new SecurityException("Native desk unavailable"); }
     public State snapshot(AccountPlatform platform) {
-        check(); return new State(library.snapshot(), player.snapshot(), accounts.apply(platform));
+        check(); var catalog=library.snapshot(platform); var pending=library.takePlaylist(); if(pending!=null) playlistPlayer.accept(pending);
+        return new State(catalog, player.snapshot(), accounts.apply(platform));
     }
     public void browse(AccountPlatform platform, Catalog.View view) { check(); library.browse(platform, view); }
     public void search(String keyword) { check(); library.search(keyword); }
+    public void filter(String keyword) { check(); library.filter(keyword); }
+    public void sort(Catalog.Sort order) { check(); library.sort(order); }
+    public void playPlaylist() { check(); library.requestPlaylist(); }
     public AccountLoginController.Snapshot account(AccountPlatform platform) { check(); return accounts.apply(platform); }
     public void page(int direction) { check(); library.turn(direction); }
     public void choose(String token) { check(); library.choose(token); }
@@ -56,6 +62,6 @@ public final class NativeDesk {
         check(); return library.resolveCover(token, request, true);
     }
     public boolean currentRow(String token) { return permitted.getAsBoolean() && library.currentRow(token); }
-    public void leave() { library.invalidate(); }
+    public void leave() { library.cancelPendingPlayback(); player.invalidate("Page left; unsubmitted playback cancelled, catalog retained"); }
     public void action(AccountPlatform platform, Action action) { check(); actions.accept(platform, action); }
 }

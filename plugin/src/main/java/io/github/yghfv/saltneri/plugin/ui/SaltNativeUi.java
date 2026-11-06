@@ -30,6 +30,8 @@ public final class SaltNativeUi implements AutoCloseable {
     public record Palette(TextStyle main, TextStyle sub, long text, long secondary, long background, long pageBackground,
                           long accent, Shape shape, float padding) { }
     private final NativeDesk desk;
+    private final java.util.Map<AccountPlatform,Object> pageMemory = new java.util.EnumMap<>(AccountPlatform.class);
+    public synchronized Object pageMemory(AccountPlatform platform, java.util.function.Supplier<Object> create) { return pageMemory.computeIfAbsent(platform,p -> create.get()); }
     private final CoverLoader covers;
     private final CoverLoader avatars;
     private final BooleanSupplier permitted;
@@ -257,7 +259,7 @@ public final class SaltNativeUi implements AutoCloseable {
     public void canvas(Modifier modifier, Object draw, Composer composer) { invoke(canvas, null, modifier, draw, composer, 0); }
     @Override public synchronized void close() {
         closed = true; navigator = null; sidebarStyle.setValue(null); pendingLogin.set(null); pages.clear();
-        covers.close(); avatars.close();
+        covers.close(); avatars.close(); pageMemory.clear();
         pageBinding.close();
         for (int i = handles.size() - 1; i >= 0; i--) {
             try { handles.get(i).close(); }

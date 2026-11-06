@@ -25,7 +25,9 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     private final ScheduledExecutorService watchdog;
     private URI toneUri;
     private String tonePath;
-    private boolean closed;
+    private volatile boolean closed;
+    private LazyPlaylistSession playlist;
+    private MediaLease.Platform playlistPlatform;
     private final java.util.Map<String, Salt1193PlaybackSession> sessions = new java.util.HashMap<>();
     private final java.util.Map<String, MediaLease.Platform> sessionPlatforms = new java.util.HashMap<>();
 
@@ -91,7 +93,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         toneUri = local;
     }
 
-    public synchronized boolean isClosed() { return closed; }
+    public boolean isClosed() { return closed; }
     /** Explicit platform queue submission. Preparation/resolution elsewhere never calls this method. */
     public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive) throws ReflectiveOperationException {
@@ -113,9 +115,22 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         catch (ReflectiveOperationException | RuntimeException failure) { track.close(); throw failure; }
     }
     public synchronized void revokePlatform(MediaLease.Platform platform) {
+        if(playlist!=null && playlistPlatform==platform) { playlist.close(); playlist=null; }
         for (String scope : java.util.List.copyOf(sessions.keySet())) if (sessionPlatforms.get(scope) == platform) {
             sessions.remove(scope).close(); sessionPlatforms.remove(scope);
         }
+    }
+    public void playPlaylist(io.github.yghfv.saltneri.plugin.library.LibraryController.Playlist list, BooleanSupplier accountActive) throws Exception {
+        synchronized(this) { if(closed || !permitted()) throw new IllegalStateException("Adapter stopped"); engine.ensureAttached(); }
+        String scope=list.account()==null ? "anonymous:"+UUID.randomUUID() : list.account().accountScope();
+        LazyPlaylistSession next=new LazyPlaylistSession(profile,adapter,transport,queue,list.items(),scope,
+                ()->!isClosed() && permitted() && accountActive.getAsBoolean(),
+                (item,identity,request)->io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.resolveAudio(list.account(),
+                        new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request));
+        try {
+            next.play();
+            synchronized(this) { if(closed || !accountActive.getAsBoolean()) throw new SecurityException("Account retired"); if(playlist!=null) playlist.close(); playlist=next; playlistPlatform=MediaLease.Platform.valueOf(list.platform().name()); }
+        } catch(Exception failure) { next.close(); throw failure; }
     }
     private boolean permitted() {
         try { return authorized.getAsBoolean(); }
@@ -124,6 +139,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     @Override public synchronized void close() {
         if (closed) return;
         closed = true;
+        if(playlist!=null) { playlist.close(); playlist=null; }
         watchdog.shutdownNow();
         tonePath = null; toneUri = null;
         try { for (var session : sessions.values()) session.close(); }

@@ -14,6 +14,7 @@ public final class NativeQueueContractTest {
         public void addToPlay(Object item) { calls.add("add"); if (failAdd) throw new IllegalStateException("SECRET"); onAdd.run(); }
         public void play() { calls.add("play"); if (failPlay) throw new IllegalStateException("SECRET"); paused = false; }
         public void playOrPause() { throw new AssertionError("Never toggle"); }
+        public void setPlaybackQueue(List<Object> items,int index) { if(items.size()!=3 || index!=0) throw new AssertionError(); calls.add("replace"); }
     }
     public static void main(String[] args) throws Exception {
         Controller controller = new Controller(); AtomicBoolean allowed = new AtomicBoolean(true);
@@ -31,6 +32,10 @@ public final class NativeQueueContractTest {
         }
         var host = Class.forName("com.xuncorp.voxzen.service.PlaybackController", false, NativeQueueContractTest.class.getClassLoader());
         check(host.getMethod("play").getReturnType() == void.class);
+        controller.failAdd=false; controller.failPlay=false; allowed.set(true); controller.calls.clear();
+        Salt1193PlaybackSession.replaceAndPlay(controller,List.of(new Object(),new Object(),new Object()),allowed::get);
+        check(controller.calls.equals(List.of("replace","play")));
+        check(host.getMethod("setPlaybackQueue",List.class,int.class).getReturnType()==void.class);
         System.out.println("PASS: " + checks + " explicit add-then-play ordering/revoke/failure checks; recording controller only");
     }
 }

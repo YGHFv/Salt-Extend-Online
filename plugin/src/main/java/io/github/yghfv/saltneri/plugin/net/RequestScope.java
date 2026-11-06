@@ -18,7 +18,7 @@ public final class RequestScope implements AutoCloseable {
     private volatile boolean closed;
     public RequestScope(BooleanSupplier active) { this(active, 30000); }
     public RequestScope(BooleanSupplier active, long deadlineMillis) {
-        if (deadlineMillis < 1 || deadlineMillis > 30000) throw new IllegalArgumentException("Invalid operation deadline");
+        if (deadlineMillis < 1 || deadlineMillis > 300000) throw new IllegalArgumentException("Invalid operation deadline");
         this.active = Objects.requireNonNull(active);
         timer = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "salt-neri-platform-request"); thread.setDaemon(true); return thread;

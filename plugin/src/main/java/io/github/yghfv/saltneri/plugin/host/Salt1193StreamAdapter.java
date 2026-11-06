@@ -26,6 +26,7 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     }
 
     private final Map<String, URI> paths = new ConcurrentHashMap<>();
+    private final Map<String, Deferred> deferred = new ConcurrentHashMap<>();
     private final Map<Object, ReversibleInterceptorLists> attachments = new IdentityHashMap<>();
     private ReversibleInterceptorLists currentAttachment;
     private final BooleanSupplier authorized;
@@ -56,6 +57,10 @@ public final class Salt1193StreamAdapter implements StreamBinding {
             try {
                 if (closed || !authorized.getAsBoolean()) throw new SecurityException("Online stream adapter disabled");
                 URI local = paths.get(path);
+                if (local == null && deferred.containsKey(path)) {
+                    local = deferred.get(path).resolve();
+                    JobKt.ensureActive(((Continuation<?>)args[5]).getContext());
+                }
                 if (local == null) throw new IllegalStateException("Online stream lease unavailable");
                 if ((long)args[2] != 0 || (long)args[3] != 0) throw new IllegalArgumentException("Subfile streams unsupported");
                 raw = factory.create(local, (int)args[4]);
@@ -88,7 +93,11 @@ public final class Salt1193StreamAdapter implements StreamBinding {
         if (paths.putIfAbsent(path, localUri) != null) throw new IllegalStateException("Stream path already registered");
     }
 
-    public void unregister(String path) { paths.remove(path); }
+    public synchronized void registerDeferred(String path, Deferred source) {
+        if (closed || !(path.matches("saltneri://[a-z0-9/-]+") || PlaybackCoverFile.isPath(path))) throw new IllegalArgumentException("Invalid deferred path");
+        if (paths.containsKey(path) || deferred.putIfAbsent(path,Objects.requireNonNull(source)) != null) throw new IllegalStateException("Duplicate deferred path");
+    }
+    public void unregister(String path) { paths.remove(path); deferred.remove(path); }
     public Object interceptor() { return interceptor; }
     public synchronized boolean isAttached() {
         return !closed && currentAttachment != null && currentAttachment.isInstalled();
@@ -141,6 +150,7 @@ public final class Salt1193StreamAdapter implements StreamBinding {
         if (closed) return;
         closed = true;
         paths.clear();
+        deferred.clear();
         RuntimeException failure = null;
         for (ReversibleInterceptorLists transaction : new ArrayList<>(attachments.values())) {
             try { transaction.close(); }

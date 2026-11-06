@@ -149,6 +149,20 @@ public final class InterceptorContractTest {
         failure(unbox.invoke(invoke(create, adapter, online, 0, 0, continuation)), "Stopped adapter opened stream");
         check(invoke(create, adapter, local, 0, 0, continuation) == null, "Stopped adapter interfered with local media");
 
+        AtomicInteger resolved=new AtomicInteger();
+        try (Salt1193StreamAdapter lazy=new Salt1193StreamAdapter(loader,profile,()->true,(uri,flags)->123)) {
+            lazy.registerDeferred("saltneri://track/test",()->{resolved.incrementAndGet();return LOCAL;});
+            eq(0,resolved.get());
+            eq(123,unbox.invoke(invoke(create,lazy,online,0,0,continuation)));
+            eq(1,resolved.get());
+            lazy.unregister("saltneri://track/test");
+            failure(unbox.invoke(invoke(create,lazy,online,0,0,continuation)),"Retired deferred path reopened");
+            lazy.registerDeferred("saltneri://track/test",()->{throw new IllegalStateException("SECRET");});
+            Object raw=unbox.invoke(invoke(create,lazy,online,0,0,continuation));
+            try {ResultKt.throwOnFailure(raw);throw new AssertionError();}
+            catch(IllegalStateException safe) {check(!safe.toString().contains("SECRET") && safe.getCause()==null,"Deferred errors leaked");}
+        }
+
         for (Object raw : List.of(0, "wrong-ABI")) {
             try (Salt1193StreamAdapter invalid = new Salt1193StreamAdapter(loader, profile, () -> true, (uri, flags) -> raw)) {
                 invalid.register("saltneri://track/test", LOCAL);

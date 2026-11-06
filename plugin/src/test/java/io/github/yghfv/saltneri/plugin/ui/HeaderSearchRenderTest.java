@@ -38,15 +38,15 @@ public final class HeaderSearchRenderTest {
         for(var child:node.getChildren()) { var found=find(child,label,action); if(found!=null) return found; }
         return (label==null || node.getConfig().toString().contains(label)) && (action==null || node.getConfig().contains(action)) ? node : null;
     }
-    private static SemanticsNode find(ImageComposeScene scene,String label,SemanticsPropertyKey<?> action) {
+    static SemanticsNode find(ImageComposeScene scene,String label,SemanticsPropertyKey<?> action) {
         for(var owner:scene.getSemanticsOwners()) { var found=find(owner.getRootSemanticsNode(),label,action); if(found!=null) return found; }
         return null;
     }
-    private static void render(ImageComposeScene scene) throws Exception {
+    static void render(ImageComposeScene scene) throws Exception {
         Thread.sleep(400);
         for(int i=0;i<4;i++) try(Image ignored=scene.render(System.nanoTime())) { }
     }
-    private static void click(ImageComposeScene scene,String label) throws Exception {
+    static void click(ImageComposeScene scene,String label) throws Exception {
         var key=SemanticsActions.INSTANCE.getOnClick(); var node=find(scene,label,key); check(node!=null);
         check(Boolean.TRUE.equals(node.getConfig().get(key).getAction().invoke())); render(scene);
     }
@@ -108,8 +108,11 @@ public final class HeaderSearchRenderTest {
                             click(scene,"\u8d26\u53f7\u83dc\u5355"); click(scene,"\u9000\u51fa\u767b\u5f55");
                             check(lastAction.get()==NativeDesk.Action.LOGOUT && find(scene,"\u767b\u5f55\u8d26\u53f7",null)!=null);
                             login.set(signedIn("search-"+width)); render(scene);
-                            click(scene,"\u641c\u7d22B\u7ad9");
-                            var setText=SemanticsActions.INSTANCE.getSetText(); var input=find(scene,null,setText); check(input!=null);
+                            var setText=SemanticsActions.INSTANCE.getSetText();
+                            if(find(scene,null,setText)==null) click(scene,"\u641c\u7d22B\u7ad9");
+                            var input=find(scene,null,setText); check(input!=null);
+                            var icon=find(scene,"\u641c\u7d22B\u7ad9",null).getBoundsInRoot();
+                            check(input.getBoundsInRoot().getRight()<=icon.getLeft() && Math.abs(input.getBoundsInRoot().getTop()-icon.getTop())<15);
                             check(Boolean.TRUE.equals(input.getConfig().get(setText).getAction().invoke(new AnnotatedString("\u6d1b\u5929\u4f9d music",List.of(),List.of()))));
                             render(scene);
                             check(queried.get()==null);
