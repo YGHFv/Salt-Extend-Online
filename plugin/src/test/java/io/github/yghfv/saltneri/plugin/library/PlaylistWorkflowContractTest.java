@@ -21,7 +21,8 @@ public final class PlaylistWorkflowContractTest {
             requests.incrementAndGet();
             if(q.view()!=View.FOLDER) return new Page(q.platform().name(),List.of(new Item(Kind.FOLDER,"10","Collection","Creator",45,true)),false,Instant.now().plusSeconds(300),1,1);
             List<Item> items=new ArrayList<>();
-            for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,45);i++) items.add(new Item(Kind.TRACK,""+i,String.format("Song %02d",i),"Artist",i*1000,true));
+            for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,45);i++) items.add(new Item(Kind.TRACK,""+i,String.format("Song %02d",i),"Artist",i*1000,true,null,0,
+                    i==1 || i==3 ? -1 : i==2 ? 0 : i>=44 ? 9000000000L : i));
             return new Page("Collection",items,q.page()<3,Instant.now().plusSeconds(300),3,45);
         })) {
             library.browse(AccountPlatform.BILIBILI,View.MINE); ready(library);
@@ -42,6 +43,18 @@ public final class PlaylistWorkflowContractTest {
             check(playlist!=null && playlist.items().size()==45 && playlist.items().getFirst().target().equals("45"));
             check(library.takePlaylist()==null);
             library.filter(""); library.sort(Sort.TITLE); check(rows(library).getFirst().get("title").equals("Song 01"));
+            count=requests.get(); library.sort(Sort.PLAY_COUNT); ready(library);
+            check(requests.get()==count && library.snapshot().get("page").equals(1));
+            check(rows(library).getFirst().get("title").equals("Song 44") && rows(library).get(1).get("title").equals("Song 45"));
+            library.turn(1); ready(library); check(rows(library).getFirst().get("title").equals("Song 25"));
+            library.turn(1); ready(library);
+            check(rows(library).stream().map(i->i.get("title")).toList().equals(List.of("Song 05","Song 04","Song 02","Song 01","Song 03")));
+            library.filter("Song 45"); check(rows(library).size()==1);
+            library.requestPlaylist(); playlist=library.takePlaylist();
+            check(playlist!=null && playlist.items().size()==45 && playlist.items().getFirst().target().equals("44"));
+            check(playlist.items().get(1).target().equals("45") && playlist.items().getLast().target().equals("3"));
+            library.filter(""); library.sort(Sort.DEFAULT); check(rows(library).getFirst().get("title").equals("Song 01"));
+            library.sort(Sort.DURATION); check(rows(library).getFirst().get("title").equals("Song 01"));
             library.accountChanged(AccountPlatform.BILIBILI); check(rows(library).isEmpty() && !library.currentRow(token));
             library.snapshot(AccountPlatform.NETEASE); check(rows(library).size()==1);
         }

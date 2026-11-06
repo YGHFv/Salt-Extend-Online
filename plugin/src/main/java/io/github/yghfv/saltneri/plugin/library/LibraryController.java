@@ -137,6 +137,8 @@ public final class LibraryController implements AutoCloseable {
             case TITLE -> items.sort(Comparator.comparing(Item::title,String.CASE_INSENSITIVE_ORDER));
             case ARTIST -> items.sort(Comparator.comparing(Item::subtitle,String.CASE_INSENSITIVE_ORDER));
             case DURATION -> items.sort(Comparator.comparingLong(Item::count));
+            // Missing counts (-1) follow real zeroes; stable sort preserves upstream ties.
+            case PLAY_COUNT -> items.sort(Comparator.comparingLong(Item::playCount).reversed());
         }
         return items;
     }

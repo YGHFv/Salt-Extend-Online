@@ -114,7 +114,7 @@ tasks.processResources {
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
     PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.2-navigation-row" else project.version.toString()
+    PluginVersion = if (experimentalAdapter) "0.8.3-icons-playcount" else project.version.toString()
     PluginProvider = "YGHFv"
     PluginName = "Salt Extend Online"
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."

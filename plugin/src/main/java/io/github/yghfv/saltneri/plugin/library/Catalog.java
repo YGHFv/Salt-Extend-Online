@@ -8,7 +8,7 @@ public final class Catalog {
     private Catalog() { }
     public enum View { DISCOVER, MUSIC_HOT, MUSIC_ORIGINAL, MINE, SAVED, FOLDER, COLLECTION, SEARCH }
     public enum Kind { FOLDER, COLLECTION, TRACK }
-    public enum Sort { DEFAULT, REVERSE, TITLE, ARTIST, DURATION }
+    public enum Sort { DEFAULT, REVERSE, TITLE, ARTIST, DURATION, PLAY_COUNT }
     public record Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword) {
         public Query(AccountPlatform platform, View view, long folder, int page) { this(platform, view, folder, page, 0, ""); }
         public Query(AccountPlatform platform, View view, long folder, int page, long owner) { this(platform, view, folder, page, owner, ""); }
@@ -25,7 +25,11 @@ public final class Catalog {
         @Override public String toString() { return "CatalogQuery[" + platform + ", " + view + ", page=" + page + ", search redacted]"; }
     }
     /** No URL/cookie in the UI model. target is a logical ID, not a media address. */
-    public record Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner) {
+    public record Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner, long playCount) {
+        public Item { playCount = Math.max(-1, playCount); }
+        public Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner) {
+            this(kind, target, title, subtitle, count, enabled, cover, owner, -1);
+        }
         public Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover) {
             this(kind, target, title, subtitle, count, enabled, cover, 0);
         }

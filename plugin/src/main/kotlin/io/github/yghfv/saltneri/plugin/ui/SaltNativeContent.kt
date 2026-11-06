@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -123,19 +125,6 @@ private fun NativeRow(ui: SaltNativeUi, title: String, selected: Boolean = false
     ui.row(title, selected, Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = click), icon, currentComposer)
 }
 
-@Composable
-private fun ToolbarButton(ui: SaltNativeUi, title: String, click: () -> Unit) {
-    val palette = ui.palette(currentComposer)
-    // Salt's full-width navigation row reserves icon/padding space and clips text in compact slots.
-    Box(Modifier.heightIn(min = 36.dp).clip(palette.shape())
-        .background(Color(palette.accent().toULong()).copy(alpha = 0.10f))
-        .border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.3f), palette.shape())
-        .clickable(role = Role.Button, onClick = click).padding(horizontal = 10.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center) {
-        ui.text(title, Modifier, palette.main().copy(fontSize = 14.sp, color = Color(palette.text().toULong())), currentComposer)
-    }
-}
-
 private data class NativeButton(val title: String, val selected: Boolean = false, val enabled: Boolean = true, val click: () -> Unit)
 
 @Composable
@@ -161,20 +150,36 @@ private fun Cover(ui: SaltNativeUi, token: String) {
     }
 }
 
+private enum class HeaderGlyph { SEARCH, ACCOUNT, PLAY, SORT }
+
 @Composable
-private fun HeaderIcon(ui: SaltNativeUi, label: String, search: Boolean, click: () -> Unit) {
+private fun HeaderIcon(ui: SaltNativeUi, label: String, glyph: HeaderGlyph, click: () -> Unit) {
     val color = Color(ui.palette(currentComposer).text().toULong())
+    val play = remember { PathParser().parsePathString("M 7 3 L 21 12 L 7 21 Z").toPath() }
     val draw: (DrawScope) -> Unit = { scope -> with(scope) {
         val center = Offset(size.width * 0.43f, size.height * 0.43f)
-        if (search) {
+        when (glyph) {
+        HeaderGlyph.SEARCH -> {
             drawCircle(color, size.width * 0.25f, center, style = Stroke(2.dp.toPx()))
             drawLine(color, Offset(size.width * 0.62f, size.height * 0.62f), Offset(size.width * 0.88f, size.height * 0.88f), 2.dp.toPx())
-        } else {
+        }
+        HeaderGlyph.ACCOUNT -> {
             drawCircle(color, size.width * 0.16f, Offset(size.width / 2, size.height * 0.3f), style = Stroke(2.dp.toPx()))
             drawArc(color, 180f, 180f, false, Offset(size.width * 0.15f, size.height * 0.55f), Size(size.width * 0.7f, size.height * 0.7f), style = Stroke(2.dp.toPx()))
         }
+        HeaderGlyph.PLAY -> scale(size.width / 24f, size.height / 24f, Offset.Zero) { drawPath(play, color) }
+        HeaderGlyph.SORT -> {
+            for (i in 0..2) {
+                val y = size.height * (0.23f + i * 0.27f)
+                drawLine(color, Offset(size.width * 0.1f, y), Offset(size.width * (0.58f - i * 0.12f), y), 2.dp.toPx())
+            }
+            drawLine(color, Offset(size.width * 0.78f, size.height * 0.15f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
+            drawLine(color, Offset(size.width * 0.61f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
+            drawLine(color, Offset(size.width * 0.95f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
+        }
+        }
     } }
-    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = click).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = click).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
         ui.canvas(Modifier.size(22.dp), draw, currentComposer)
     }
 }
@@ -196,7 +201,7 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
         NativeText(ui, name(platform), modifier = if(memory.searching) Modifier.width(105.dp) else Modifier.weight(1f), heading = true)
         if (platform == AccountPlatform.BILIBILI) {
             if(memory.searching) SearchInput(ui,memory.searchText,{memory.searchText=it},modifier=Modifier.weight(1f)) { keyword -> action {ui.desk().search(keyword);memory.view=Catalog.View.SEARCH} }
-            HeaderIcon(ui, "\u641c\u7d22B\u7ad9", true) {
+            HeaderIcon(ui, "\u641c\u7d22B\u7ad9", HeaderGlyph.SEARCH) {
                 memory.searching = !memory.searching
             }
         }
@@ -204,7 +209,7 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
         Box {
             if (loggedIn && image != null) {
                 Image(image.bitmap(), "\u8d26\u53f7\u83dc\u5355", Modifier.size(40.dp).clip(CircleShape).clickable { menu = !menu }, contentScale = ContentScale.Crop)
-            } else HeaderIcon(ui, if (loggedIn) "\u8d26\u53f7\u83dc\u5355" else "\u767b\u5f55\u8d26\u53f7", false) {
+            } else HeaderIcon(ui, if (loggedIn) "\u8d26\u53f7\u83dc\u5355" else "\u767b\u5f55\u8d26\u53f7", HeaderGlyph.ACCOUNT) {
                 if (loggedIn) menu = !menu else action { ui.desk().action(platform, NativeDesk.Action.LOGIN) }
             }
             if (menu && loggedIn) Popup(alignment = Alignment.TopEnd, offset = IntOffset(0, menuOffset), onDismissRequest = { menu = false },
@@ -249,23 +254,24 @@ private class PageMemory(platform: AccountPlatform) {
 }
 
 @Composable
-private fun PlaylistTitle(ui: SaltNativeUi, title: String, count: Long, action: (() -> Unit) -> Unit, memory: PageMemory) {
+private fun PlaylistTitle(ui: SaltNativeUi, platform: AccountPlatform, title: String, count: Long, action: (() -> Unit) -> Unit, memory: PageMemory) {
     var menu by remember { mutableStateOf(false) }
     val palette=ui.palette(currentComposer)
     val offset=with(LocalDensity.current) { 40.dp.roundToPx() }
     Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
         NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch) 0.6f else 1f))
-        ToolbarButton(ui,"\u5168\u90e8\u64ad\u653e") { action {ui.desk().playPlaylist()} }
-        Spacer(Modifier.width(8.dp))
         if(memory.localSearch) SearchInput(ui,memory.localText,{memory.localText=it},true,Modifier.weight(1f)) { keyword -> action {ui.desk().filter(keyword)} }
-        HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",true) {
+        HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",HeaderGlyph.SEARCH) {
             memory.localSearch = !memory.localSearch
         }
+        HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) { action {ui.desk().playPlaylist()} }
         Box {
-            ToolbarButton(ui,"\u6392\u5e8f") { menu=!menu }
+            HeaderIcon(ui,"\u6392\u5e8f",HeaderGlyph.SORT) { menu=!menu }
             if(menu) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={menu=false},properties=PopupProperties(focusable=true)) {
                 Column(Modifier.width(180.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
-                    listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f").forEach { (sort,label) ->
+                    val sorts = listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f") +
+                        if (platform == AccountPlatform.BILIBILI) listOf(Catalog.Sort.PLAY_COUNT to "\u64ad\u653e\u91cf") else emptyList()
+                    sorts.forEach { (sort,label) ->
                         NativeRow(ui,label,click={menu=false;action {ui.desk().sort(sort)}})
                     }
                 }
@@ -355,7 +361,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                     val title=catalog?.get("title") as? String ?: ""
                     val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
                     Column {
-                        if(folder) PlaylistTitle(ui,title,(catalog?.get("totalCount") as? Number)?.toLong() ?: -1,action,memory)
+                        if(folder) PlaylistTitle(ui,platform,title,(catalog?.get("totalCount") as? Number)?.toLong() ?: -1,action,memory)
                         else NativeText(ui,title)
                         if(catalog?.get("loadingAll")==true) NativeText(ui,"\u6b63\u5728\u8bfb\u53d6\u5b8c\u6574\u5408\u96c6\u2026",true)
                     }

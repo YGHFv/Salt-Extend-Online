@@ -116,7 +116,7 @@ public final class CatalogClient {
                 String target = enabled ? bvid : "unsupported:" + id(video.get("aid"));
                 if (!unique.add(target)) throw invalid();
                 items.add(new Item(Kind.TRACK, target, text(video.get("title")), author(video), duration * 1000, enabled,
-                        cover(AccountPlatform.BILIBILI, video.get("pic"))));
+                        cover(AccountPlatform.BILIBILI, video.get("pic")), 0, playCount(video, "stat", "view")));
             }
             Map<String, Object> paging = data.get("page") == null ? Map.of() : object(data.get("page"));
             long total = number(paging.get("total"), number(meta.get("total"), -1));
@@ -135,7 +135,7 @@ public final class CatalogClient {
                 String target = enabled ? bvid : "unsupported:" + id(video.get("id")); if (!unique.add(target)) throw invalid();
                 String owner = video.get("upper") == null ? "" : optional(object(video.get("upper")).get("name"));
                 items.add(new Item(Kind.TRACK, target, text(video.get("title")), owner + (enabled ? " / P1" : " / unavailable or unsupported"), number(video.get("duration"), 0) * 1000, enabled,
-                        cover(AccountPlatform.BILIBILI, video.get("cover"))));
+                        cover(AccountPlatform.BILIBILI, video.get("cover")), 0, playCount(video, "cnt_info", "play")));
             }
             Boolean more = more(data, query.page(), number(info.get("media_count"), -1));
             if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
@@ -212,6 +212,13 @@ public final class CatalogClient {
     private static URI firstCover(AccountPlatform platform, Map<String, Object> row, String... fields) {
         for (String field : fields) { URI uri = cover(platform, row.get(field)); if (uri != null) return uri; }
         return null;
+    }
+    private static long playCount(Map<String, Object> row, String container, String field) {
+        // Optional statistics must not make an otherwise playable video disappear.
+        if (!(row.get(container) instanceof Map<?, ?> stats)) return -1;
+        Object value = stats.get(field);
+        try { return Math.max(-1, value instanceof String text ? Long.parseLong(text) : BoundedJson.integer(value)); }
+        catch (IOException | NumberFormatException ignored) { return -1; }
     }
     private static String viewTitle(Query query) {
         return switch (query.view()) {

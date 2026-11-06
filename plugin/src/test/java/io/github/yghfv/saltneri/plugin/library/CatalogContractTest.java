@@ -124,6 +124,31 @@ public final class CatalogContractTest {
             fails(() -> new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0,"music"));
             check(new Fixture().load(new Query(AccountPlatform.BILIBILI,View.MINE,0,1),bili).totalPages()==2);
             check(new Fixture().load(new Query(AccountPlatform.BILIBILI,View.COLLECTION,30,1,99),bili).totalPages()==2);
+            for (View view : List.of(View.FOLDER, View.COLLECTION)) {
+                Query query = view == View.FOLDER ? new Query(AccountPlatform.BILIBILI,view,20,1) : new Query(AccountPlatform.BILIBILI,view,30,1,99);
+                check(new Fixture().load(query,bili).items().getFirst().playCount()==-1);
+                String container = view == View.FOLDER ? "cnt_info" : "stat", field = view == View.FOLDER ? "play" : "view";
+                for (String value : List.of("0", "12345", "9000000000", "9223372036854775807", "\"23456\"", "null", "-9", "1.5", "\"invalid\"", "9223372036854775808", "true", "{}")) {
+                    Fixture statistics = new Fixture();
+                    String replacement = "\"duration\":60,\""+container+"\":{\""+field+"\":"+value+"}";
+                    statistics.resources = statistics.resources.replace("\"duration\":60", replacement);
+                    statistics.collection = statistics.collection.replace("\"duration\":60", replacement);
+                    Item item = statistics.load(query,bili).items().getFirst();
+                    long expected = switch(value) { case "0" -> 0; case "12345" -> 12345; case "9000000000" -> 9000000000L;
+                        case "9223372036854775807" -> Long.MAX_VALUE; case "\"23456\"" -> 23456; default -> -1; };
+                    check(item.playCount()==expected && item.enabled() && item.count()==60000);
+                    check(statistics.requests.size()==(view==View.FOLDER?2:3));
+                }
+                for (String stats : List.of("null", "{}", "[]", "\"invalid\"")) {
+                    Fixture statistics = new Fixture();
+                    String replacement = "\"duration\":60,\""+container+"\":"+stats;
+                    statistics.resources = statistics.resources.replace("\"duration\":60", replacement);
+                    statistics.collection = statistics.collection.replace("\"duration\":60", replacement);
+                    Item item = statistics.load(query,bili).items().getFirst();
+                    check(item.playCount()==-1 && item.enabled());
+                }
+            }
+            check(publicSongs.items().getFirst().playCount()==-1);
             Fixture paging = new Fixture();
             for (String flag : List.of("true", "1")) {
                 paging.created = "{\"code\":0,\"data\":{\"has_more\":" + flag + ",\"list\":[{\"id\":20,\"title\":\"One visible row\"}]}}";
