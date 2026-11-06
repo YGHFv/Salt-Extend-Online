@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composer;
 import androidx.compose.ui.ImageComposeScene;
 import androidx.compose.ui.semantics.*;
 import androidx.compose.ui.text.AnnotatedString;
+import androidx.compose.ui.text.TextLayoutResult;
 import androidx.compose.ui.unit.*;
 import io.github.yghfv.saltneri.plugin.auth.*;
 import io.github.yghfv.saltneri.plugin.library.*;
@@ -19,9 +20,26 @@ import static io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest.*;
 public final class PlaylistRenderTest {
     private static int checks;
     private static void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Playlist render "+checks); }
+    private static void centeredLabel(ImageComposeScene scene, String label, SemanticsNode button) {
+        var action=SemanticsActions.INSTANCE.getGetTextLayoutResult();
+        var text=find(scene,label,action); check(text!=null);
+        var a=button.getBoundsInRoot(); var b=text.getBoundsInRoot();
+        check(Math.abs((a.getLeft()+a.getRight())-(b.getLeft()+b.getRight()))<=2);
+        check(Math.abs((a.getTop()+a.getBottom())-(b.getTop()+b.getBottom()))<=2);
+        var layouts=new ArrayList<TextLayoutResult>();
+        check(Boolean.TRUE.equals(text.getConfig().get(action).getAction().invoke(layouts)) && layouts.size()==1);
+        var layout=layouts.getFirst();
+        for(int line=0;line<layout.getLineCount();line++)
+            check(Math.abs(layout.getLineLeft(line)+layout.getLineRight(line)-layout.getMultiParagraph().getWidth())<=2);
+    }
+    private static void selectedTab(ImageComposeScene scene, String label) {
+        var node=find(scene,label,SemanticsActions.INSTANCE.getOnClick()); check(node!=null);
+        check(Boolean.TRUE.equals(node.getConfig().get(SemanticsProperties.INSTANCE.getSelected())));
+    }
     private static void navigationRows(ImageComposeScene scene, float density, int width) {
-        var topLabels=List.of("\u53d1\u73b0","\u521b\u5efa\u7684\u6536\u85cf","\u6536\u85cf / \u8ba2\u9605");
+        var topLabels=List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605");
         var bottomLabels=List.of("\u70ed\u95e8\u89c6\u9891","\u97f3\u4e50\u70ed\u95e8\u699c","\u539f\u521b\u699c");
+        check(find(scene,"\u521b\u5efa\u7684\u6536\u85cf",null)==null && find(scene,"\u6536\u85cf / \u8ba2\u9605",null)==null);
         float top=-1, bottom=-1, right=-1, buttonWidth=-1;
         for(int i=0;i<3;i++) {
             var upper=find(scene,topLabels.get(i),SemanticsActions.INSTANCE.getOnClick());
@@ -33,6 +51,10 @@ public final class PlaylistRenderTest {
             check(a.getLeft()>=right && a.getRight()<=width && a.getBottom()<b.getTop());
             check(Math.abs(a.getLeft()-b.getLeft())<=1 && Math.abs(a.getWidth()-b.getWidth())<=1);
             check(a.getWidth()>60*density && Math.abs(a.getWidth()-buttonWidth)<=1);
+            centeredLabel(scene,topLabels.get(i),upper);
+            centeredLabel(scene,bottomLabels.get(i),lower);
+            check(Boolean.valueOf(i==0).equals(upper.getConfig().get(SemanticsProperties.INSTANCE.getSelected())));
+            check(Boolean.valueOf(i==0).equals(lower.getConfig().get(SemanticsProperties.INSTANCE.getSelected())));
             right=a.getRight();
         }
     }
@@ -126,9 +148,11 @@ public final class PlaylistRenderTest {
                             check(find(scene,"\u6682\u672a\u63a5\u5165",null)==null && find(scene,"\u70ed\u95e8\u89c6\u9891",null)!=null);
                             navigationRows(scene,density,width);
                             click(scene,"\u97f3\u4e50\u70ed\u95e8\u699c"); check(library.snapshot().get("view").equals("MUSIC_HOT"));
+                            selectedTab(scene,"\u97f3\u4e50\u70ed\u95e8\u699c"); selectedTab(scene,"\u53d1\u73b0");
                             click(scene,"\u539f\u521b\u699c"); check(library.snapshot().get("view").equals("MUSIC_ORIGINAL"));
-                            click(scene,"\u6536\u85cf / \u8ba2\u9605"); check(library.snapshot().get("view").equals("SAVED"));
-                            click(scene,"\u521b\u5efa\u7684\u6536\u85cf"); check(library.snapshot().get("view").equals("MINE"));
+                            selectedTab(scene,"\u539f\u521b\u699c"); selectedTab(scene,"\u53d1\u73b0");
+                            click(scene,"\u8ba2\u9605"); check(library.snapshot().get("view").equals("SAVED")); selectedTab(scene,"\u8ba2\u9605");
+                            click(scene,"\u6536\u85cf"); check(library.snapshot().get("view").equals("MINE")); selectedTab(scene,"\u6536\u85cf");
                         } catch(Exception e){throw new AssertionError(e);} finally {scene.close();}
                     });
                 }

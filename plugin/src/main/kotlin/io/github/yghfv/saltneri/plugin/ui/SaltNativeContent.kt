@@ -34,9 +34,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -129,9 +131,20 @@ private data class NativeButton(val title: String, val selected: Boolean = false
 
 @Composable
 private fun NativeButtons(ui: SaltNativeUi, buttons: List<NativeButton>) {
-    Row(Modifier.fillMaxWidth()) {
+    val palette = ui.palette(currentComposer)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         buttons.forEach { button ->
-            Box(Modifier.weight(1f)) { NativeRow(ui, button.title, button.selected, button.enabled, button.click) }
+            // Navigation rows reserve a leading icon slot; tabs must center against their full width.
+            Box(Modifier.weight(1f).heightIn(min = 40.dp).clip(palette.shape())
+                .background(if (button.selected) Color(palette.background().toULong()).copy(alpha = 0.65f) else Color.Transparent)
+                .clickable(enabled = button.enabled, role = Role.Tab, onClick = button.click)
+                .semantics { selected = button.selected }, contentAlignment = Alignment.Center) {
+                if (button.selected) Box(Modifier.align(Alignment.CenterStart).padding(start = 4.dp)
+                    .width(3.dp).height(16.dp).clip(CircleShape).background(Color(palette.accent().toULong())))
+                ui.text(button.title, Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    palette.main().copy(color = Color((if (button.enabled) palette.text() else palette.secondary()).toULong()),
+                        textAlign = TextAlign.Center), currentComposer)
+            }
         }
     }
 }
@@ -336,8 +349,8 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 }
                 item {
                     val views = listOf(Catalog.View.DISCOVER to "\u53d1\u73b0",
-                        Catalog.View.MINE to if (platform == AccountPlatform.NETEASE) "\u6211\u7684\u6b4c\u5355 / \u559c\u6b22" else "\u521b\u5efa\u7684\u6536\u85cf",
-                        Catalog.View.SAVED to "\u6536\u85cf / \u8ba2\u9605")
+                        Catalog.View.MINE to if (platform == AccountPlatform.NETEASE) "\u6211\u7684\u6b4c\u5355 / \u559c\u6b22" else "\u6536\u85cf",
+                        Catalog.View.SAVED to "\u8ba2\u9605")
                     NativeButtons(ui, views.map { (destination, label) ->
                         NativeButton(label, memory.view == destination) {
                             action { ui.desk().browse(platform, destination); memory.view = destination; memory.localSearch=false; memory.localText="" }

@@ -225,8 +225,8 @@ public final class CatalogClient {
             case DISCOVER -> "\u53d1\u73b0";
             case MUSIC_HOT -> "\u97f3\u4e50\u70ed\u95e8\u699c";
             case MUSIC_ORIGINAL -> "\u97f3\u4e50\u539f\u521b\u699c";
-            case MINE -> query.platform() == AccountPlatform.BILIBILI ? "\u521b\u5efa\u7684\u6536\u85cf\u5939" : "\u6211\u7684\u6b4c\u5355";
-            case SAVED -> "\u6536\u85cf / \u8ba2\u9605";
+            case MINE -> query.platform() == AccountPlatform.BILIBILI ? "\u6536\u85cf" : "\u6211\u7684\u6b4c\u5355";
+            case SAVED -> "\u8ba2\u9605";
             case FOLDER, COLLECTION -> throw new IllegalArgumentException("Folder title comes from its contents");
             case SEARCH -> "\u641c\u7d22";
         };
