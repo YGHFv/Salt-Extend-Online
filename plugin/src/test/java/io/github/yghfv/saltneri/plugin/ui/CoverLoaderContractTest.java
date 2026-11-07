@@ -20,9 +20,15 @@ public final class CoverLoaderContractTest {
         return png(240, 120);
     }
     public static byte[] png(int width, int height) throws IOException {
+        return picture(width, height, "png");
+    }
+    static byte[] jpeg() throws IOException { return picture(240, 120, "jpeg"); }
+    private static byte[] picture(int width, int height, String format) throws IOException {
         var image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) image.setRGB(x, y, x < width / 2 ? 0xffdd5500 : 0xff008866);
-        var bytes = new ByteArrayOutputStream(); ImageIO.write(image, "png", bytes); return bytes.toByteArray();
+        try {
+            var bytes = new ByteArrayOutputStream(); ImageIO.write(image, format, bytes); return bytes.toByteArray();
+        } finally { image.flush(); }
     }
     static final class Response extends HttpURLConnection {
         byte[] bytes; int status = 200; String type = "image/png", encoding; long length = -1; boolean closed;
@@ -113,6 +119,33 @@ public final class CoverLoaderContractTest {
         Response jpeg = new Response(SOURCE, jpegBytes.toByteArray()); jpeg.type = "image/jpeg; charset=binary";
         try (CoverLoader loader = new CoverLoader(uri -> jpeg); RequestScope scope = new RequestScope(() -> true)) {
             check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == 150);
+        }
+        URI netease = URI.create("https://p2.music.126.net/fixture.jpg");
+        for (String type : List.of("image/jpg", "IMAGE/JPG", " image/jpg ; charset=binary", "image/jpeg")) {
+            Response jpg = new Response(netease, jpeg()); jpg.type = type;
+            try (CoverLoader loader = new CoverLoader(uri -> jpg); RequestScope scope = new RequestScope(() -> true)) {
+                var list = ImageIO.read(new ByteArrayInputStream(loader.load(netease,scope)));
+                check(list.getWidth() == 168 && list.getHeight() == 84);
+                var playback = ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(netease,scope)));
+                check(playback.getWidth() == 240 && playback.getHeight() == 120);
+                check(jpg.closed && jpg.getRequestProperty("Cookie") == null && jpg.getRequestProperty("Authorization") == null);
+                check(jpg.getRequestProperty("Referer").equals("https://music.163.com/"));
+            }
+        }
+        for (int mode = 0; mode < 7; mode++) {
+            Response bad = new Response(netease, jpeg()); bad.type = "image/jpg";
+            switch (mode) {
+                case 0 -> bad.bytes = "<html>SECRET</html>".getBytes();
+                case 1 -> bad.bytes = new byte[]{(byte)0xff, (byte)0xd8, (byte)0xff};
+                case 2 -> bad.type = "application/octet-stream";
+                case 3 -> bad.type = "image/jpg-extra";
+                case 4 -> bad.length = 4194305;
+                case 5 -> bad.bytes = new byte[4194305];
+                case 6 -> bad.bytes = hugeBytes.toByteArray();
+            }
+            try (CoverLoader loader = new CoverLoader(uri -> bad); RequestScope scope = new RequestScope(() -> true)) {
+                rejects(() -> loader.load(netease,scope)); check(bad.closed);
+            }
         }
         AtomicInteger opens = new AtomicInteger(); AtomicBoolean active = new AtomicBoolean(true);
         try (CoverLoader loader = new CoverLoader(uri -> { opens.incrementAndGet(); return new Response(uri, fixture); })) {

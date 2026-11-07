@@ -111,7 +111,7 @@ public final class NativePageRenderTest {
                          requests.incrementAndGet(); int offset = (query.page() - 1) * 20, total = catalogSize.get();
                          var items = java.util.stream.IntStream.range(offset, Math.min(offset + 20, total)).mapToObj(index ->
                                  new Catalog.Item(Catalog.Kind.TRACK, "123", index == 0 ? "Synthetic song" : "Song " + index, "Artist", 1, !invalidItems.get(),
-                                         URI.create("https://i0.hdslb.com/bfs/archive/fixture.png"))).toList();
+                                         URI.create("https://p2.music.126.net/fixture.jpg"))).toList();
                          return new Catalog.Page("Synthetic playlist", items, offset + 20 < total, clock.instant().plusSeconds(300), Math.max(1,(total+19)/20));
                      })) {
             NativeDesk desk = new NativeDesk(library, player,
@@ -119,8 +119,10 @@ public final class NativePageRenderTest {
                             qr.get() == 0 ? "Offline fixture - not logged in" : "Offline synthetic QR - do not scan",
                             qr.get() == 0 ? null : URI.create("https://example.invalid/offline-render-fixture"), ""),
                     (p,a) -> { actions.incrementAndGet(); if (a == NativeDesk.Action.ARM) armed.set(true); }, () -> true);
-            byte[] fixture = CoverLoaderContractTest.png();
-            try (SaltNativeUi ui = new SaltNativeUi(host, new Hooks(), desk, () -> true, new CoverLoader(uri -> new CoverLoaderContractTest.Response(uri, fixture)))) {
+            byte[] fixture = CoverLoaderContractTest.jpeg();
+            try (SaltNativeUi ui = new SaltNativeUi(host, new Hooks(), desk, () -> true, new CoverLoader(uri -> {
+                var response = new CoverLoaderContractTest.Response(uri, fixture); response.type = "image/jpg"; return response;
+            }))) {
                 SwingUtilities.invokeAndWait(() -> {});
                 for (AccountPlatform platform : AccountPlatform.values()) for (int width : new int[]{740, 420}) {
                     qr.set(width == 420 ? 1 : 0);
@@ -181,7 +183,10 @@ public final class NativePageRenderTest {
                                 byte[] bytes = png.getBytes(); var pixels = ImageIO.read(new ByteArrayInputStream(bytes));
                                 int colored = 0;
                                 for (int y = 70; y < 720; y++) for (int x = 20; x < 140; x++) {
-                                    int rgb = pixels.getRGB(x,y) & 0xffffff; if (rgb == 0xdd5500 || rgb == 0x008866) colored++;
+                                    int rgb = pixels.getRGB(x,y);
+                                    int red = (rgb >> 16) & 255, green = (rgb >> 8) & 255, blue = rgb & 255;
+                                    if ((rgb >>> 24) > 240 && (Math.abs(red-221)<8 && Math.abs(green-85)<8 && blue<8
+                                            || red<8 && Math.abs(green-136)<8 && Math.abs(blue-102)<8)) colored++;
                                 }
                                 check(colored > 400); Files.write(output.resolve("cover-prepared-740.png"), bytes);
                                 backdrop(image,output.resolve("cover-prepared-740-backdrop.png"),false);

@@ -88,13 +88,14 @@ public final class CoverLoader implements AutoCloseable {
         byte[] encoded;
         try {
             connection.setInstanceFollowRedirects(false); connection.setUseCaches(false); connection.setConnectTimeout(5000); connection.setReadTimeout(5000);
-            connection.setRequestMethod("GET"); connection.setRequestProperty("Accept", "image/jpeg,image/png,image/webp");
+            connection.setRequestMethod("GET"); connection.setRequestProperty("Accept", "image/jpeg,image/jpg,image/png,image/webp");
             connection.setRequestProperty("Accept-Encoding", "identity");
             connection.setRequestProperty("User-Agent", "Mozilla/5.0 SaltExtendOnline/0.7.8");
             connection.setRequestProperty("Referer", source.getHost().endsWith(".music.126.net") ? "https://music.163.com/" : "https://www.bilibili.com/");
             if (connection.getResponseCode() != 200 || connection.getContentLengthLong() > maxBytes) throw invalid();
             String type = connection.getHeaderField("Content-Type"), encoding = connection.getHeaderField("Content-Encoding");
-            if (type == null || !Set.of("image/jpeg", "image/png", "image/webp").contains(type.split(";",2)[0].trim().toLowerCase(Locale.ROOT))
+            // NetEase's image CDN labels real JPEGs image/jpg; the bounded decoder still validates the bytes.
+            if (type == null || !Set.of("image/jpeg", "image/jpg", "image/png", "image/webp").contains(type.split(";",2)[0].trim().toLowerCase(Locale.ROOT))
                     || encoding != null && !encoding.equalsIgnoreCase("identity")) throw invalid();
             try (InputStream input = connection.getInputStream(); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
                 byte[] buffer = new byte[8192];
