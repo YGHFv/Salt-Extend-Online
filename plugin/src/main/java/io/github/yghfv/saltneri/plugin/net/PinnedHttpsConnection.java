@@ -68,6 +68,11 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
                 "/api/v6/playlist/detail", "/weapi/cloudsearch/get/web").contains(target.getPath())) throw new IOException("Invalid catalog POST target");
         PinnedHttpsConnection connection = new PinnedHttpsConnection(target); connection.loginForm(form); return connection;
     }
+    public static PinnedHttpsConnection neteaseLyricPost(URI target, byte[] form) throws IOException {
+        if (!"interface.music.163.com".equals(target.getHost()) || !"/eapi/song/lyric/v1".equals(target.getPath())
+                || target.getRawQuery() != null) throw new IOException("Invalid lyric POST target");
+        PinnedHttpsConnection connection = new PinnedHttpsConnection(target); connection.loginForm(form); return connection;
+    }
     void loginForm(byte[] form) throws IOException {
         if (form.length < 1 || form.length > 32768) throw new IOException("Invalid login POST body");
         for (byte value : form) if (value < 32 || value > 126) throw new IOException("Invalid login POST encoding");

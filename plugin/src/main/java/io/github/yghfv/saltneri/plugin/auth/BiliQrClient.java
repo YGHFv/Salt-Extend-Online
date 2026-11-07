@@ -19,10 +19,11 @@ public final class BiliQrClient implements QrAuthClient {
     private final Clock clock;
     private final AuthHttp http;
     private final ScopedCookies cookies;
+    private Map<String,Object> verifiedNav = Map.of();
     public BiliQrClient() { this(Clock.systemUTC(), new AuthHttp()); }
     public BiliQrClient(Clock clock, AuthHttp http) { this.clock = clock; this.http = http; cookies = new ScopedCookies(AccountPlatform.BILIBILI, clock); }
     @Override public Session create(RequestScope request) throws IOException {
-        cookies.clear(); Map<String, Object> root = http.exchange(URI.create(BASE + "generate"), null, cookies, Map.of(), request).json();
+        cookies.clear(); verifiedNav = Map.of(); Map<String, Object> root = http.exchange(URI.create(BASE + "generate"), null, cookies, Map.of(), request).json();
         Map<String, Object> data = success(root); String key = BoundedJson.string(data.get("qrcode_key"));
         URI qr;
         try { qr = URI.create(BoundedJson.string(data.get("url"))); } catch (IllegalArgumentException e) { throw invalid(); }
@@ -57,16 +58,19 @@ public final class BiliQrClient implements QrAuthClient {
         };
     }
     private AccountCredentials verifyJar(RequestScope request) throws IOException {
+        verifiedNav = Map.of();
         if (cookies.value(NAV, "SESSDATA").isEmpty()) throw new IOException("Bilibili confirmation has no login credential");
         Map<String, Object> data = success(http.exchange(NAV, null, cookies, Map.of(), request).json());
         if (!Boolean.TRUE.equals(data.get("isLogin"))) throw new IOException("Bilibili account verification rejected");
         long mid = BoundedJson.integer(data.get("mid")); if (mid <= 0) throw invalid();
         String cookieId = cookies.value(NAV, "DedeUserID");
         if (!cookieId.isEmpty() && !cookieId.equals(Long.toString(mid))) throw new IOException("Bilibili account identity mismatch");
-        request.check(); return new AccountCredentials(AccountPlatform.BILIBILI, Long.toString(mid), cookies.snapshot(), clock,
+        request.check(); verifiedNav = data;
+        return new AccountCredentials(AccountPlatform.BILIBILI, Long.toString(mid), cookies.snapshot(), clock,
                 AccountCredentials.Profile.from(AccountPlatform.BILIBILI, data.get("uname"), data.get("face")));
     }
     @Override public AccountCredentials verify(AccountCredentials saved, RequestScope request) throws IOException {
+        verifiedNav = Map.of();
         if (saved.platform() != AccountPlatform.BILIBILI) throw invalid();
         cookies.restore(saved.cookieSnapshot()); AccountCredentials verified = verifyJar(request);
         if (!verified.userId().equals(saved.userId())) { verified.retire(); throw new IOException("Saved Bilibili identity mismatch"); }
@@ -76,5 +80,14 @@ public final class BiliQrClient implements QrAuthClient {
         long code = BoundedJson.integer(root.get("code")); if (code != 0) throw new IOException("Bilibili login rejected (code " + code + ")"); return BoundedJson.object(root.get("data"));
     }
     private static IOException invalid() { return new IOException("Invalid Bilibili login response"); }
-    @Override public void close() { cookies.clear(); }
+    /** Optional signing metadata from the already verified response; never weakens account checks. */
+    public String verifiedWbiMixin() {
+        try {
+            var keys = BoundedJson.object(verifiedNav.get("wbi_img"));
+            String mixin = io.github.yghfv.saltneri.plugin.bilibili.BiliWbi.mixin(
+                    BoundedJson.string(keys.get("img_url")), BoundedJson.string(keys.get("sub_url")));
+            return mixin.length() == 32 ? mixin : null;
+        } catch (IOException | IllegalArgumentException error) { return null; }
+    }
+    @Override public void close() { cookies.clear(); verifiedNav = Map.of(); }
 }

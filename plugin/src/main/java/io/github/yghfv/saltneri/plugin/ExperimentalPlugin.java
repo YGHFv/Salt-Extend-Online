@@ -67,7 +67,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
         online = new OnlinePlaybackController(this::credentials, this::granted, this::adapterArmed, (audio, activeAccount) -> {
             Salt1193DiagnosticRuntime current = runtime;
             if (current == null || current.isClosed()) throw new IllegalStateException("Arm the adapter first");
-            current.playTrack(audio.key(), audio.metadata(), audio.lease(), activeAccount);
+            AccountCredentials account=credentials(AccountPlatform.NETEASE);
+            current.playTrack(audio.key(), audio.metadata(), audio.lease(), activeAccount,
+                    audio.key().platform()==io.github.yghfv.saltneri.core.TrackKey.Platform.NETEASE
+                    ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(account).load(Long.parseLong(audio.key().remoteId()),request) : null);
         });
         OnlinePlaybackController startedOnline = online;
         library = new LibraryController(this::credentials, this::granted, startedOnline::prepare,
@@ -190,7 +193,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             runtime = Salt1193DiagnosticRuntime.open(WorkshopApi.class.getClassLoader(), profile,
                     WorkshopApi.hookRegistrar(), this::granted);
         }
-        status = "Experimental adapter armed. No audio enqueued; platform resolve-only actions are separate. Playlist covers are separate; lyrics are not connected.";
+        status = "Experimental adapter armed. No audio enqueued. NetEase lyrics load only for owned playing items.";
     }
 
     private synchronized void play() throws ReflectiveOperationException {

@@ -97,6 +97,10 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     /** Explicit platform queue submission. Preparation/resolution elsewhere never calls this method. */
     public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive) throws ReflectiveOperationException {
+        playTrack(key,metadata,lease,accountActive,null);
+    }
+    public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+                                       BooleanSupplier accountActive, OnlineLyrics.Source lyrics) throws ReflectiveOperationException {
         if (closed || !permitted()) throw new IllegalStateException("Arm the experimental adapter first");
         if (!accountActive.getAsBoolean()) throw new SecurityException("Account revision revoked");
         engine.ensureAttached();
@@ -107,7 +111,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
             session = new Salt1193PlaybackSession(profile, lease.scope(), () -> permitted() && accountActive.getAsBoolean(), adapter, transport, false);
             sessions.put(lease.scope(), session); sessionPlatforms.put(lease.scope(), lease.platform());
         }
-        Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease);
+        Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease, lyrics);
         try { session.enqueue(track, item -> {
             if (!permitted() || !accountActive.getAsBoolean()) throw new SecurityException("Account/permission revoked before enqueue");
             queue.addToPlay(item);
@@ -126,7 +130,9 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         LazyPlaylistSession next=new LazyPlaylistSession(profile,adapter,transport,queue,list.items(),scope,
                 ()->!isClosed() && permitted() && accountActive.getAsBoolean(),
                 (item,identity,request)->io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.resolveAudio(list.account(),
-                        new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request));
+                        new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request),
+                item -> list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE
+                        ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(list.account()).load(Long.parseLong(item.target()),request) : null);
         try {
             next.play();
             synchronized(this) { if(closed || !accountActive.getAsBoolean()) throw new SecurityException("Account retired"); if(playlist!=null) playlist.close(); playlist=next; playlistPlatform=MediaLease.Platform.valueOf(list.platform().name()); }

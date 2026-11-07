@@ -31,11 +31,18 @@ public final class LazyPlaylistSession implements AutoCloseable {
         final Catalog.Item row;
         final String id, path;
         volatile Object media;
+        OnlineLyrics.Binding lyrics;
         Entry(Catalog.Item row) { this.row=row; String nonce=UUID.randomUUID().toString(); id="saltneri:queue:"+nonce; path="saltneri://queue/"+nonce; }
     }
     public LazyPlaylistSession(Salt1193Probe.Result profile, StreamBinding adapter, LoopbackRangeServer transport,
                                Salt1193PlaybackSession.QueueSink queue, List<Catalog.Item> items, String scope,
                                BooleanSupplier active, Resolver resolver) throws ReflectiveOperationException {
+        this(profile,adapter,transport,queue,items,scope,active,resolver,item->null);
+    }
+    public LazyPlaylistSession(Salt1193Probe.Result profile, StreamBinding adapter, LoopbackRangeServer transport,
+                               Salt1193PlaybackSession.QueueSink queue, List<Catalog.Item> items, String scope,
+                               BooleanSupplier active, Resolver resolver, java.util.function.Function<Catalog.Item,OnlineLyrics.Source> lyrics)
+            throws ReflectiveOperationException {
         if (!profile.matched() || items.isEmpty() || items.size()>10000) throw new IllegalArgumentException("Invalid playlist");
         this.media=profile.mediaFactory(); this.adapter=adapter; this.transport=transport; this.queue=queue;
         this.scope=scope; this.active=active; this.resolver=resolver;
@@ -44,6 +51,8 @@ public final class LazyPlaylistSession implements AutoCloseable {
                 if(!row.enabled() || row.kind()!=Catalog.Kind.TRACK) throw new IllegalArgumentException("Unplayable queue item");
                 check(); Entry entry=new Entry(row); entries.add(entry);
                 entry.media=media.create(entry.id,row.title(),row.subtitle(),"","",entry.path);
+                var source=lyrics.apply(row);
+                if(source!=null) entry.lyrics=OnlineLyrics.bind(entry.id,entry.path,()->!closed && active.getAsBoolean(),source);
                 adapter.registerDeferred(entry.path,()->resolve(entry));
             }
         } catch (ReflectiveOperationException | RuntimeException failure) { close(); throw failure; }
@@ -73,6 +82,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
                         Cached previous=cache.put(entry,new Cached(local,audio.expiresAt(),cover));
                         if(previous!=null) retire(previous);
                         entry.media=item;
+                        if(entry.lyrics!=null) entry.lyrics.path(cover==null?entry.path:cover.path());
                         while(cache.size()>8) { Entry first=cache.keySet().iterator().next(); retire(cache.remove(first)); }
                     }
                     if(submitted) { check(); queue.update(item); }
@@ -87,7 +97,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private void retire(Cached cached) { transport.revoke(cached.uri()); if(cached.cover()!=null) cached.cover().close(); }
     @Override public void close() {
         closed=true; requests.forEach(RequestScope::close); requests.clear();
-        for(Entry entry:entries) adapter.unregister(entry.path);
+        for(Entry entry:entries) { if(entry.lyrics!=null) entry.lyrics.close(); adapter.unregister(entry.path); }
         synchronized(cache) { cache.values().forEach(this::retire); cache.clear(); }
         aliases.forEach(adapter::unregister); aliases.clear();
     }

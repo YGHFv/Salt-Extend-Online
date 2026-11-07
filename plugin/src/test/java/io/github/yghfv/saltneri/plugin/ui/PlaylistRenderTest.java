@@ -133,7 +133,9 @@ public final class PlaylistRenderTest {
                             beforeToggle=requests.get();
                             click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle && library.snapshot().get("filter").equals("Song 21"));
                             visibleButtons(scene,density);
-                            click(scene,"\u6392\u5e8f"); click(scene,"\u5012\u5e8f");
+                            click(scene,"\u6392\u5e8f");
+                            HeaderSearchRenderTest.menuIcons(scene,List.of("\u9ed8\u8ba4\u987a\u5e8f","\u5012\u5e8f","\u6807\u9898","\u4f5c\u8005","\u65f6\u957f","\u64ad\u653e\u91cf"),density);
+                            click(scene,"\u5012\u5e8f");
                             check(library.snapshot().get("sort").equals("REVERSE"));
                             click(scene,"\u5168\u90e8\u64ad\u653e"); render(scene);
                             check(submitted.get()!=null && submitted.get().items().size()==21 && submitted.get().items().getFirst().target().equals("21"));

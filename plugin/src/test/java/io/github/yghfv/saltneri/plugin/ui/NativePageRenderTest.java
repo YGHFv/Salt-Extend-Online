@@ -137,6 +137,10 @@ public final class NativePageRenderTest {
                                     } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
                                 });
                         try {
+                            HeaderSearchRenderTest.render(scene);
+                            check(library.snapshot(platform).get("view").equals("DISCOVER"));
+                            var discovery=HeaderSearchRenderTest.find(scene,"\u53d1\u73b0",androidx.compose.ui.semantics.SemanticsActions.INSTANCE.getOnClick());
+                            check(discovery!=null && Boolean.TRUE.equals(discovery.getConfig().get(androidx.compose.ui.semantics.SemanticsProperties.INSTANCE.getSelected())));
                             for (int frame = 1; frame <= 3; frame++) try (Image image = scene.render(frame * 16_000_000L)) {
                                 check(image.getWidth() == width && image.getHeight() == 820);
                                 if (frame == 3) try (Data png = image.encodeToData(EncodedImageFormat.PNG, 100, 0)) {
@@ -162,7 +166,7 @@ public final class NativePageRenderTest {
                         finally { scene.close(); }
                     });
                 }
-                check(requests.get() == 0 && queues.get() == 0 && actions.get() == 0);
+                check(requests.get() == 2 && queues.get() == 0 && actions.get() == 0);
                 library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
                 long deadline = System.nanoTime() + 3_000_000_000L;
                 while (((List<?>)library.snapshot().get("items")).isEmpty() && System.nanoTime() < deadline) Thread.sleep(10);
@@ -220,7 +224,7 @@ public final class NativePageRenderTest {
                     } catch (Exception error) { throw new AssertionError(error); }
                     finally { scene.close(); }
                 });
-                check(requests.get() == 1 && queues.get() == 1 && actions.get() == 1);
+                check(requests.get() == 2 && queues.get() == 1 && actions.get() == 1);
                 for (int width : new int[]{740, 420}) for (int count : new int[]{0, 2, 20, 21}) {
                     catalogSize.set(count);
                     library.invalidate();

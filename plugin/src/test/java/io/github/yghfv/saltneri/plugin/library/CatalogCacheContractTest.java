@@ -73,6 +73,7 @@ public final class CatalogCacheContractTest {
             int before=calls.get(); cache.load(null,query(9),"read","fixture",request,resolver); check(calls.get()==before+1);
         } finally { release.countDown(); }
         controller();
+        autoDiscover();
         System.out.println("PASS: "+checks+" catalog cache TTL/LRU/account/refresh/failure/cancellation/navigation checks; no network or audio");
     }
     private static void controller() throws Exception {
@@ -96,5 +97,31 @@ public final class CatalogCacheContractTest {
             library.browse(AccountPlatform.NETEASE,View.MINE); ready(library); check(calls.get()==9);
             check(library.takePlaylist()==null);
         } finally { if(account.get()!=null) account.get().retire(); }
+    }
+    private static void autoDiscover() throws Exception {
+        var calls=new AtomicInteger(); var fail=new AtomicBoolean(); var allowed=new AtomicBoolean(true);
+        var query=new AtomicReference<Query>(); var clock=new Time();
+        try(var library=new LibraryController(p->null,allowed::get,t->{throw new AssertionError("Entry played");},()->{},clock,
+                a->(q,k,s,r)->{calls.incrementAndGet();query.set(q);if(fail.get()) throw new java.io.IOException();return page(q,clock);})) {
+            library.snapshot(AccountPlatform.BILIBILI); check(calls.get()==0);
+            for(var platform:AccountPlatform.values()) {
+                check(library.enter(platform)); library.snapshot(platform); ready(library);
+                check(query.get().view()==View.DISCOVER && query.get().platform()==platform);
+                int before=calls.get(); for(int i=0;i<5;i++) check(!library.enter(platform)); check(calls.get()==before);
+                library.browse(platform,View.MINE); ready(library); before=calls.get();
+                check(!library.enter(platform) && library.snapshot(platform).get("view").equals("MINE") && calls.get()==before);
+            }
+            library.invalidate(); fail.set(true); check(library.enter(AccountPlatform.BILIBILI));
+            long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(3);
+            while(library.snapshot().get("error").toString().isEmpty() && System.nanoTime()<end) Thread.sleep(5);
+            check(!library.snapshot().get("error").toString().isEmpty()); int before=calls.get();
+            check(!library.enter(AccountPlatform.BILIBILI)); Thread.sleep(50); check(calls.get()==before);
+            fail.set(false); library.accountChanged(AccountPlatform.BILIBILI);
+            check(library.enter(AccountPlatform.BILIBILI)); ready(library); check(calls.get()==before+1);
+            allowed.set(false);
+            try { library.enter(AccountPlatform.NETEASE); throw new AssertionError("Unauthorized entry"); }
+            catch(SecurityException expected) { checks++; }
+            check(library.takePlaylist()==null);
+        }
     }
 }

@@ -56,6 +56,41 @@ public final class BiliDiscoveryContractTest {
                 catch(CatalogFailure e){check(e.stage()==CatalogFailure.Stage.BILI_DISCOVER && e.code()==-412 && !e.toString().contains("SECRET"));}
             }
         } finally {account.retire();}
+        caching(fixture,requests);
         System.out.println("PASS: "+checks+" NeriPlayer music discovery endpoints/latest period/MV identity/pagination/anonymous cookie isolation checks");
+    }
+    private static void caching(CatalogHttp.Opener fixture, List<CatalogContractTest.Response> requests) throws Exception {
+        var time=new CatalogCacheContractTest.Time(); var cache=new BiliDiscovery.Cache(time);
+        var client=new CatalogClient(null,time,fixture,cache);
+        try(var request=new RequestScope(()->true)) {
+            var first=new Query(AccountPlatform.BILIBILI,View.DISCOVER,0,1);
+            int before=requests.size(); client.load(first,request);
+            var second=client.load(new Query(AccountPlatform.BILIBILI,View.DISCOVER,0,2),request);
+            check(requests.size()==before+1 && second.items().getFirst().target().equals("av21") && !second.hasMore());
+            time.now=time.now.plusSeconds(119); client.load(first,request); check(requests.size()==before+1);
+            time.now=time.now.plusSeconds(1); client.load(first,request); check(requests.size()==before+2);
+            cache.clear(); client.load(first,request); check(requests.size()==before+3);
+            for(View view:List.of(View.MUSIC_HOT,View.MUSIC_ORIGINAL)) {
+                before=requests.size(); client.load(new Query(AccountPlatform.BILIBILI,view,0,1),request);
+                client.load(new Query(AccountPlatform.BILIBILI,view,0,2),request);
+                check(requests.size()==before+2);
+            }
+            var cancelled=new RequestScope(()->true); cancelled.close();
+            try { client.load(first,cancelled); throw new AssertionError("Cancelled chart published"); }
+            catch(java.util.concurrent.CancellationException expected) { checks++; }
+        }
+        var started=new java.util.concurrent.CountDownLatch(1); var release=new java.util.concurrent.CountDownLatch(1);
+        cache.clear();
+        try(var request=new RequestScope(()->true)) {
+            CatalogHttp.Opener slow=(u,f)->{
+                started.countDown(); try { release.await(); } catch(InterruptedException error) { Thread.currentThread().interrupt(); }
+                return fixture.open(u,f);
+            };
+            var task=new java.util.concurrent.FutureTask<Page>(()->new CatalogClient(null,time,slow,cache).load(new Query(AccountPlatform.BILIBILI,View.DISCOVER,0,1),request));
+            new Thread(task).start(); check(started.await(2,java.util.concurrent.TimeUnit.SECONDS));
+            cache.clear(); release.countDown(); task.get(2,java.util.concurrent.TimeUnit.SECONDS);
+            int before=requests.size(); client.load(new Query(AccountPlatform.BILIBILI,View.DISCOVER,0,2),request);
+            check(requests.size()==before+1);
+        } finally { release.countDown(); }
     }
 }

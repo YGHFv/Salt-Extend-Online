@@ -203,6 +203,32 @@ private fun HeaderIcon(ui: SaltNativeUi, label: String, glyph: HeaderGlyph, clic
 }
 
 @Composable
+private fun MenuIcon(ui: SaltNativeUi, label: String, vector: String) {
+    val color = Color(ui.palette(currentComposer).text().toULong())
+    val path = remember(vector) { PathParser().parsePathString(vector).toPath() }
+    val draw: (DrawScope) -> Unit = { scope -> with(scope) {
+        scale(size.width / 24f, size.height / 24f, Offset.Zero) { drawPath(path,color,style=Stroke(2f)) }
+    } }
+    ui.canvas(Modifier.size(20.dp).semantics { contentDescription = label }, draw, currentComposer)
+}
+
+@Composable
+private fun AccountMenuIcon(ui: SaltNativeUi, logout: Boolean) {
+    MenuIcon(ui, if(logout) "\u9000\u51fa\u767b\u5f55\u56fe\u6807" else "\u5207\u6362\u8d26\u6237\u56fe\u6807",
+        if(logout) "M 10 4 L 4 4 L 4 20 L 10 20 M 9 12 L 21 12 M 17 8 L 21 12 L 17 16"
+        else "M 3 7 L 20 7 L 16 3 M 20 17 L 3 17 L 7 21")
+}
+
+private fun sortVector(sort: Catalog.Sort) = when(sort) {
+    Catalog.Sort.DEFAULT -> "M 4 6 L 20 6 M 4 12 L 16 12 M 4 18 L 12 18"
+    Catalog.Sort.REVERSE -> "M 7 3 L 7 21 L 3 17 M 7 21 L 11 17 M 17 21 L 17 3 L 13 7 M 17 3 L 21 7"
+    Catalog.Sort.TITLE -> "M 4 7 L 4 4 L 20 4 L 20 7 M 12 4 L 12 20 M 8 20 L 16 20"
+    Catalog.Sort.ARTIST -> "M 16 7 A 4 4 0 1 1 8 7 A 4 4 0 1 1 16 7 M 4 21 L 4 19 A 8 6 0 0 1 20 19 L 20 21"
+    Catalog.Sort.DURATION -> "M 21 12 A 9 9 0 1 1 3 12 A 9 9 0 1 1 21 12 M 12 6 L 12 12 L 16 15"
+    Catalog.Sort.PLAY_COUNT -> "M 4 20 L 4 13 M 10 20 L 10 9 M 16 20 L 16 4 M 3 21 L 21 21"
+}
+
+@Composable
 private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: AccountLoginController.Snapshot?, action: (() -> Unit) -> Unit,
                           memory: PageMemory) {
     var menu by remember(platform, login?.revision()) { mutableStateOf(false) }
@@ -237,8 +263,8 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
                     .border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.3f), palette.shape()).padding(8.dp)) {
                     val nickname = login.profile().name()
                     if (nickname.isNotEmpty()) NativeText(ui, nickname, modifier = Modifier.padding(8.dp))
-                    NativeRow(ui, "\u5207\u6362\u8d26\u6237", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.SWITCH_ACCOUNT) } })
-                    NativeRow(ui, "\u9000\u51fa\u767b\u5f55", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) } })
+                    NativeRow(ui, "\u5207\u6362\u8d26\u6237", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.SWITCH_ACCOUNT) } }) { AccountMenuIcon(ui,false) }
+                    NativeRow(ui, "\u9000\u51fa\u767b\u5f55", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) } }) { AccountMenuIcon(ui,true) }
                 }
             }
         }
@@ -263,7 +289,7 @@ private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> U
 }
 
 private class PageMemory(platform: AccountPlatform) {
-    var view by mutableStateOf(if(platform == AccountPlatform.BILIBILI) Catalog.View.MINE else Catalog.View.DISCOVER)
+    var view by mutableStateOf(Catalog.View.DISCOVER)
     var selectedRow by mutableStateOf("")
     var searching by mutableStateOf(false)
     var searchText by mutableStateOf("")
@@ -292,7 +318,7 @@ private fun PlaylistTitle(ui: SaltNativeUi, platform: AccountPlatform, title: St
                     val sorts = listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f") +
                         if (platform == AccountPlatform.BILIBILI) listOf(Catalog.Sort.PLAY_COUNT to "\u64ad\u653e\u91cf") else emptyList()
                     sorts.forEach { (sort,label) ->
-                        NativeRow(ui,label,click={menu=false;action {ui.desk().sort(sort)}})
+                        NativeRow(ui,label,click={menu=false;action {ui.desk().sort(sort)}}) { MenuIcon(ui,label+"\u56fe\u6807",sortVector(sort)) }
                     }
                 }
             }
@@ -313,7 +339,10 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     LaunchedEffect(ui, platform) {
         while (true) {
             enabled = ui.available()
-            state = if (enabled) try { ui.desk().snapshot(platform) } catch (_: Exception) { null } else null
+            state = if (enabled) try {
+                if (ui.desk().enter(platform)) { memory.view=Catalog.View.DISCOVER; memory.localSearch=false; memory.localText="" }
+                ui.desk().snapshot(platform)
+            } catch (_: Exception) { null } else null
             delay(350)
         }
     }

@@ -71,13 +71,18 @@ public final class PlaybackSessionContractTest {
             require(streams.get() == 1, "Session didn't resolve through transport");
             var art = new Salt1193PlaybackSession.Metadata("Title", "Artist", "Album", "Artist",
                     io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest.png());
-            var covered = session.prepare(key, art, TransportContractTest.lease("account-a", EXPIRY, 100));
+            AtomicInteger lyricRequests=new AtomicInteger();
+            var covered = session.prepare(key, art, TransportContractTest.lease("account-a", EXPIRY, 100),r->{lyricRequests.incrementAndGet();return "[00:01.000]Fixture";});
+            String[] lyricFields=profile.mediaFactory().read(covered.mediaItem());
+            require(lyricRequests.get()==0,"Preparing audio eagerly loaded lyrics");
+            require(io.github.yghfv.saltneri.plugin.host.OnlineLyrics.load(lyricFields[0],lyricFields[5]).equals("[00:01.000]Fixture"),"Covered native item lost lyric binding");
             java.nio.file.Path coverPath = java.nio.file.Path.of(covered.path());
             require(java.nio.file.Files.isRegularFile(coverPath), "Playback cover file missing");
             session.enqueue(covered, queue::add);
             require(unbox.invoke(create.invoke(adapter.interceptor(), null, covered.mediaItem(), 0L, 0L, 0, continuation())).equals(321), "Cover path did not resolve online audio");
             require(streams.get() == 2, "Cover file was played instead of remote audio");
             covered.close(); require(!java.nio.file.Files.exists(coverPath), "Retired cover file retained");
+            require(io.github.yghfv.saltneri.plugin.host.OnlineLyrics.load(lyricFields[0],lyricFields[5])==null,"Retired item retained lyric capability");
             Object retiredCover = unbox.invoke(create.invoke(adapter.interceptor(), null, covered.mediaItem(), 0L, 0L, 0, continuation()));
             try { ResultKt.throwOnFailure(retiredCover); throw new AssertionError("Retired cover path fell through to local audio"); }
             catch (IllegalStateException expected) { checks++; }

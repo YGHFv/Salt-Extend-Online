@@ -55,7 +55,8 @@ listOf(
     "nativeHookTransformTest" to "io.github.yghfv.saltneri.plugin.ui.NativeHookTransformTest",
     "coverLoaderContractTest" to "io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest",
     "nativeQueueContractTest" to "io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest",
-    "playbackCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest"
+    "playbackCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest",
+    "onlineLyricsContractTest" to "io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest"
 ).forEach { (taskName, testClass) ->
     tasks.register<JavaExec>(taskName) {
         dependsOn(tasks.testClasses)
@@ -75,6 +76,7 @@ listOf(
     "biliResolutionContractTest" to "io.github.yghfv.saltneri.plugin.bilibili.BiliResolutionContractTest",
     "neteaseClientContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest",
     "neteaseResolutionContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest",
+    "neteaseLyricsContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsContractTest",
     "catalogContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogContractTest",
     "catalogCacheContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest",
     "libraryWorkflowContractTest" to "io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest",
@@ -99,7 +101,11 @@ listOf(
 tasks.register<Exec>("verifyQrVendor") {
     commandLine("python", rootProject.file("scripts/verify-vendor.py").absolutePath)
 }
-tasks.compileJava { dependsOn("verifyQrVendor") }
+tasks.compileJava {
+    dependsOn("verifyQrVendor")
+    // The checked-in extension index is shared with the offline local build.
+    options.compilerArgs.add("-proc:none")
+}
 
 tasks.processResources {
     from("src/main/resources/" + if (experimentalAdapter) "preference_config_experimental.json" else "preference_config.json") {
@@ -116,7 +122,7 @@ tasks.processResources {
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
     PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.9-loading-cache" else project.version.toString()
+    PluginVersion = if (experimentalAdapter) "0.8.10-bili-discovery" else project.version.toString()
     PluginProvider = "YGHFv"
     PluginName = "Salt Extend Online"
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."

@@ -19,8 +19,12 @@ public final class CatalogClient {
     private final AccountCredentials account;
     private final Clock clock;
     private final CatalogHttp.Opener opener;
+    private final BiliDiscovery.Cache discovery;
     public CatalogClient(AccountCredentials account) { this(account, Clock.systemUTC(), CatalogHttp::openPinned); }
-    public CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener) { this.account = account; this.clock = clock; this.opener = opener; }
+    public CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener) { this(account,clock,opener,new BiliDiscovery.Cache(clock)); }
+    CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery) {
+        this.account = account; this.clock = clock; this.opener = opener; this.discovery = discovery;
+    }
     public Page load(Query query, RequestScope request) throws IOException {
         boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL;
         boolean personal = query.view() == View.MINE || query.view() == View.SAVED || query.platform() == AccountPlatform.BILIBILI && !discover;
@@ -121,7 +125,7 @@ public final class CatalogClient {
                 "offset", Integer.toString((query.page() - 1) * 20), "total", "true");
     }
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
-        if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return BiliDiscovery.load(query,http,request,clock);
+        if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return discovery.load(query,http,request);
         String base = "https://api.bilibili.com";
         if (query.view() == View.SEARCH) {
             URI uri = BiliWbi.sign(base + "/x/web-interface/wbi/search/type", Map.of(
@@ -218,6 +222,7 @@ public final class CatalogClient {
         return object(success(http.json(URI.create(url), null, request), 0, http.stage()).get("data"));
     }
     private String wbi(CatalogHttp http, RequestScope request) throws IOException {
+        String verified = http.verifiedWbiMixin(request); if (verified != null) return verified;
         var nav = biliData(http, request, "https://api.bilibili.com/x/web-interface/nav");
         var keys = object(nav.get("wbi_img"));
         try { return BiliWbi.mixin(text(keys.get("img_url")), text(keys.get("sub_url"))); }

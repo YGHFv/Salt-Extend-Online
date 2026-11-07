@@ -24,6 +24,8 @@ public final class CatalogHttp implements AutoCloseable {
     private final AccountPlatform platform;
     private final Clock clock;
     private Stage stage = Stage.SESSION;
+    private String wbiMixin;
+    String verifiedWbiMixin(RequestScope request) { check(request); return wbiMixin; }
     public Stage stage() { return stage; }
     public CatalogHttp(AccountPlatform platform, AccountCredentials account, Clock clock, Opener opener) throws IOException {
         if (account != null && account.platform() != platform) throw new IllegalArgumentException("Wrong catalog account");
@@ -36,12 +38,14 @@ public final class CatalogHttp implements AutoCloseable {
         return PinnedHttpsConnection.neteaseCatalogPost(uri, form);
     }
     public void verify(RequestScope request) throws IOException {
+        wbiMixin = null;
         stage = platform == AccountPlatform.BILIBILI ? Stage.BILI_VERIFY : Stage.NET_VERIFY;
         if (account == null) throw new SecurityException("Login required for personal catalog");
         check(request);
         try (QrAuthClient client = platform == AccountPlatform.BILIBILI ? new BiliQrClient(clock, new AuthHttp(opener::open)) : new NeteaseQrClient(clock, new AuthHttp(opener::open))) {
             AccountCredentials checked = client.verify(account, request);
             try { cookies.restore(checked.cookieSnapshot()); } finally { checked.retire(); }
+            if (client instanceof BiliQrClient bili) wbiMixin = bili.verifiedWbiMixin();
         } catch (IOException error) { throw CatalogFailure.wrap(stage, Reason.AUTH, error); }
         check(request);
     }
@@ -114,5 +118,5 @@ public final class CatalogHttp implements AutoCloseable {
         String cookie = cookies.header(uri); if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
     }
     private void check(RequestScope request) { request.check(); if (account != null && !account.isActive()) throw new java.util.concurrent.CancellationException("Catalog account retired"); }
-    @Override public void close() { cookies.clear(); }
+    @Override public void close() { cookies.clear(); wbiMixin = null; }
 }

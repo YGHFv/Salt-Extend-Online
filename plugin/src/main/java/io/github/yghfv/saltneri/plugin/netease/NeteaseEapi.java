@@ -14,10 +14,15 @@ import javax.crypto.spec.SecretKeySpec;
 
 public final class NeteaseEapi {
     public static final String PATH = "/eapi/song/enhance/player/url/v1";
+    public static final String LYRIC_PATH = "/eapi/song/lyric/v1";
     private NeteaseEapi() { }
     public static byte[] form(Map<String, Object> payload) throws IOException {
+        return form(PATH, payload);
+    }
+    public static byte[] form(String endpoint, Map<String, Object> payload) throws IOException {
+        if (!PATH.equals(endpoint) && !LYRIC_PATH.equals(endpoint)) throw new IOException("Invalid EAPI endpoint");
         byte[] json = BoundedJson.encode(payload); if (json.length > 8192) throw new IOException("EAPI payload too large");
-        String data = new String(json, StandardCharsets.UTF_8), path = PATH.replace("/eapi", "/api");
+        String data = new String(json, StandardCharsets.UTF_8), path = endpoint.replace("/eapi", "/api");
         try {
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("MD5").digest(
                     ("nobody" + path + "use" + data + "md5forencrypt").getBytes(StandardCharsets.UTF_8)));

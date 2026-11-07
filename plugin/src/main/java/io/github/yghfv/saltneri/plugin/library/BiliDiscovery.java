@@ -7,10 +7,40 @@ import io.github.yghfv.saltneri.plugin.net.*;
 import java.io.IOException;
 import java.net.URI;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.*;
 import static io.github.yghfv.saltneri.plugin.library.Catalog.*;
 
 final class BiliDiscovery {
+    private record Chart(String title, List<Item> items, Instant until) {
+        Chart { items = List.copyOf(items); }
+        Page page(Query query) {
+            int pages=Math.max(1,(items.size()+19)/20),from=Math.min(items.size(),(query.page()-1)*20);
+            return new Page(title,items.subList(from,Math.min(items.size(),from+20)),query.page()<pages,until,pages,items.size());
+        }
+    }
+    /** These APIs already return a complete bounded chart, not a remote page. Retain it for local paging. */
+    static final class Cache {
+        private final Clock clock;
+        private final Map<View,Chart> charts = new EnumMap<>(View.class);
+        private long revision;
+        Cache(Clock clock) { this.clock = clock; }
+        synchronized void clear() { revision++; charts.clear(); }
+        Page load(Query query, CatalogHttp http, RequestScope request) throws IOException {
+            request.check(); long captured;
+            synchronized (this) {
+                captured = revision;
+                Chart hit = charts.get(query.view());
+                if (hit != null && clock.instant().isBefore(hit.until())) return hit.page(query);
+                charts.remove(query.view());
+            }
+            Chart result = fetch(query,http,request,clock); request.check();
+            synchronized (this) {
+                request.check(); if (revision == captured) charts.put(query.view(),result);
+            }
+            return result.page(query);
+        }
+    }
     private static Object data(CatalogHttp http,String url,RequestScope request) throws IOException {
         var root=http.json(URI.create(url),null,request); long code=BoundedJson.integer(root.get("code"));
         if(code!=0) throw CatalogFailure.code(CatalogFailure.Stage.BILI_DISCOVER,CatalogFailure.Reason.API,code);
@@ -28,7 +58,7 @@ final class BiliDiscovery {
         String bv=text(bvid).strip(); if(bv.matches("BV[0-9A-Za-z]{10}")) return bv;
         long av=number(aid); return av>0?"av"+av:"";
     }
-    static Page load(Query query,CatalogHttp http,RequestScope request,Clock clock) throws IOException {
+    private static Chart fetch(Query query,CatalogHttp http,RequestScope request,Clock clock) throws IOException {
         List<Item> items=new ArrayList<>(); Set<String> unique=new HashSet<>(); String title;
         if(query.view()==View.DISCOVER) {
             title="\u97f3\u4e50\u5206\u533a\u70ed\u95e8\u89c6\u9891";
@@ -64,7 +94,6 @@ final class BiliDiscovery {
                 items.add(new Item(Kind.TRACK,id,name,artist,duration,true,cover));
             }
         }
-        int pages=Math.max(1,(items.size()+19)/20),from=Math.min(items.size(),(query.page()-1)*20);
-        return new Page(title,items.subList(from,Math.min(items.size(),from+20)),query.page()<pages,clock.instant().plusSeconds(300),pages,items.size());
+        return new Chart(title,items,clock.instant().plusSeconds(120));
     }
 }

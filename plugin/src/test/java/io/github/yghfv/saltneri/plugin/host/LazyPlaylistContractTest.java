@@ -35,11 +35,16 @@ public final class LazyPlaylistContractTest {
     public static void main(String[] args) throws Exception {
         var profile=Salt1193Probe.inspect(LazyPlaylistContractTest.class.getClassLoader(),"1.19.3","Steam"); check(profile.matched());
         var binding=new Binding(); var queue=new Queue(); var allowed=new AtomicBoolean(true); var resolves=new AtomicInteger();
+        var lyricCalls=new AtomicInteger();
         List<Catalog.Item> rows=new ArrayList<>(); for(int i=1;i<=100;i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,"Song "+i,"Artist",1000,true));
         try(var transport=new LoopbackRangeServer(allowed::get)) {
-            try(var session=new LazyPlaylistSession(profile,binding,transport,queue,rows,"test",allowed::get,(item,scope,r)->{resolves.incrementAndGet(); return audio(item,scope);})) {
+            try(var session=new LazyPlaylistSession(profile,binding,transport,queue,rows,"test",allowed::get,(item,scope,r)->{resolves.incrementAndGet(); return audio(item,scope);},
+                    item->r->{lyricCalls.incrementAndGet();return "[00:01.000]Song "+item.target();})) {
                 check(resolves.get()==0 && binding.pending.size()==100 && queue.replacements==0);
                 session.play(); check(queue.replacements==1 && queue.items.size()==100 && resolves.get()==1);
+                check(lyricCalls.get()==0);
+                String[] next=profile.mediaFactory().read(queue.items.get(1));
+                check(OnlineLyrics.load(next[0],next[5]).equals("[00:01.000]Song 2") && resolves.get()==1);
                 for(int i=0;i<10;i++) {
                     String path=profile.mediaFactory().read(queue.items.get(i))[5];
                     check(binding.pending.get(path).resolve().getHost().equals("127.0.0.1"));
@@ -48,9 +53,11 @@ public final class LazyPlaylistContractTest {
                 String first=profile.mediaFactory().read(queue.items.getFirst())[5]; binding.pending.get(first).resolve();
                 check(resolves.get()==11);
                 allowed.set(false);
+                check(OnlineLyrics.load(next[0],next[5])==null);
                 try { binding.pending.get(first).resolve(); throw new AssertionError("Revoked account opened"); } catch(CancellationException expected) { checks++; }
             }
             check(binding.pending.isEmpty()); allowed.set(true);
+            String[] retired=profile.mediaFactory().read(queue.items.getFirst()); check(OnlineLyrics.load(retired[0],retired[5])==null);
             int before=queue.replacements;
             try(var session=new LazyPlaylistSession(profile,binding,transport,queue,rows,"test",allowed::get,(i,s,r)->{throw new java.io.IOException("No audio");})) {
                 try {session.play();throw new AssertionError("Expected first track failure");}catch(java.io.IOException expected){checks++;}

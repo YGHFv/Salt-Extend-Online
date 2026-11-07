@@ -16,8 +16,9 @@ final class CatalogPageCache {
     private final LinkedHashMap<Query, Cached> pages = new LinkedHashMap<>(16, 0.75f, true);
     private AccountCredentials account;
     private long revision;
-    CatalogPageCache(Clock clock) { this.clock = clock; }
-    synchronized void clear() { revision++; pages.clear(); account = null; }
+    final BiliDiscovery.Cache discovery;
+    CatalogPageCache(Clock clock) { this.clock = clock; discovery = new BiliDiscovery.Cache(clock); }
+    synchronized void clear() { revision++; pages.clear(); account = null; discovery.clear(); }
     Page load(AccountCredentials owner, Query query, String quality, String scope, RequestScope request,
               PlatformResolutionController.Resolver<Query,String,Page> upstream) throws Exception {
         request.check(); long captured;

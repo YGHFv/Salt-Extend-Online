@@ -32,6 +32,7 @@ public final class NativeDesk {
         return new State(catalog, player.snapshot(), accounts.apply(platform));
     }
     public void browse(AccountPlatform platform, Catalog.View view) { check(); library.browse(platform, view); }
+    public boolean enter(AccountPlatform platform) { check(); return library.enter(platform); }
     public void search(String keyword) { check(); library.search(keyword); }
     public void search(AccountPlatform platform, String keyword) { check(); library.search(platform, keyword); }
     public void reload() { check(); library.reload(); }

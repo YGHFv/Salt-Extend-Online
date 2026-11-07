@@ -50,6 +50,36 @@ public final class HeaderSearchRenderTest {
         var key=SemanticsActions.INSTANCE.getOnClick(); var node=find(scene,label,key); check(node!=null);
         check(Boolean.TRUE.equals(node.getConfig().get(key).getAction().invoke())); render(scene);
     }
+    private static void accountIcons(ImageComposeScene scene) throws Exception {
+        menuIcons(scene,List.of("\u5207\u6362\u8d26\u6237","\u9000\u51fa\u767b\u5f55"));
+    }
+    static void menuIcons(ImageComposeScene scene,List<String> labels) throws Exception {
+        menuIcons(scene,labels,1f);
+    }
+    static void menuIcons(ImageComposeScene scene,List<String> labels,float density) throws Exception {
+        try(var image=scene.render(System.nanoTime()); var data=image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
+            var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data.getBytes()));
+            for(String label:labels) {
+                SemanticsNode icon=null,text=null;
+                for(var owner:scene.getSemanticsOwners()) {
+                    if(icon==null) icon=find(owner.getUnmergedRootSemanticsNode(),label+"\u56fe\u6807",null);
+                    if(text==null) text=find(owner.getUnmergedRootSemanticsNode(),label,SemanticsActions.INSTANCE.getGetTextLayoutResult());
+                }
+                check(icon!=null); check(text!=null);
+                var bounds=icon.getBoundsInRoot(); var title=text.getBoundsInRoot();
+                if(Math.abs(bounds.getWidth()-20*density)>1 || Math.abs(bounds.getHeight()-20*density)>1 || bounds.getRight()>title.getLeft()) throw new AssertionError("Menu icon/text bounds: "+bounds+" / "+title);
+                check(Math.abs(bounds.getWidth()-20*density)<=1 && Math.abs(bounds.getHeight()-20*density)<=1 && bounds.getRight()<=title.getLeft());
+                check(Math.abs(bounds.getTop()+bounds.getBottom()-title.getTop()-title.getBottom())<=4*density);
+                int ink=0;
+                for(int y=Math.max(0,(int)bounds.getTop());y<Math.min(pixels.getHeight(),(int)bounds.getBottom());y++)
+                    for(int x=Math.max(0,(int)bounds.getLeft());x<Math.min(pixels.getWidth(),(int)bounds.getRight());x++) {
+                        int rgb=pixels.getRGB(x,y);
+                        if((rgb>>>24)>200 && ((rgb>>16)&255)<150 && ((rgb>>8)&255)<150 && (rgb&255)<150) ink++;
+                    }
+                check(ink>15);
+            }
+        }
+    }
     @SuppressWarnings("unchecked")
     public static void main(String[] args) throws Exception {
         Clock clock=Clock.systemUTC(); var login=new AtomicReference<>(signedIn("revision-one"));
@@ -108,6 +138,7 @@ public final class HeaderSearchRenderTest {
                             check(avatar!=null && search!=null && search.getBoundsInRoot().getRight() < avatar.getBoundsInRoot().getRight());
                             check(avatar.getBoundsInRoot().getTop()<100 && avatar.getBoundsInRoot().getRight()<=width);
                             click(scene,"\u8d26\u53f7\u83dc\u5355");
+                            accountIcons(scene);
                             check(find(scene,"Fixture user",null)!=null && find(scene,"\u5207\u6362\u8d26\u6237",null)!=null);
                             click(scene,"\u5207\u6362\u8d26\u6237");
                             check(lastAction.get()==NativeDesk.Action.SWITCH_ACCOUNT && find(scene,"\u5b98\u65b9 App",null)!=null);
@@ -115,7 +146,7 @@ public final class HeaderSearchRenderTest {
                             login.set(signedIn("replacement-"+width)); render(scene);
                             click(scene,"\u8d26\u53f7\u83dc\u5355"); click(scene,"\u9000\u51fa\u767b\u5f55");
                             check(lastAction.get()==NativeDesk.Action.LOGOUT && find(scene,"\u767b\u5f55\u8d26\u53f7",null)!=null);
-                            login.set(signedIn("search-"+width)); render(scene);
+                            login.set(signedIn("search-"+width)); render(scene); queried.set(null);
                             var setText=SemanticsActions.INSTANCE.getSetText();
                             if(find(scene,null,setText)==null) click(scene,"\u641c\u7d22B\u7ad9");
                             click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==null);
@@ -187,6 +218,9 @@ public final class HeaderSearchRenderTest {
                             check(Boolean.TRUE.equals(find(scene,null,submit).getConfig().get(submit).getAction().invoke())); render(scene);
                             check(find(scene,"\u5f53\u9875\u6ca1\u6709\u53ef\u64ad\u653e\u7684\u641c\u7d22\u7ed3\u679c",null)!=null);
                             check(find(scene,"\u4e0b\u4e00\u9875",null)==null && find(scene,"\u4e0a\u4e00\u9875",null)==null);
+                            login.set(signedIn("netease-menu-"+width)); render(scene);
+                            click(scene,"\u8d26\u53f7\u83dc\u5355"); accountIcons(scene);
+                            click(scene,"\u9000\u51fa\u767b\u5f55"); check(lastAction.get()==NativeDesk.Action.LOGOUT);
                         } catch(Exception error){throw new AssertionError(error);} finally {scene.close();}
                     });
                 }

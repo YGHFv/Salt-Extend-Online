@@ -53,11 +53,11 @@ public final class LibraryController implements AutoCloseable {
     public LibraryController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, Consumer<OnlinePlaybackController.Target> prepare,
                              Runnable navigation, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> testLoader, CoverLookup coverLookup) {
         this.accounts = accounts; this.coverLookup = coverLookup; this.prepare = prepare; this.navigation = navigation; this.authorized = authorized;
-        Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> factory = account ->
-                testLoader == null ? (q,k,scope,r) -> new CatalogClient(account).load(q,r) : testLoader.apply(account);
         for (AccountPlatform p : AccountPlatform.values()) {
             State s = new State(p); states.put(p,s);
             s.cache = new CatalogPageCache(clock);
+            Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> factory = account ->
+                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery).load(q,r) : testLoader.apply(account);
             // Catalog metadata has no signed audio URL; retain it until explicit refresh/account revocation.
             s.loader = new PlatformResolutionController<>("Catalog", account -> {
                 var resolver = factory.apply(account);
@@ -78,6 +78,12 @@ public final class LibraryController implements AutoCloseable {
         }
     }
     private State current() { return states.get(platform); }
+    public synchronized boolean enter(AccountPlatform destination) {
+        if (!permitted()) throw new SecurityException("Catalog unavailable");
+        State s = states.get(destination); refresh(s);
+        if (s.query != null) return false;
+        browse(destination,View.DISCOVER); return true;
+    }
     private State stateFor(String token) { for (State s : states.values()) if (s.rows.containsKey(token)) return s; return null; }
     public synchronized void browse(AccountPlatform platform, View view) {
         if (view == View.FOLDER || view == View.COLLECTION || view == View.SEARCH) throw new IllegalArgumentException("Use matching catalog action");

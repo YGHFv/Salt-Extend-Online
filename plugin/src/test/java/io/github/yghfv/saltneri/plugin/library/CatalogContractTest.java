@@ -159,7 +159,7 @@ public final class CatalogContractTest {
                     long expected = switch(value) { case "0" -> 0; case "12345" -> 12345; case "9000000000" -> 9000000000L;
                         case "9223372036854775807" -> Long.MAX_VALUE; case "\"23456\"" -> 23456; default -> -1; };
                     check(item.playCount()==expected && item.enabled() && item.count()==60000);
-                    check(statistics.requests.size()==(view==View.FOLDER?2:3));
+                    check(statistics.requests.size()==2);
                 }
                 for (String stats : List.of("null", "{}", "[]", "\"invalid\"")) {
                     Fixture statistics = new Fixture();
@@ -264,6 +264,7 @@ public final class CatalogContractTest {
         } finally { bili.retire(); }
         neteaseSearch();
         inlineTracks();
+        reusedWbi();
         Fixture wrongFolder = new Fixture(); wrongFolder.detail = wrongFolder.detail.replace("\"id\":10", "\"id\":99"); fails(() -> wrongFolder.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
         Fixture duplicates = new Fixture(); duplicates.detail = duplicates.detail.replace("\"id\":2", "\"id\":1"); fails(() -> duplicates.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
         Fixture foreign = new Fixture(); foreign.songs = foreign.songs.replace("\"id\":2", "\"id\":99"); fails(() -> foreign.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
@@ -405,5 +406,37 @@ public final class CatalogContractTest {
         check(order.load(first,null).items().stream().map(Item::target).toList().equals(List.of("1","2")) && order.requests.size()==1);
         fixture.load(new Query(AccountPlatform.NETEASE,View.FOLDER,10,2),null);
         check(new String(fixture.playlistForm,StandardCharsets.US_ASCII).contains("n=0"));
+    }
+    private static void reusedWbi() throws Exception {
+        var account=account(AccountPlatform.BILIBILI);
+        try {
+            for(var query:List.of(new Query(AccountPlatform.BILIBILI,View.COLLECTION,30,1,99),
+                    new Query(AccountPlatform.BILIBILI,View.SEARCH,0,1,0,"music"))) {
+                Fixture fixture=new Fixture(); fixture.load(query,account);
+                check(fixture.requests.size()==2);
+                check(fixture.requests.stream().filter(r->r.getURL().getPath().equals("/x/web-interface/nav")).count()==1);
+                check(fixture.requests.getLast().getURL().getQuery().contains("w_rid="));
+                Fixture mismatch=new Fixture(); mismatch.identity="99";
+                safeFailure(()->mismatch.load(query,account),Stage.BILI_VERIFY,Reason.AUTH,null);
+                check(mismatch.requests.size()==1);
+            }
+            var fixture=new Fixture();
+            try(var request=new RequestScope(()->true)) {
+                new CatalogClient(account,CLOCK,fixture).collectionCover(new Query(AccountPlatform.BILIBILI,View.COLLECTION,30,1,99),request);
+                check(fixture.requests.size()==2 && fixture.requests.getLast().getURL().getQuery().contains("page_size=1"));
+            }
+            for(String optional:List.of("", ",\"wbi_img\":{\"img_url\":\"bad\",\"sub_url\":\"bad\"}")) {
+                var navs=new java.util.concurrent.atomic.AtomicInteger(); var fallback=new Fixture();
+                CatalogHttp.Opener opener=(uri,form)->{
+                    if(uri.getPath().equals("/x/web-interface/nav") && navs.incrementAndGet()==1)
+                        return new Response(uri,"{\"code\":0,\"data\":{\"isLogin\":true,\"mid\":42"+optional+"}}",List.of());
+                    return fallback.open(uri,form);
+                };
+                try(var request=new RequestScope(()->true)) {
+                    var result=new CatalogClient(account,CLOCK,opener).load(new Query(AccountPlatform.BILIBILI,View.SEARCH,0,1,0,"music"),request);
+                    check(navs.get()==2 && result.items().size()==1 && fallback.requests.getLast().getURL().getQuery().contains("w_rid="));
+                }
+            }
+        } finally { account.retire(); }
     }
 }

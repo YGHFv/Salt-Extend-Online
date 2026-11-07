@@ -46,10 +46,12 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         private final Object mediaItem;
         private final java.time.Instant expiresAt;
         private final PlaybackCoverFile cover;
-        private PreparedTrack(TrackKey key, String path, URI localUri, Object mediaItem, java.time.Instant expiresAt, PlaybackCoverFile cover) {
+        private final OnlineLyrics.Binding lyrics;
+        private PreparedTrack(TrackKey key, String path, URI localUri, Object mediaItem, java.time.Instant expiresAt, PlaybackCoverFile cover, OnlineLyrics.Binding lyrics) {
             this.key = key; this.path = path; this.localUri = localUri; this.mediaItem = mediaItem;
             this.expiresAt = expiresAt;
             this.cover = cover;
+            this.lyrics = lyrics;
         }
         public TrackKey key() { return key; }
         public String path() { return path; }
@@ -66,7 +68,7 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
     private final boolean ownsResources;
     private final ScheduledExecutorService revocations;
     private final Map<String, PreparedTrack> tracks = new HashMap<>();
-    private boolean closed;
+    private volatile boolean closed;
 
     public static Salt1193PlaybackSession open(ClassLoader loader, Salt1193Probe.Result profile,
                                               String accountScope, BooleanSupplier authorized) throws IOException,
@@ -114,6 +116,10 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
 
     public synchronized PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease)
             throws ReflectiveOperationException {
+        return prepare(key,metadata,lease,null);
+    }
+    public synchronized PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease, OnlineLyrics.Source lyricSource)
+            throws ReflectiveOperationException {
         requireActive();
         Objects.requireNonNull(key);
         Objects.requireNonNull(metadata);
@@ -132,18 +138,22 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
             catch (IOException ignored) { /* Artwork failure must not prevent explicit audio playback. */ }
         }
         String path = cover == null ? "saltneri://media/" + nonce : cover.path();
+        OnlineLyrics.Binding lyrics = null;
         try {
             adapter.register(path, local);
-            Object item = media.create("saltneri:" + key.stableId() + ":" + nonce, metadata.title(), metadata.artist(), metadata.album(),
+            String id="saltneri:" + key.stableId() + ":" + nonce;
+            Object item = media.create(id, metadata.title(), metadata.artist(), metadata.album(),
                     metadata.albumArtist(), path);
+            if(lyricSource!=null) lyrics=OnlineLyrics.bind(id,path,()->!closed && permitted(),lyricSource);
             requireActive();
-            PreparedTrack track = new PreparedTrack(key, path, local, item, lease.expiresAt(), cover);
+            PreparedTrack track = new PreparedTrack(key, path, local, item, lease.expiresAt(), cover, lyrics);
             tracks.put(path, track);
             return track;
         } catch (ReflectiveOperationException | RuntimeException failure) {
             adapter.unregister(path);
             transport.revoke(local);
             if (cover != null) cover.close();
+            if (lyrics != null) lyrics.close();
             throw failure;
         }
     }
@@ -172,6 +182,7 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
 
     private synchronized void retire(PreparedTrack track) {
         if (tracks.remove(track.path, track)) {
+            if(track.lyrics!=null) track.lyrics.close();
             try { adapter.unregister(track.path); } finally { transport.revoke(track.localUri); if (track.cover != null) track.cover.close(); }
         }
     }
