@@ -251,6 +251,11 @@
       "class": "io.github.yghfv.saltneri.plugin.library.CatalogPresentationContractTest",
       "baseOnly": true,
       "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.CatalogNavigationContractTest",
+      "baseOnly": false,
+      "offline": false
     }
   ]
 }

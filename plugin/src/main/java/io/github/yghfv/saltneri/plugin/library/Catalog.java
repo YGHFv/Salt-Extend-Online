@@ -5,11 +5,13 @@ import java.time.Instant;
 import java.util.List;
 
 public final class Catalog {
+    private static final java.time.format.DateTimeFormatter DATE=java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(java.time.ZoneId.of("Asia/Shanghai"));
     private Catalog() { }
     public enum View { DISCOVER, MUSIC_HOT, MUSIC_ORIGINAL, MINE, SAVED, FOLDER, COLLECTION, SEARCH, AUTHOR_VIDEOS, AUTHOR_COLLECTIONS }
     public enum Kind { FOLDER, COLLECTION, TRACK }
     public enum Sort { DEFAULT, REVERSE, TITLE, ARTIST, DURATION, PLAY_COUNT }
-    public record Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse) {
+    public record Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse, Sort order) {
+        public Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse) { this(platform,view,folder,page,owner,keyword,reverse,Sort.DEFAULT); }
         public Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword) { this(platform,view,folder,page,owner,keyword,false); }
         public Query(AccountPlatform platform, View view, long folder, int page) { this(platform, view, folder, page, 0, ""); }
         public Query(AccountPlatform platform, View view, long folder, int page, long owner) { this(platform, view, folder, page, owner, ""); }
@@ -19,7 +21,8 @@ public final class Catalog {
                     || (view == View.MUSIC_HOT || view == View.MUSIC_ORIGINAL) && platform != AccountPlatform.BILIBILI
                     || (view == View.FOLDER || view == View.COLLECTION ? folder <= 0 : folder != 0)
                     || (view == View.COLLECTION || view == View.AUTHOR_VIDEOS || view == View.AUTHOR_COLLECTIONS ? platform != AccountPlatform.BILIBILI || owner <= 0 : owner != 0)
-                    || reverse && view!=View.COLLECTION
+                    || reverse && view!=View.COLLECTION && view!=View.AUTHOR_VIDEOS
+                    || order==null || order!=Sort.DEFAULT && (view!=View.AUTHOR_VIDEOS || order!=Sort.PLAY_COUNT || reverse)
                     || (view == View.SEARCH ? keyword.isEmpty() || keyword.length() > 100
                         || keyword.chars().anyMatch(c -> Character.isISOControl(c)) : !keyword.isEmpty()))
                 throw new IllegalArgumentException("Invalid catalog query");
@@ -32,9 +35,22 @@ public final class Catalog {
         return seconds>=3600 ? String.format(java.util.Locale.ROOT,"%d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)
                 : String.format(java.util.Locale.ROOT,"%02d:%02d",seconds/60,seconds%60);
     }
+    public static String plays(long count) {
+        if(count<0) return "--";
+        if(count>=100000000) return String.format(java.util.Locale.ROOT,"%.1f\u4ebf",count/100000000.0);
+        if(count>=10000) return String.format(java.util.Locale.ROOT,"%.1f\u4e07",count/10000.0);
+        return Long.toString(count);
+    }
+    public static String updated(long seconds) {
+        if(seconds<=0 || seconds>253402214400L) return "--";
+        return DATE.format(Instant.ofEpochSecond(seconds));
+    }
     /** No URL/cookie in the UI model. target is a logical ID, not a media address. */
-    public record Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner, long playCount) {
+    public record Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner, long playCount, long updatedAt) {
         public Item { playCount = Math.max(-1, playCount); }
+        public Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner, long playCount) {
+            this(kind,target,title,subtitle,count,enabled,cover,owner,playCount,0);
+        }
         public Item(Kind kind, String target, String title, String subtitle, long count, boolean enabled, java.net.URI cover, long owner) {
             this(kind, target, title, subtitle, count, enabled, cover, owner, -1);
         }

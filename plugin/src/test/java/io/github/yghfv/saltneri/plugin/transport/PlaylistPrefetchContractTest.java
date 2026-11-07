@@ -71,7 +71,8 @@ public final class PlaylistPrefetchContractTest {
                 plan.set(new NativePlaylistOrder.Plan(ids.get(9),"Circle",List.of(ids.get(10),ids.get(11),ids.get(0))));
                 await(()->server.cacheBytes()==600); check(resolutions.equals(List.of("5","10","3","8","11","12","1")));
                 plan.set(new NativePlaylistOrder.Plan(ids.get(9),"Random",List.of(ids.get(5),ids.get(6),ids.get(8))));
-                await(()->server.cacheBytes()==800);
+                // The cache can hit 800 after only two new prefixes, before LRU replaces the third.
+                await(()->server.cacheBytes()==800 && resolutions.size()==10 && requests.size()==9);
                 check(resolutions.size()==10 && requests.size()==9);
                 check(TransportContractTest.call(warmed,"GET","Range: bytes=0-9\r\n","").code()==206);
                 // Changing lookahead repeatedly may evict old prefetched entries, never the playing lease.

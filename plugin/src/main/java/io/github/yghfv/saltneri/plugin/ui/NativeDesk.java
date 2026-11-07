@@ -23,6 +23,10 @@ public final class NativeDesk {
     private Supplier<CoverMode> coverMode=()->CoverMode.FIT;
     public void coverMode(Supplier<CoverMode> value) { coverMode=Objects.requireNonNull(value); }
     public CoverMode coverMode() { return coverMode.get(); }
+    private CatalogPreferences preferences=new CatalogPreferences();
+    public void preferences(CatalogPreferences value) { preferences=Objects.requireNonNull(value); }
+    public String layout(AccountPlatform platform) { return preferences.layout(platform); }
+    public void layout(AccountPlatform platform,String value) { check(); preferences.layout(platform,value); }
     public NativeDesk(LibraryController library, OnlinePlaybackController player,
                       Function<AccountPlatform, AccountLoginController.Snapshot> accounts,
                       BiConsumer<AccountPlatform, Action> actions, BooleanSupplier permitted) {
@@ -48,6 +52,7 @@ public final class NativeDesk {
     public void author(String token) { check(); library.author(token); }
     public void authorTab(boolean collections) { check(); library.authorTab(collections); }
     public void back() { check(); library.back(); }
+    public boolean back(AccountPlatform platform) { check(); return library.back(platform); }
     public void playRow(String token) {
         check(); library.playRow(token, target -> player.playSelected(target, () -> {
             check(); actions.accept(target.platform(), Action.ARM);

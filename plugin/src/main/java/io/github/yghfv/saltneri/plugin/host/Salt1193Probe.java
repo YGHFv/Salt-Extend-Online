@@ -5,10 +5,7 @@ import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.Map;
 import java.util.Properties;
 
@@ -49,13 +46,10 @@ public final class Salt1193Probe {
     private Salt1193Probe() {}
 
     public static Result inspect(ClassLoader hostLoader, String version, String channel) {
-        if (!"1.19.3".equals(version) || !"Steam".equals(channel)) {
-            return new Result(false, "No profile for " + channel + " " + version, null);
-        }
         try {
             Properties profile = new Properties();
             try (InputStream input = Salt1193Probe.class.getResourceAsStream(RESOURCE)) {
-                if (input == null) throw new IOException("Missing host fingerprint resource");
+                if (input == null) throw new IOException("Missing host capability list");
                 profile.load(input);
             }
             Map<String, Class<?>> classes = new HashMap<>();
@@ -63,14 +57,6 @@ public final class Salt1193Probe {
             for (String key : profile.stringPropertyNames()) {
                 if (!key.startsWith("class.")) continue;
                 String name = key.substring(6);
-                String hash;
-                try (InputStream input = hostLoader.getResourceAsStream(name.replace('.', '/') + ".class")) {
-                    if (input == null) throw new IOException("Missing host class " + name);
-                    hash = digest(input);
-                }
-                if (!hash.equals(profile.getProperty(key))) {
-                    return new Result(false, "Host fingerprint changed: " + name, null);
-                }
                 // Initialization would start the audio service for PlaybackController.
                 classes.put(name, Class.forName(name, false, hostLoader));
                 verified++;
@@ -114,10 +100,9 @@ public final class Salt1193Probe {
             method(classes.get(TAGS), "readImageToByteArray", byte[].class, classes.get("com.xuncorp.spc.v.Vri"));
             method(classes.get(TAGS), "readImageToByteArrayOrThrow$Voxzen_composeApp", byte[].class,
                     classes.get("com.xuncorp.spc.v.Vri"));
-            return new Result(true, "Steam 1.19.3: 20 class fingerprints and native entry signatures match; "
+            return new Result(true, "Host " + channel + " " + version + ": required native entry signatures match (no version/hash lock); "
                     + "online playback is not connected", new MediaFactory(constructor, getters));
-        } catch (ReflectiveOperationException | IOException | LinkageError | IllegalArgumentException | SecurityException
-                 | NoSuchAlgorithmException failure) {
+        } catch (ReflectiveOperationException | IOException | LinkageError | IllegalArgumentException | SecurityException failure) {
             return new Result(false, "Host probe failed: " + failure.getClass().getSimpleName(), null);
         }
     }
@@ -131,11 +116,4 @@ public final class Salt1193Probe {
         return method;
     }
 
-    private static String digest(InputStream input) throws IOException, NoSuchAlgorithmException {
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
-        byte[] buffer = new byte[16_384];
-        int read;
-        while ((read = input.read(buffer)) != -1) digest.update(buffer, 0, read);
-        return HexFormat.of().formatHex(digest.digest());
-    }
 }

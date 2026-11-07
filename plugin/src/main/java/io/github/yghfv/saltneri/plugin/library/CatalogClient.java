@@ -190,22 +190,7 @@ public final class CatalogClient {
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
         if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return discovery.load(query,http,request);
         String base = "https://api.bilibili.com";
-        if(query.view()==View.AUTHOR_VIDEOS) {
-            URI uri=BiliWbi.sign(base+"/x/space/wbi/arc/search",Map.of("mid",Long.toString(query.owner()),"pn",Integer.toString(query.page()),
-                    "ps","20","order","pubdate","platform","web","web_location","1550101"),wbi(http,request),clock.instant().getEpochSecond());
-            var data=object(success(http.json(uri,null,request),0,http.stage()).get("data"));
-            var paging=object(data.get("page"));
-            if(number(paging.get("pn"),query.page())!=query.page()) throw invalid();
-            List<Item> items=new ArrayList<>();
-            for(Object row:bounded(arrayOrEmpty(object(data.get("list")).get("vlist")),20)) {
-                var video=object(row); String bvid=optional(video.get("bvid")); long duration=searchDuration(video.get("length"));
-                if(!bvid.matches("BV[0-9A-Za-z]{10}") || duration<=0) continue;
-                items.add(new Item(Kind.TRACK,bvid,text(video.get("title")),optional(video.get("author")),duration,true,
-                        cover(AccountPlatform.BILIBILI,video.get("pic")),query.owner()));
-            }
-            long total=number(paging.get("count"),-1);
-            return page("\u89c6\u9891",items,total<0?items.size()==20:query.page()*20L<total,total);
-        }
+        if(query.view()==View.AUTHOR_VIDEOS) return authorVideos(query,http,request);
         if(query.view()==View.AUTHOR_COLLECTIONS) {
             URI uri=BiliWbi.sign(base+"/x/polymer/web-space/seasons_series_list",Map.of("mid",Long.toString(query.owner()),
                     "page_num",Integer.toString(query.page()),"page_size","20","web_location","333.999"),wbi(http,request),clock.instant().getEpochSecond());
@@ -217,7 +202,7 @@ public final class CatalogClient {
                 var meta=object(object(row).get("meta"));
                 if(number(meta.get("mid"),query.owner())!=query.owner()) throw invalid();
                 items.add(new Item(Kind.COLLECTION,Long.toString(id(meta.get("season_id"))),text(meta.get("name")),author(meta),
-                        number(meta.get("total"),-1),true,firstCover(AccountPlatform.BILIBILI,meta,"cover","pic"),query.owner()));
+                        number(meta.get("total"),-1),true,firstCover(AccountPlatform.BILIBILI,meta,"cover","pic"),query.owner(),-1,number(alias(meta,"ptime","mtime"),0)));
             }
             // Upstream paging also counts series; only playable season collections are exposed here.
             long total=number(paging.get("total"),-1);
@@ -240,7 +225,7 @@ public final class CatalogClient {
                 long duration = searchDuration(video.get("duration"));
                 if (!bvid.matches("BV[0-9A-Za-z]{10}") || duration <= 0 || !unique.add(bvid)) continue;
                 items.add(new Item(Kind.TRACK, bvid, searchTitle(text(video.get("title"))), optional(video.get("author")), duration, true,
-                        cover(AccountPlatform.BILIBILI, video.get("pic")), number(video.get("mid"),0)));
+                        cover(AccountPlatform.BILIBILI, video.get("pic")), number(video.get("mid"),0), number(video.get("play"),-1),number(video.get("pubdate"),0)));
             }
             return new Page("\u641c\u7d22\uff1a" + query.keyword(), items, query.page() < pages, clock.instant().plusSeconds(300), pages);
         }
@@ -307,6 +292,41 @@ public final class CatalogClient {
         if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
                 base + "/x/v3/fav/folder/" + endpoint + "?up_mid=" + account.userId() + "&pn=" + (query.page() + 1) + "&ps=20&platform=web&web_location=333.1387").get("list")).isEmpty();
         return page(viewTitle(query), items, more && query.page() < 500, number(alias(data, "count", "total"), -1));
+    }
+    private record AuthorPage(List<Object> rows,long total) { }
+    private AuthorPage authorPage(Query query,int page,CatalogHttp http,RequestScope request) throws IOException {
+        URI uri=BiliWbi.sign("https://api.bilibili.com/x/space/wbi/arc/search",Map.of("mid",Long.toString(query.owner()),"pn",Integer.toString(page),
+                "ps","20","order",query.order()==Sort.PLAY_COUNT?"click":"pubdate","platform","web","web_location","1550101"),wbi(http,request),clock.instant().getEpochSecond());
+        var data=object(success(http.json(uri,null,request),0,http.stage()).get("data"));
+        var paging=object(data.get("page"));
+        if(number(paging.get("pn"),page)!=page) throw invalid();
+        return new AuthorPage(bounded(arrayOrEmpty(object(data.get("list")).get("vlist")),20),number(paging.get("count"),-1));
+    }
+    private Page authorVideos(Query query,CatalogHttp http,RequestScope request) throws IOException {
+        var first=authorPage(query,query.reverse()?1:query.page(),http,request);
+        long total=first.total(); List<Object> rows=new ArrayList<>();
+        if(!query.reverse()) rows.addAll(first.rows());
+        else {
+            // Reverse raw upstream positions before filtering unavailable rows. At most two tail pages,
+            // plus the count probe; never download the whole uploader merely to show oldest-first.
+            if(total<0 || total>10000) throw new IOException("Uploader reverse requires a bounded total");
+            int end=(int)Math.max(0,total-(query.page()-1)*20L),start=Math.max(0,end-20);
+            for(int page=start/20+1;start<end && page<=(end-1)/20+1;page++) {
+                AuthorPage part=page==1?first:authorPage(query,page,http,request);
+                if(part.total()!=total) throw new IOException("Uploader changed; refresh before sorting");
+                int from=Math.max(0,start-(page-1)*20),to=Math.min(part.rows().size(),end-(page-1)*20);
+                if(from<to) rows.addAll(part.rows().subList(from,to));
+            }
+            Collections.reverse(rows);
+        }
+        List<Item> items=new ArrayList<>(); Set<String> unique=new HashSet<>();
+        for(Object row:rows) {
+            var video=object(row); String bvid=optional(video.get("bvid")); long duration=searchDuration(video.get("length"));
+            if(!bvid.matches("BV[0-9A-Za-z]{10}") || duration<=0 || !unique.add(bvid)) continue;
+            items.add(new Item(Kind.TRACK,bvid,text(video.get("title")),optional(video.get("author")),duration,true,
+                    cover(AccountPlatform.BILIBILI,video.get("pic")),query.owner(),number(video.get("play"),-1),number(video.get("created"),0)));
+        }
+        return page("\u89c6\u9891",items,total<0?rows.size()==20:query.page()*20L<total,total);
     }
     private static Boolean more(Map<String, Object> data, int page, long total) throws IOException {
         Object flag = alias(data, "has_more", "more");

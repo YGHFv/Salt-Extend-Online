@@ -20,6 +20,13 @@ import static io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest.*;
 public final class PlaylistRenderTest {
     private static int checks;
     private static void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Playlist render "+checks); }
+    private static SemanticsNode unmerged(SemanticsNode node,String label,SemanticsPropertyKey<?> action) {
+        for(var child:node.getChildren()) { var found=unmerged(child,label,action); if(found!=null)return found; }
+        return node.getConfig().toString().contains(label) && (action==null || node.getConfig().contains(action))?node:null;
+    }
+    private static SemanticsNode unmerged(ImageComposeScene scene,String label,SemanticsPropertyKey<?> action) {
+        for(var owner:scene.getSemanticsOwners()){var found=unmerged(owner.getUnmergedRootSemanticsNode(),label,action);if(found!=null)return found;}return null;
+    }
     private static void centeredLabel(ImageComposeScene scene, String label, SemanticsNode button) {
         var action=SemanticsActions.INSTANCE.getGetTextLayoutResult();
         var text=find(scene,label,action); check(text!=null);
@@ -87,8 +94,8 @@ public final class PlaylistRenderTest {
         try(var player=new OnlinePlaybackController(p->null,()->true,()->true,(a,v)->{});
             var library=new LibraryController(p->null,()->true,t->{},()->{},Clock.systemUTC(),a->(q,k,s,r)->{
                 requests.incrementAndGet(); List<Catalog.Item> rows=new ArrayList<>();
-                if(q.view()!=Catalog.View.FOLDER) rows.add(new Catalog.Item(Catalog.Kind.FOLDER,"10","My collection","Uploader",21,true));
-                else for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,String.format("Song %02d",i),"Uploader",1000,true,null,99,i==20?9000000000L:i));
+                if(q.view()!=Catalog.View.FOLDER && q.view()!=Catalog.View.AUTHOR_VIDEOS) rows.add(new Catalog.Item(Catalog.Kind.FOLDER,"10","My collection","Uploader",21,true));
+                else for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,String.format("Song %02d",i)+(i==2?" - longer title to verify two-line card height and single-line list ellipsis":""),"Uploader",1000,true,null,99,i==20?9000000000L:i,1700000000));
                 return new Catalog.Page(q.view()==Catalog.View.FOLDER?"My collection":"Catalog",rows,q.view()==Catalog.View.FOLDER && q.page()==1,Instant.now().plusSeconds(300),q.view()==Catalog.View.FOLDER?2:1,q.view()==Catalog.View.FOLDER?21:1);
             })) {
             var desk=new NativeDesk(library,player,p->new AccountLoginController.Snapshot(AccountLoginController.Phase.LOGGED_IN,"",null,"42"),(p,a)->{},()->true);
@@ -114,14 +121,40 @@ public final class PlaylistRenderTest {
                             int beforeLayout=requests.get();
                             for(String layout:List.of("\u53cc\u5217\u5217\u8868","\u5361\u7247\u5217\u8868","\u5355\u5217\u5217\u8868")) {
                                 click(scene,"\u5207\u6362\u5217\u8868");click(scene,layout);render(scene);
-                                var a=find(scene,"Song 01",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
-                                var b=find(scene,"Song 02",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                var a=unmerged(scene,"Song 01",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                var b=unmerged(scene,"Song 02",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
                                 boolean multiple=layout.equals("\u5361\u7247\u5217\u8868") || layout.equals("\u53cc\u5217\u5217\u8868") && logicalWidth>=600;
                                 check(multiple?Math.abs(a.getTop()-b.getTop())<=2 && b.getLeft()>a.getLeft():b.getTop()>a.getTop());
                                 check(requests.get()==beforeLayout);
+                                var artist=unmerged(scene,"Uploader",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                if(layout.equals("\u5361\u7247\u5217\u8868")) {
+                                    check(Math.abs(a.getHeight()-b.getHeight())<=1);
+                                    var cover=unmerged(scene,"\u5361\u7247\u5c01\u9762",null).getBoundsInRoot();
+                                    var plays=unmerged(scene,"\u5c01\u9762\u64ad\u653e\u91cf",null).getBoundsInRoot();
+                                    var duration=unmerged(scene,"\u5c01\u9762\u65f6\u957f",null).getBoundsInRoot();
+                                    check(plays.getLeft()>cover.getLeft() && duration.getRight()<cover.getRight() && plays.getRight()<duration.getLeft());
+                                    check(plays.getBottom()<cover.getBottom() && Math.abs(plays.getTop()-duration.getTop())<=1 && plays.getTop()>cover.getTop()+cover.getHeight()/2);
+                                    check(a.getTop()>=cover.getBottom() && artist.getTop()>a.getTop());
+                                } else {
+                                    var duration=unmerged(scene,"00:01",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                    if(Math.abs(artist.getTop()-duration.getTop())>1) throw new AssertionError("Artist/duration alignment: "+artist+" / "+duration); checks++;
+                                }
                             }
-                            check(find(scene,"00:01",null)!=null);
+                            check(unmerged(scene,"00:01",null)!=null);
+                            check(unmerged(scene,"\u5408\u96c6",SemanticsActions.INSTANCE.getGetTextLayoutResult())==null);
+                            var back=unmerged(scene,"\u8fd4\u56de\u5217\u8868",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                            var layoutBounds=unmerged(scene,"\u5207\u6362\u5217\u8868",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                            check(Math.abs(back.getTop()-layoutBounds.getTop())<=1);
                             click(scene,"\u4f5c\u8005\u4e3b\u9875");check(library.snapshot().get("view").equals("AUTHOR_VIDEOS") && submitted.get()==null);
+                            check(unmerged(scene,"2023-11-15",null)!=null);
+                            if(logicalWidth>=600) {
+                                var header=unmerged(scene,"\u66f4\u65b0\u65f6\u95f4",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                var date=unmerged(scene,"2023-11-15",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                check(Math.abs(header.getLeft()-date.getLeft())<=1 && Math.abs(header.getWidth()-date.getWidth())<=1);
+                            }
+                            click(scene,"\u6392\u5e8f");
+                            HeaderSearchRenderTest.menuIcons(scene,List.of("\u64ad\u653e\u91cf","\u6700\u65b0","\u9006\u5411\u6392\u5e8f"),density);
+                            check(unmerged(scene,"\u5df2\u9009\u62e9\u6700\u65b0",null)!=null);click(scene,"\u6700\u65b0");
                             click(scene,"\u8fd4\u56de\u5217\u8868");check(library.snapshot().get("view").equals("FOLDER"));
                             visibleButtons(scene,density);
                             var play=find(scene,"\u5168\u90e8\u64ad\u653e",SemanticsActions.INSTANCE.getOnClick());

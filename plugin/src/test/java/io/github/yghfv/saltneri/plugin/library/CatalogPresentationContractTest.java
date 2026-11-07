@@ -19,9 +19,47 @@ public final class CatalogPresentationContractTest {
     }
     @SuppressWarnings("unchecked") private static List<Map<String,Object>> rows(LibraryController library) {return (List<Map<String,Object>>)library.snapshot().get("items");}
     public static void main(String[] args) throws Exception {
-        batches(); authors(); navigation(); remoteOrder();
+        batches(); authors(); navigation(); remoteOrder(); authorOrder();
         check(Catalog.duration(125000).equals("02:05") && Catalog.duration(3661000).equals("1:01:01") && Catalog.duration(0).equals("--:--"));
+        check(Catalog.plays(-1).equals("--") && Catalog.plays(0).equals("0") && Catalog.plays(12345).equals("1.2\u4e07"));
+        check(Catalog.updated(1700000000).equals("2023-11-15") && Catalog.updated(0).equals("--"));
         System.out.println("PASS: "+checks+" cached bounded parallel catalog, uploader APIs/navigation, duration and no redundant sort checks; fixtures only");
+    }
+    private static void authorOrder() throws Exception {
+        var account=CatalogContractTest.account(AccountPlatform.BILIBILI); var fixture=new CatalogContractTest.Fixture();
+        var calls=new ArrayList<String>();
+        try(var request=new RequestScope(()->true)) {
+            var client=new CatalogClient(account,CatalogContractTest.CLOCK,(uri,form)->{
+                if(uri.getPath().endsWith("nav"))return fixture.open(uri,form);
+                var params=new HashMap<String,String>(); for(String part:uri.getQuery().split("&")){var pair=part.split("=",2);params.put(pair[0],pair[1]);}
+                int pn=Integer.parseInt(params.get("pn"));calls.add(pn+":"+params.get("order"));
+                var rows=new ArrayList<String>();
+                for(int i=(pn-1)*20+1;i<=Math.min(45,pn*20);i++) rows.add("{\"bvid\":\"BV17x411w7"+String.format("%02d",i)+"\",\"title\":\"Video "+i+"\",\"length\":\"02:05\",\"play\":12345,\"created\":1700000000}");
+                return new CatalogContractTest.Response(uri,"{\"code\":0,\"data\":{\"page\":{\"pn\":"+pn+",\"count\":45},\"list\":{\"vlist\":["+String.join(",",rows)+"]}}}",List.of());
+            });
+            var reverse=client.load(new Query(AccountPlatform.BILIBILI,View.AUTHOR_VIDEOS,0,1,99,"",true),request);
+            check(reverse.items().size()==20 && reverse.items().getFirst().title().equals("Video 45") && reverse.items().getLast().title().equals("Video 26"));
+            check(calls.equals(List.of("1:pubdate","2:pubdate","3:pubdate")) && reverse.totalPages()==3 && reverse.hasMore());calls.clear();
+            reverse=client.load(new Query(AccountPlatform.BILIBILI,View.AUTHOR_VIDEOS,0,2,99,"",true),request);
+            check(reverse.items().getFirst().title().equals("Video 25") && reverse.items().getLast().title().equals("Video 6"));
+            reverse=client.load(new Query(AccountPlatform.BILIBILI,View.AUTHOR_VIDEOS,0,3,99,"",true),request);
+            check(reverse.items().size()==5 && reverse.items().getLast().title().equals("Video 1") && !reverse.hasMore());
+            var byPlays=client.load(new Query(AccountPlatform.BILIBILI,View.AUTHOR_VIDEOS,0,1,99,"",false,Sort.PLAY_COUNT),request);
+            check(calls.getLast().equals("1:click") && byPlays.items().getFirst().playCount()==12345 && byPlays.items().getFirst().updatedAt()==1700000000);
+        } finally {account.retire();}
+        var queries=new ArrayList<Query>();
+        try(var library=new LibraryController(p->null,()->true,t->{},()->{},Clock.systemUTC(),a->(q,k,s,r)->{
+            synchronized(queries){queries.add(q);}
+            if(k.equals("all")) throw new AssertionError("Author order fetched whole catalog");
+            return new Page("Videos",List.of(new Item(Kind.TRACK,"BV17x411w7KC","Video","Uploader",125000,true,null,99,12345,1700000000)),true,Instant.MAX,3,45);
+        })) {
+            library.browse(AccountPlatform.BILIBILI,View.DISCOVER);ready(library);library.author((String)rows(library).getFirst().get("token"));ready(library);
+            library.sort(Sort.PLAY_COUNT);ready(library);check(queries.getLast().order()==Sort.PLAY_COUNT);
+            library.turn(1);ready(library);check(queries.getLast().page()==2 && queries.getLast().order()==Sort.PLAY_COUNT);
+            library.sort(Sort.REVERSE);ready(library);check(queries.getLast().reverse() && library.snapshot().get("loadingAll").equals(false));
+            check(rows(library).getFirst().get("updated").equals("2023-11-15") && rows(library).getFirst().get("playCount").equals("1.2\u4e07"));
+            library.sort(Sort.DEFAULT);ready(library);check(!queries.getLast().reverse() || library.snapshot().get("sort").equals("DEFAULT"));
+        }
     }
     private static void remoteOrder() throws Exception {
         var queries=new CopyOnWriteArrayList<Query>();
@@ -97,7 +135,7 @@ public final class CatalogPresentationContractTest {
         })) {
             library.browse(AccountPlatform.BILIBILI,View.MINE);ready(library);library.choose((String)rows(library).getFirst().get("token"));ready(library);
             int before=requests.get(); library.sort(Sort.DEFAULT);library.sort(Sort.TITLE);ready(library);check(requests.get()==before);
-            var row=rows(library).getFirst(); check(row.get("duration").equals("02:05") && row.get("author").equals(true) && row.get("collection").equals("Fixture"));
+            var row=rows(library).getFirst(); check(row.get("duration").equals("02:05") && row.get("author").equals(true) && row.get("collection").equals(""));
             String old=(String)row.get("token"); library.author(old);ready(library);
             check(library.snapshot().get("view").equals("AUTHOR_VIDEOS") && library.snapshot().get("authorName").equals("Uploader"));
             library.authorTab(true);ready(library);check(rows(library).getFirst().get("kind").equals("COLLECTION"));

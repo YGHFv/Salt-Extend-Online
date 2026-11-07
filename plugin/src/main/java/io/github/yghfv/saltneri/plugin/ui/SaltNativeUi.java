@@ -12,7 +12,6 @@ import com.xuncorp.spw.workshop.api.hook.*;
 import io.github.yghfv.saltneri.plugin.auth.AccountPlatform;
 import java.io.*;
 import java.lang.reflect.*;
-import java.security.MessageDigest;
 import java.util.*;
 import java.util.function.BooleanSupplier;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -20,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import kotlin.jvm.functions.Function1;
 import kotlin.jvm.functions.Function3;
 
-/** Fingerprinted host-only bindings. No second Compose runtime or invented host classes. */
+/** Capability-checked host-only bindings. No second Compose runtime or invented host classes. */
 public final class SaltNativeUi implements AutoCloseable {
     public static final String PLUGIN_ID = "io.github.yghfv.saltneri.online";
     public static final String SIDEBAR = "androidx.compose.ui.\u0b1a";
@@ -97,6 +96,11 @@ public final class SaltNativeUi implements AutoCloseable {
             pageBinding.install();
             handles.add(hooks.afterComposable(SIDEBAR, "\u037f", SIDEBAR_CALL, List.of(ROUTE_ITEM), 50,
                     (ComposableHook)factory.newInstance(this)));
+            handles.add(hooks.hookMethod("com.xuncorp.voxzen.ui.navigation.Navigator", "back", List.of(), new MethodHook() {
+                @Override public void before(MethodHookParam call) {
+                    if(internalBack(call.getThisObject())) call.setResult(null);
+                }
+            }));
         } catch (Exception | LinkageError failure) { close(); throw failure; }
     }
     private static Class<?> type(ClassLoader loader, String name) throws ClassNotFoundException { return Class.forName(name, false, loader); }
@@ -105,14 +109,14 @@ public final class SaltNativeUi implements AutoCloseable {
         try (InputStream input = SaltNativeUi.class.getResourceAsStream("/host-profiles/windows-steam-1.19.3-ui.properties")) {
             if (input == null) throw new IOException("Missing native UI profile"); pins.load(input);
         }
-        if (pins.size() != 20) throw new IOException("Incomplete native UI profile");
-        for (String name : pins.stringPropertyNames()) {
-            try (InputStream input = host.getResourceAsStream(name.replace('.', '/') + ".class")) {
-                if (input == null) throw new IOException("Native UI class missing");
-                String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.readAllBytes()));
-                if (!hash.equals(pins.getProperty(name))) throw new IOException("Unsupported native UI fingerprint");
-            }
-        }
+        if (pins.size() != 21) throw new IOException("Incomplete native UI profile");
+        // Runtime compatibility follows classes/signatures, not version labels or byte-for-byte code.
+        for (String name : pins.stringPropertyNames()) type(host,name);
+        Class<?> nav=type(host,"com.xuncorp.voxzen.ui.navigation.Navigator");
+        if(nav.getMethod("back").getReturnType()!=void.class || !List.class.isAssignableFrom(nav.getMethod("getNavBackStack").getReturnType()))
+            throw new IOException("Unsupported navigation capability");
+        if(type(host,"com.xuncorp.voxzen.ui.component.PlayerSheetState").getMethod("\u0528").getReturnType()!=boolean.class)
+            throw new IOException("Unsupported player sheet capability");
     }
     private void validatePalette() throws Exception {
         for (String name : List.of("\u037f", "\u0528", "\u0529", "\u052a", "\u052b")) {
@@ -219,6 +223,17 @@ public final class SaltNativeUi implements AutoCloseable {
         catch (RuntimeException error) { failure = error.getClass().getSimpleName(); }
     }
     public synchronized void pageLeft(Object lease) { pages.remove(lease); }
+    /** Salt routes side buttons, keyboard and its back button through this same void method. */
+    boolean internalBack(Object owner) {
+        if(!available() || owner==null || owner!=navigator) return false;
+        List<?> stack=(List<?>)value(owner,"getNavBackStack");
+        AccountPlatform platform=stack.isEmpty()?null:platform(stack.getLast());
+        if(platform==null) return false;
+        synchronized(this) { if(!pages.containsValue(platform)) return false; }
+        // An expanded native player must collapse before navigating the catalog underneath it.
+        if(Boolean.TRUE.equals(value(value(owner,"getPlayerSheetState"),"\u0528"))) return false;
+        return desk.back(platform);
+    }
     public synchronized String diagnostics() {
         String visible = pages.isEmpty() ? "none" : new TreeSet<>(pages.values().stream().map(Enum::name).toList()).toString();
         return "Native UI 0.7.6: bound=" + pageBinding.isInstalled() + ", dispatch=" + dispatched.get()
@@ -254,7 +269,10 @@ public final class SaltNativeUi implements AutoCloseable {
         invoke(nativeRow, null, label, selected, null, false, modifier, null, null, icon, composer, 0, 108);
     }
     public void text(String label, Modifier modifier, TextStyle style, Composer composer) {
-        invoke(text, null, label, modifier, style, null, 1, true, Integer.MAX_VALUE, 1, composer, 0, 0);
+        text(label,modifier,style,Integer.MAX_VALUE,1,composer);
+    }
+    public void text(String label, Modifier modifier, TextStyle style, int maxLines, int minLines, Composer composer) {
+        invoke(text, null, label, modifier, style, null, 2, true, maxLines, minLines, composer, 0, 0);
     }
     public void canvas(Modifier modifier, Object draw, Composer composer) { invoke(canvas, null, modifier, draw, composer, 0); }
     @Override public synchronized void close() {

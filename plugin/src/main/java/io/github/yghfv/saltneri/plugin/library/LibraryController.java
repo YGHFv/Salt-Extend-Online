@@ -124,7 +124,7 @@ public final class LibraryController implements AutoCloseable {
     private void load(State s, Query next) {
         navigation.run(); s.rows.clear(); s.visible = null; s.error = ""; s.query = next; s.account=accounts.apply(s.platform); s.loader.start(next,"read");
     }
-    private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword(),q.reverse()); }
+    private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword(),q.reverse(),q.order()); }
     private static Query allQuery(Query q) {return new Query(q.platform(),q.view(),q.folder(),1,q.owner(),q.keyword());}
     public synchronized void turn(int direction) {
         State s = current(); refresh(s);
@@ -145,7 +145,7 @@ public final class LibraryController implements AutoCloseable {
     private void remember(State s) {
         if(s.query==null) return;
         if(s.history.size()>=16) s.history.removeFirst();
-        s.history.addLast(new Location(s.query,s.creator,s.authorName,s.contents==null?(s.query.reverse()?Sort.REVERSE:Sort.DEFAULT):s.sort,
+        s.history.addLast(new Location(s.query,s.creator,s.authorName,s.contents==null?(s.query.reverse()?Sort.REVERSE:s.query.order()):s.sort,
                 s.contents==null?"":s.filter,s.contents));
     }
     public synchronized void author(String token) {
@@ -161,11 +161,16 @@ public final class LibraryController implements AutoCloseable {
         long owner=s.query.owner(); reset(s); load(s,new Query(s.platform,collections?View.AUTHOR_COLLECTIONS:View.AUTHOR_VIDEOS,0,1,owner));
     }
     public synchronized void back() {
-        State s=current(); refresh(s); if(s.history.isEmpty()) return;
+        back(platform);
+    }
+    public synchronized boolean back(AccountPlatform destination) {
+        State s=states.get(destination); refresh(s); if(s.history.isEmpty()) return false;
+        platform=destination;
         Location previous=s.history.removeLast(); navigation.run(); reset(s); s.creator=previous.creator(); s.authorName=previous.authorName();
         s.sort=previous.sort(); s.filter=previous.filter(); s.query=previous.query();
         if(previous.contents()!=null) {s.contents=previous.contents();s.fullMode=true;rebuild(s);}
         else load(s,s.query);
+        return true;
     }
     private PlatformResolutionController.Snapshot<?> refresh(State s) {
         if (!permitted() || s.account != accounts.apply(s.platform) || s.account != null && !s.account.isActive()) {
@@ -243,7 +248,15 @@ public final class LibraryController implements AutoCloseable {
         s.filter=value; complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
     public synchronized void sort(Sort order) {
-        State s=current(); requireFolder(s); Objects.requireNonNull(order);
+        State s=current(); refresh(s); Objects.requireNonNull(order);
+        if(s.query!=null && s.query.view()==View.AUTHOR_VIDEOS) {
+            if(order!=Sort.DEFAULT && order!=Sort.REVERSE && order!=Sort.PLAY_COUNT) throw new IllegalArgumentException("Unsupported author order");
+            if(s.sort==order && s.error.isEmpty() && !s.loader.snapshot().failed()) return;
+            s.sort=order;
+            load(s,new Query(s.platform,View.AUTHOR_VIDEOS,0,1,s.query.owner(),"",order==Sort.REVERSE,order==Sort.PLAY_COUNT?order:Sort.DEFAULT));
+            return;
+        }
+        requireFolder(s);
         if(s.sort==order && s.error.isEmpty() && !s.complete.snapshot().failed()) return;
         s.sort=order;
         if(s.platform==AccountPlatform.BILIBILI && s.query.view()==View.COLLECTION && s.contents==null && s.filter.isEmpty()
@@ -266,9 +279,14 @@ public final class LibraryController implements AutoCloseable {
     public synchronized Map<String,Object> snapshot(AccountPlatform p) { platform=p; return snapshot(); }
     public synchronized Map<String,Object> snapshot() {
         State s=current(); var status=refresh(s); List<Object> items=new ArrayList<>();
-        s.rows.forEach((token,item)->items.add(Map.of("token",token,"kind",item.kind().name(),"title",item.title(),"subtitle",item.subtitle().isEmpty() && item.kind()==Kind.TRACK ? s.creator : item.subtitle(),"count",item.count(),"enabled",item.enabled(),
-                "author",s.platform==AccountPlatform.BILIBILI && item.owner()>0,"collection",item.kind()==Kind.TRACK && s.query!=null && (s.query.view()==View.FOLDER || s.query.view()==View.COLLECTION)?s.title:"",
-                "duration",item.kind()==Kind.TRACK?Catalog.duration(item.count()):"")));
+        s.rows.forEach((token,item)->{
+            Map<String,Object> row=new HashMap<>();
+            row.put("token",token); row.put("kind",item.kind().name()); row.put("title",item.title());
+            row.put("subtitle",item.subtitle().isEmpty() ? (s.query!=null && (s.query.view()==View.AUTHOR_VIDEOS || s.query.view()==View.AUTHOR_COLLECTIONS)?s.authorName:s.creator) : item.subtitle());
+            row.put("count",item.count()); row.put("enabled",item.enabled()); row.put("author",s.platform==AccountPlatform.BILIBILI && item.owner()>0);
+            row.put("collection",""); row.put("updated",Catalog.updated(item.updatedAt())); row.put("playCount",Catalog.plays(item.playCount()));
+            row.put("duration",item.kind()==Kind.TRACK?Catalog.duration(item.count()):""); items.add(Map.copyOf(row));
+        });
         Map<String,Object> result=new HashMap<>(); result.put("status",status.status()); result.put("title",s.title);
         result.put("platform",platform.name()); result.put("view",s.query==null ? "" : s.query.view().name()); result.put("page",s.query==null ? 1 : s.query.page());
         result.put("more",s.visible!=null && s.visible.hasMore()); result.put("items",items); result.put("error",!s.error.isEmpty()?s.error:status.failed()?status.status():"");

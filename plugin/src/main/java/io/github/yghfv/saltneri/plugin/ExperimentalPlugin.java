@@ -56,7 +56,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         stopped = false;
         active = this;
         Object started = new Object(); generation = started;
-        status = "Checking Steam 1.19.3 native UI; no network or queue changes.";
+        status = "Checking native UI capabilities; no network or queue changes.";
         configManager = WorkshopApi.manager().createConfigManager();
         ConfigHelper initialConfig = configManager.getConfig();
         applySettings(initialConfig);
@@ -98,6 +98,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             catch (Exception failure) { throw new IllegalStateException("Native action failed", failure); }
         }, () -> generation == started && granted());
         desk.coverMode(()->settings.coverMode());
+        desk.preferences(new io.github.yghfv.saltneri.plugin.ui.CatalogPreferences(configManager.getConfig("catalog-ui.json")));
         desk.playlistPlayer(list -> startedOnline.playPlaylist(list, () -> {
             try { arm(); } catch(Exception failure) { throw new IllegalStateException("Adapter unavailable"); }
         }, (playlist,valid) -> {
@@ -123,7 +124,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         profile = Salt1193Probe.inspect(WorkshopApi.class.getClassLoader(),
                 getPluginContext().getSpwVersion(), getPluginContext().getSpwChannel().name());
         status = profile.detail();
-        if (profile.matched() && granted()) {
+        if (granted()) {
             try {
                 mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install();
                 mediaIdentityStatus=mediaIdentity==null?"not Windows":"Salt Player for Windows (Start Menu registered; restart for shell refresh)";
@@ -155,7 +156,6 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private boolean adapterArmed() { Salt1193DiagnosticRuntime current = runtime; return current != null && !current.isClosed(); }
     private synchronized void ensureNativeUi() throws Exception {
         if (stopped || !granted()) throw new SecurityException("Experimental permission required");
-        if (profile == null || !profile.matched()) throw new IllegalStateException("Verified host profile unavailable");
         if (nativeUi == null || !nativeUi.available()) {
             if (nativeUi != null) nativeUi.close();
             Object owner = generation;
@@ -210,7 +210,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
 
     private synchronized void arm() throws IOException, ReflectiveOperationException {
         if (stopped) throw new IllegalStateException("Plugin disabled");
-        if (profile == null || !profile.matched()) throw new IllegalStateException("Verified host profile unavailable");
+        if (profile == null || !profile.matched()) throw new IllegalStateException("Required playback capabilities unavailable");
         if (!granted()) throw new SecurityException("CLASS_TRANSFORM not granted");
         if (runtime == null || runtime.isClosed()) {
             runtime = Salt1193DiagnosticRuntime.open(WorkshopApi.class.getClassLoader(), profile,

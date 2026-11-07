@@ -72,7 +72,7 @@ def validate(path, experimental):
         if any(name in names for name in ("classes/library.html", "classes/login.html")):
             raise ValueError("Browser UI must not be bundled")
         ui_profile = archive.read("classes/host-profiles/windows-steam-1.19.3-ui.properties").decode("ascii")
-        if sum(not line.startswith("#") and "=" in line for line in ui_profile.splitlines()) != 20:
+        if sum(not line.startswith("#") and "=" in line for line in ui_profile.splitlines()) != 21:
             raise ValueError("Missing native UI fingerprints")
         if "classes/io/github/yghfv/saltneri/plugin/ui/SaltNativeContent.class" not in names:
             raise ValueError("Missing compiled native Compose content")

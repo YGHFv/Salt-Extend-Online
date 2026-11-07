@@ -13,6 +13,7 @@ public final class NativeHookTransformTest {
     public static final class ResolverFixture {
         public static Function1<Object, Object> build(List<String> page) { return key -> resolve(page); }
         private static Object resolve(List<String> page) { return page.getFirst(); }
+        public static void back(List<String> page) { page.removeLast(); }
     }
     private static int checks;
     private static void check(boolean value) { checks++; if (!value) throw new AssertionError("Transform check " + checks); }
@@ -25,6 +26,8 @@ public final class NativeHookTransformTest {
         try (var input = host.getResourceAsStream(fixture.replace('.', '/') + ".class")) { original = input.readAllBytes(); }
         byte[] transformed = (byte[])transformerType.getMethod("\u037f", String.class, byte[].class).invoke(transformer, fixture, original);
         check(!Arrays.equals(original, transformed));
+        Object backTransformer=transformerType.getConstructor(Method.class).newInstance(ResolverFixture.class.getMethod("back",List.class));
+        final byte[] withBack=(byte[])transformerType.getMethod("\u037f",String.class,byte[].class).invoke(backTransformer,fixture,transformed);
         Path temporary = Files.createTempDirectory("salt-native-hook-fixture-");
         Path sources = Files.createDirectories(temporary.resolve("src"));
         Path classes = Files.createDirectories(temporary.resolve("classes"));
@@ -72,7 +75,7 @@ public final class NativeHookTransformTest {
                     if (name.equals(fixture) || name.equals("com.xuncorp.voxzen.workshop.hooks.WorkshopHookBridge")
                             || name.equals("com.xuncorp.voxzen.workshop.hooks.WorkshopMethodFrame")) {
                         Class<?> value = findLoadedClass(name);
-                        if (value == null) value = name.equals(fixture) ? defineClass(name, transformed, 0, transformed.length) : findClass(name);
+                        if (value == null) value = name.equals(fixture) ? defineClass(name, withBack, 0, withBack.length) : findClass(name);
                         if (resolve) resolveClass(value); return value;
                     }
                     return super.loadClass(name, resolve);
@@ -96,7 +99,15 @@ public final class NativeHookTransformTest {
                 }
             });
             check(cached.invoke("key").equals("native"));
+            callback.set(null, new MethodHook() {
+                @Override public void before(MethodHookParam call) { call.setResult(null); }
+            });
+            isolated.loadClass(fixture).getMethod("back",List.class).invoke(null,page);
+            check(page.equals(List.of("native")));
             callback.set(null, null);
+            page.add("nested");
+            isolated.loadClass(fixture).getMethod("back",List.class).invoke(null,page);
+            check(page.equals(List.of("native")));
             check(cached.invoke("key").equals("native"));
         }
         System.out.println("PASS: " + checks + " actual host method-transform checks; cached resolver/object mutation works, result override is discarded; synthetic bridge only");

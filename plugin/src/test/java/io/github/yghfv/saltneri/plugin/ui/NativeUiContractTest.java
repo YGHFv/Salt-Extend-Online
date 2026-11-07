@@ -33,7 +33,8 @@ public final class NativeUiContractTest {
             uiCalls++; content = hook; return handle();
         }
         public HookHandle hookMethod(String owner, String name, List<String> types, MethodHook hook) {
-            methodCalls++; throw new AssertionError("Native page must not depend on an ordinary method Hook");
+            check(owner.equals("com.xuncorp.voxzen.ui.navigation.Navigator") && name.equals("back") && types.isEmpty());
+            methodCalls++; return handle();
         }
         public HookHandle replaceComposable(String c, String m, String i, List<String> t, int p, ComposableHook h) { throw new AssertionError("Original UI must not be replaced"); }
         public <S> HookHandle appendContent(String c, String m, String i, String a, Class<S> s, List<String> t, int p, ContentHook<S> h) { throw new AssertionError("Unexpected DSL append"); }
@@ -61,8 +62,15 @@ public final class NativeUiContractTest {
                         ? new ByteArrayInputStream(new byte[]{0}) : super.getResourceAsStream(name);
             }
         };
-        try { SaltNativeUi.verify(tampered); throw new AssertionError("Changed UI accepted"); }
-        catch (IOException expected) { checks++; }
+        SaltNativeUi.verify(tampered); checks++;
+        ClassLoader missing=new ClassLoader(host) {
+            @Override protected Class<?> loadClass(String name,boolean resolve) throws ClassNotFoundException {
+                if(name.equals(SaltNativeUi.SIDEBAR)) throw new ClassNotFoundException("Fixture missing UI");
+                return super.loadClass(name,resolve);
+            }
+        };
+        try { SaltNativeUi.verify(missing); throw new AssertionError("Missing UI capability accepted"); }
+        catch (ClassNotFoundException expected) { checks++; }
         AtomicBoolean permitted = new AtomicBoolean(true);
         AtomicInteger upstream = new AtomicInteger(), prepare = new AtomicInteger(), queue = new AtomicInteger(), actions = new AtomicInteger();
         Clock clock = Clock.systemUTC();
@@ -88,7 +96,7 @@ public final class NativeUiContractTest {
             try (SaltNativeUi ui = new SaltNativeUi(host, hooks, desk, permitted::get)) {
                 javax.swing.SwingUtilities.invokeAndWait(() -> {});
                 check(ui.diagnostics().contains("bound=true"));
-                check(hooks.uiCalls == 1 && hooks.methodCalls == 0);
+                check(hooks.uiCalls == 1 && hooks.methodCalls == 1);
                 check(upstream.get() == 0 && queue.get() == 0 && actions.get() == 0);
                 check(hooks.content.getClass().getMethod("Content", UiHookCall.class, Composer.class, int.class).getReturnType() == void.class);
                 check(desk.snapshot(AccountPlatform.NETEASE).login().qrContent() == null);
@@ -191,7 +199,7 @@ public final class NativeUiContractTest {
                 check(!ui.available() && queue.get() == 0);
                 permitted.set(true); check(!ui.available());
                 ui.close(); ui.close(); javax.swing.SwingUtilities.invokeAndWait(() -> {});
-                check(hooks.closed == 1 && blockField.get(cachedContent) == fixtureBlock);
+                check(hooks.closed == 2 && blockField.get(cachedContent) == fixtureBlock);
                 Object oldKey = route.getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID + "/native/NETEASE");
                 Object retired = built.invoke(oldKey);
                 javax.swing.SwingUtilities.invokeAndWait(() -> {

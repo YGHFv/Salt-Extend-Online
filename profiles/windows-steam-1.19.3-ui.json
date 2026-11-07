@@ -2947,6 +2947,64 @@
           "access": 8
         }
       ]
+    },
+    {
+      "name": "com.xuncorp.voxzen.ui.component.PlayerSheetState",
+      "superclass": "java.lang.Object",
+      "interfaces": [],
+      "majorVersion": 69,
+      "minorVersion": 0,
+      "access": 49,
+      "sha256": "37d767f12b2d716856a4ca093e72ffa1e2ef9304566e608b35b4696f37e86d80",
+      "fields": [
+        {
+          "name": "\u037f",
+          "descriptor": "Landroidx/compose/ui/\u1076;",
+          "access": 18
+        }
+      ],
+      "methods": [
+        {
+          "name": "<init>",
+          "descriptor": "(Landroidx/compose/ui/\u1076;)V",
+          "access": 1
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "()Landroidx/compose/ui/\u1076;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "()Z",
+          "access": 17
+        },
+        {
+          "name": "\u0529",
+          "descriptor": "()Z",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;",
+          "access": 17
+        },
+        {
+          "name": "\u037f",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/component/PlayerSheetState;)Z",
+          "access": 26
+        },
+        {
+          "name": "\u0528",
+          "descriptor": "(Lcom/xuncorp/voxzen/ui/component/PlayerSheetState;)Z",
+          "access": 26
+        }
+      ]
     }
   ]
 }

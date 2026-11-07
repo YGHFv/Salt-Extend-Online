@@ -30,7 +30,7 @@ public final class NativePageRenderTest {
         public HookHandle afterComposable(String o, String m, String i, List<String> t, int p, ComposableHook c) {
             return new HookHandle() { public void unhook() {} public void close() {} };
         }
-        public HookHandle hookMethod(String o, String m, List<String> t, MethodHook h) { throw new AssertionError("No ordinary page Hook"); }
+        public HookHandle hookMethod(String o, String m, List<String> t, MethodHook h) { if(!o.equals("com.xuncorp.voxzen.ui.navigation.Navigator") || !m.equals("back") || !t.isEmpty()) throw new AssertionError("Unexpected method hook"); return new HookHandle() { public void unhook() {} public void close() {} }; }
         public HookHandle replaceComposable(String o, String m, String i, List<String> t, int p, ComposableHook c) { throw new AssertionError(); }
         public <S> HookHandle appendContent(String o, String m, String i, String a, Class<S> s, List<String> t, int p, ContentHook<S> c) { throw new AssertionError(); }
     }

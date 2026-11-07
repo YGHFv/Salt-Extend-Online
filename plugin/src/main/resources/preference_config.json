@@ -7,7 +7,7 @@
         {
           "type": "button",
           "title": "查看接入状态",
-          "summary": "后台核验 Steam 1.19.3 原生媒体入口与 17 个类指纹，不修改队列。尚未连接在线播放与词图获取，下列选项当前不生效。",
+          "summary": "后台检查原生媒体接口结构，不锁定版本、渠道或类文件哈希，不修改队列。此被动探测包尚未连接在线播放与词图获取，下列选项当前不生效。",
           "arrow_type": "none",
           "on_click": "io.github.yghfv.saltneri.plugin.MainPlugin.showStatus"
         },

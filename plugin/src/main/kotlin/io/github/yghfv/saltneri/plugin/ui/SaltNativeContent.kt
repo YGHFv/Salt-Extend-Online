@@ -24,6 +24,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -112,13 +113,14 @@ private fun SidebarEntries(ui: SaltNativeUi) {
 private fun name(platform: AccountPlatform) = if (platform == AccountPlatform.BILIBILI) "Bilibili" else "\u7f51\u6613\u4e91"
 
 @Composable
-private fun NativeText(ui: SaltNativeUi, text: String, secondary: Boolean = false, modifier: Modifier = Modifier, heading: Boolean = false) {
+private fun NativeText(ui: SaltNativeUi, text: String, secondary: Boolean = false, modifier: Modifier = Modifier, heading: Boolean = false,
+                       maxLines: Int = Int.MAX_VALUE, minLines: Int = 1) {
     val palette = ui.palette(currentComposer)
     var style: TextStyle = (if (secondary) palette.sub() else palette.main()).copy(
         // Host getters return packed Compose colors, not 32-bit ARGB values accepted by Color(Long).
         color = Color((if (secondary) palette.secondary() else palette.text()).toULong()))
     if (heading) style = style.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold)
-    ui.text(text, modifier, style, currentComposer)
+    ui.text(text, modifier, style, maxLines, minLines, currentComposer)
 }
 
 @Composable
@@ -150,7 +152,7 @@ private fun NativeButtons(ui: SaltNativeUi, buttons: List<NativeButton>) {
 }
 
 @Composable
-private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mode: CoverMode, card: Boolean = false) {
+private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mode: CoverMode, card: Boolean = false, stats: Map<*,*>? = null) {
     var png by remember(token) { mutableStateOf<ByteArray?>(null) }
     LaunchedEffect(ui, token) {
         while (true) { png = ui.cover(token); if (png != null) break; delay(350) }
@@ -159,11 +161,19 @@ private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mo
     DisposableEffect(thumbnail) { onDispose { thumbnail?.close() } }
     val ratio=if(platform==AccountPlatform.BILIBILI) 16f/9f else 1f
     val frame=if(card) Modifier.fillMaxWidth().aspectRatio(if(mode==CoverMode.FIT) ratio else 1f)
-        else Modifier.width(if(mode==CoverMode.FIT && platform==AccountPlatform.BILIBILI) 100.dp else 56.dp).height(56.dp)
-    Box(frame.clip(ui.palette(currentComposer).shape()), contentAlignment = Alignment.Center) {
+        else Modifier.width(coverWidth(platform,mode)).height(56.dp)
+    Box(frame.clip(ui.palette(currentComposer).shape()).semantics { if(card) contentDescription="\u5361\u7247\u5c01\u9762" }, contentAlignment = Alignment.Center) {
         if (thumbnail == null) NativeText(ui, "\u97f3\u4e50", true)
         else Image(thumbnail.bitmap(), "\u5c01\u9762", Modifier.fillMaxSize(), contentScale = if(mode==CoverMode.FIT) ContentScale.Fit else ContentScale.Crop,
             alignment=when(mode) { CoverMode.LEFT -> Alignment.CenterStart; CoverMode.RIGHT -> Alignment.CenterEnd; else -> Alignment.Center })
+        if(card && stats!=null) Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent,Color.Black.copy(alpha=0.72f))))
+            .padding(start=8.dp,end=8.dp,top=18.dp,bottom=6.dp),verticalAlignment=Alignment.CenterVertically) {
+            val style=ui.palette(currentComposer).sub().copy(color=Color.White)
+            ui.text((stats["playCount"] as? String) ?: "--",Modifier.weight(1f).semantics {contentDescription="\u5c01\u9762\u64ad\u653e\u91cf"},style,1,1,currentComposer)
+            Spacer(Modifier.width(8.dp))
+            ui.text((stats["duration"] as? String) ?: "--:--",Modifier.semantics {contentDescription="\u5c01\u9762\u65f6\u957f"},style,1,1,currentComposer)
+        }
     }
 }
 
@@ -302,8 +312,8 @@ private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> U
 
 private enum class ListLayout { SINGLE, DOUBLE, CARDS }
 
-private class PageMemory(platform: AccountPlatform) {
-    var layout by mutableStateOf(ListLayout.SINGLE)
+private class PageMemory(val platform: AccountPlatform, layout: String) {
+    var layout by mutableStateOf(ListLayout.valueOf(layout))
     var view by mutableStateOf(Catalog.View.DISCOVER)
     var selectedRow by mutableStateOf("")
     var searching by mutableStateOf(false)
@@ -315,35 +325,43 @@ private class PageMemory(platform: AccountPlatform) {
 }
 
 @Composable
-private fun PlaylistTitle(ui: SaltNativeUi, platform: AccountPlatform, title: String, count: Long, action: (() -> Unit) -> Unit, memory: PageMemory, selectedSort: String) {
+private fun CatalogTitle(ui: SaltNativeUi, platform: AccountPlatform, title: String, count: Long, action: (() -> Unit) -> Unit,
+                         memory: PageMemory, selectedSort: String, back: Boolean, folder: Boolean, author: Boolean) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
+        if(back) HeaderIcon(ui,"\u8fd4\u56de\u5217\u8868",HeaderGlyph.BACK) {action {ui.desk().back(platform);memory.localSearch=false;memory.localText=""}}
+        NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch && folder) 0.6f else 1f),maxLines=1)
+        if(folder) {
+            if(memory.localSearch) SearchInput(ui,memory.localText,{memory.localText=it},true,Modifier.weight(1f)) { keyword -> action {ui.desk().filter(keyword)} }
+            HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",HeaderGlyph.SEARCH) { memory.localSearch = !memory.localSearch }
+            HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) { action {ui.desk().playPlaylist()} }
+        }
+        LayoutMenu(ui,memory,action)
+        if(folder || author) SortMenu(ui,platform,selectedSort,author,action)
+    }
+}
+
+@Composable
+private fun SortMenu(ui: SaltNativeUi, platform: AccountPlatform, selectedSort: String, author: Boolean, action: (() -> Unit) -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val palette=ui.palette(currentComposer)
     val offset=with(LocalDensity.current) { 40.dp.roundToPx() }
-    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-        NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch) 0.6f else 1f))
-        if(memory.localSearch) SearchInput(ui,memory.localText,{memory.localText=it},true,Modifier.weight(1f)) { keyword -> action {ui.desk().filter(keyword)} }
-        HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",HeaderGlyph.SEARCH) {
-            memory.localSearch = !memory.localSearch
-        }
-        HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) { action {ui.desk().playPlaylist()} }
-        LayoutMenu(ui,memory)
-        Box {
-            HeaderIcon(ui,"\u6392\u5e8f",HeaderGlyph.SORT) { menu=!menu }
-            if(menu) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={menu=false},properties=PopupProperties(focusable=true)) {
-                Column(Modifier.width(220.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
-                    val sorts = listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f") +
+    Box {
+        HeaderIcon(ui,"\u6392\u5e8f",HeaderGlyph.SORT) { menu=!menu }
+        if(menu) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={menu=false},properties=PopupProperties(focusable=true)) {
+            Column(Modifier.width(220.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
+                val sorts = if(author) listOf(Catalog.Sort.PLAY_COUNT to "\u64ad\u653e\u91cf",Catalog.Sort.DEFAULT to "\u6700\u65b0",Catalog.Sort.REVERSE to "\u9006\u5411\u6392\u5e8f")
+                    else listOf(Catalog.Sort.DEFAULT to "\u9ed8\u8ba4\u987a\u5e8f",Catalog.Sort.REVERSE to "\u5012\u5e8f",Catalog.Sort.TITLE to "\u6807\u9898",Catalog.Sort.ARTIST to "\u4f5c\u8005",Catalog.Sort.DURATION to "\u65f6\u957f") +
                         if (platform == AccountPlatform.BILIBILI) listOf(Catalog.Sort.PLAY_COUNT to "\u64ad\u653e\u91cf") else emptyList()
-                    sorts.forEach { (sort,label) ->
-                        Row(Modifier.fillMaxWidth().clip(palette.shape())
-                            .background(if(selectedSort==sort.name) Color(palette.background().toULong()) else Color.Transparent)
-                            .clickable {menu=false;action {ui.desk().sort(sort)}}.semantics {selected=selectedSort==sort.name}
-                            .padding(horizontal=8.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
-                            if(selectedSort==sort.name) MenuIcon(ui,"\u5df2\u9009\u62e9"+label,"M 4 12 L 9 17 L 20 6") else Spacer(Modifier.width(20.dp))
-                            Spacer(Modifier.width(6.dp))
-                            MenuIcon(ui,label+"\u56fe\u6807",sortVector(sort))
-                            Spacer(Modifier.width(12.dp))
-                            NativeText(ui,label)
-                        }
+                sorts.forEach { (sort,label) ->
+                    Row(Modifier.fillMaxWidth().clip(palette.shape())
+                        .background(if(selectedSort==sort.name) Color(palette.background().toULong()) else Color.Transparent)
+                        .clickable {menu=false;action {ui.desk().sort(sort)}}.semantics {selected=selectedSort==sort.name}
+                        .padding(horizontal=8.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
+                        if(selectedSort==sort.name) MenuIcon(ui,"\u5df2\u9009\u62e9"+label,"M 4 12 L 9 17 L 20 6") else Spacer(Modifier.width(20.dp))
+                        Spacer(Modifier.width(6.dp))
+                        MenuIcon(ui,label+"\u56fe\u6807",sortVector(sort))
+                        Spacer(Modifier.width(12.dp))
+                        NativeText(ui,label)
                     }
                 }
             }
@@ -352,7 +370,7 @@ private fun PlaylistTitle(ui: SaltNativeUi, platform: AccountPlatform, title: St
 }
 
 @Composable
-private fun LayoutMenu(ui: SaltNativeUi,memory: PageMemory) {
+private fun LayoutMenu(ui: SaltNativeUi,memory: PageMemory,action: (() -> Unit) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val palette=ui.palette(currentComposer)
     val offset=with(LocalDensity.current) {40.dp.roundToPx()}
@@ -361,7 +379,7 @@ private fun LayoutMenu(ui: SaltNativeUi,memory: PageMemory) {
         if(open) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={open=false},properties=PopupProperties(focusable=true)) {
             Column(Modifier.width(190.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
                 listOf(ListLayout.SINGLE to "\u5355\u5217\u5217\u8868",ListLayout.DOUBLE to "\u53cc\u5217\u5217\u8868",ListLayout.CARDS to "\u5361\u7247\u5217\u8868").forEach { (layout,label) ->
-                    NativeRow(ui,label,selected=memory.layout==layout,click={memory.layout=layout;open=false}) {
+                    NativeRow(ui,label,selected=memory.layout==layout,click={action {ui.desk().layout(memory.platform,layout.name);memory.layout=layout};open=false}) {
                         MenuIcon(ui,label+"\u56fe\u6807",if(memory.layout==layout) "M 4 12 L 9 17 L 20 6" else "M 4 5 L 20 5 L 20 19 L 4 19 Z")
                     }
                 }
@@ -370,11 +388,25 @@ private fun LayoutMenu(ui: SaltNativeUi,memory: PageMemory) {
     }
 }
 
+// The same cell modifiers and cover inset are shared by headers and rows.
+private fun RowScope.primaryCell() = Modifier.weight(1f).padding(start=12.dp,end=8.dp)
+private fun RowScope.middleCell() = Modifier.weight(0.65f).padding(horizontal=8.dp)
+private fun coverWidth(platform: AccountPlatform, mode: CoverMode) = if(mode==CoverMode.FIT && platform==AccountPlatform.BILIBILI) 100.dp else 56.dp
+
 @Composable
-private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,memory: PageMemory,card: Boolean,compact: Boolean,mode: CoverMode,action: (() -> Unit) -> Unit) {
+private fun TrackStats(ui: SaltNativeUi,row: Map<*,*>,modifier: Modifier=Modifier) {
+    Column(modifier,verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        NativeText(ui,(row["playCount"] as? String) ?: "--",true,Modifier.height(24.dp),maxLines=1)
+        NativeText(ui,(row["duration"] as? String) ?: "--:--",true,Modifier.height(24.dp),maxLines=1)
+    }
+}
+
+@Composable
+private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,memory: PageMemory,card: Boolean,compact: Boolean,mode: CoverMode,middleLabel: String,action: (() -> Unit) -> Unit) {
     val palette=ui.palette(currentComposer)
     val token=row["token"] as String
     val track=row["kind"]=="TRACK"
+    val middle=if(middleLabel=="\u66f4\u65b0\u65f6\u95f4") (row["updated"] as? String).orEmpty() else (row["collection"] as? String).orEmpty()
     val count=(row["count"] as? Number)?.toLong() ?: -1
     val title=(row["title"] as String)+if(!track && count>=0) " ($count)" else ""
     val click={action {if(track) memory.selectedRow=token else {ui.desk().choose(token);memory.localSearch=false;memory.localText=""}}}
@@ -385,36 +417,33 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     val author: @Composable () -> Unit = {
         val label=row["subtitle"] as String
         if(row["author"]==true && label.isNotBlank()) ui.text(label,
-            Modifier.clickable {action {ui.desk().author(token);memory.localSearch=false;memory.localText=""}}
+            Modifier.height(24.dp).clickable {action {ui.desk().author(token);memory.localSearch=false;memory.localText=""}}
                 .semantics {contentDescription="\u4f5c\u8005\u4e3b\u9875"},
-            palette.sub().copy(color=Color(palette.accent().toULong())),currentComposer)
-        else NativeText(ui,label,true)
+            palette.sub().copy(color=Color(palette.accent().toULong())),1,1,currentComposer)
+        else NativeText(ui,label,true,Modifier.height(24.dp),maxLines=1)
     }
     if(card) Column(modifier,verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Cover(ui,token,platform,mode,true)
-        NativeText(ui,title,modifier=Modifier.fillMaxWidth())
+        Cover(ui,token,platform,mode,true,if(track) row else null)
+        NativeText(ui,title,modifier=Modifier.fillMaxWidth(),maxLines=2,minLines=2)
         author()
-        if(track) Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-            NativeText(ui,(row["collection"] as? String).orEmpty(),true,Modifier.weight(1f))
-            NativeText(ui,(row["duration"] as? String) ?: "--:--",true)
-        }
-    } else Row(modifier,verticalAlignment=Alignment.CenterVertically) {
+        if(track && middleLabel.isNotEmpty() && middle.isNotBlank()) NativeText(ui,middle,true,maxLines=1)
+    } else Row(modifier,verticalAlignment=Alignment.Top) {
         Box(Modifier.width(3.dp).height(32.dp).background(if(memory.selectedRow==token) Color(palette.accent().toULong()) else Color.Transparent))
         Spacer(Modifier.width(8.dp))
         Cover(ui,token,platform,mode)
-        Column(Modifier.weight(1f).padding(start=12.dp,end=8.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-            NativeText(ui,title,modifier=Modifier.fillMaxWidth())
+        Column(primaryCell(),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            NativeText(ui,title,modifier=Modifier.fillMaxWidth().height(24.dp),maxLines=1)
             author()
-            if(track && compact && (row["collection"] as? String).orEmpty().isNotBlank()) NativeText(ui,row["collection"] as String,true)
+            if(track && compact && middleLabel.isNotEmpty() && middle.isNotBlank()) NativeText(ui,middle,true)
         }
-        if(track && !compact) NativeText(ui,(row["collection"] as? String).orEmpty(),true,Modifier.weight(0.65f).padding(horizontal=8.dp))
-        if(track) NativeText(ui,(row["duration"] as? String) ?: "--:--",true,Modifier.width(64.dp))
+        if(track && !compact && middleLabel.isNotEmpty()) NativeText(ui,middle,true,middleCell())
+        if(track) TrackStats(ui,row,Modifier.width(80.dp))
     }
 }
 
 @Composable
 private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
-    val memory=remember(ui,platform) { ui.pageMemory(platform) { PageMemory(platform) } as PageMemory }
+    val memory=remember(ui,platform) { ui.pageMemory(platform) { PageMemory(platform,ui.desk().layout(platform)) } as PageMemory }
     var state by remember(ui, platform) { mutableStateOf<NativeDesk.State?>(if(ui.available()) ui.desk().snapshot(platform) else null) }
     var error by remember(ui, platform) { mutableStateOf("") }
     var enabled by remember(ui) { mutableStateOf(ui.available()) }
@@ -443,6 +472,11 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     val playback = state?.playback()
     val login = state?.login()
     val rows = catalog?.get("items") as? List<*>
+    val middleLabel=when(catalog?.get("view")) {
+        "FOLDER","COLLECTION" -> ""
+        "AUTHOR_VIDEOS" -> "\u66f4\u65b0\u65f6\u95f4"
+        else -> if(rows?.any { ((it as? Map<*,*>)?.get("collection") as? String).orEmpty().isNotBlank() }==true) "\u5408\u96c6" else ""
+    }
     val listState = memory.list
     val location=listOf(catalog?.get("view"),catalog?.get("page"),catalog?.get("title"),catalog?.get("filter"),catalog?.get("sort"))
     LaunchedEffect(location) {
@@ -506,31 +540,33 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                     if (catalogError.isNotEmpty()) NativeText(ui, catalogError)
                     val title=catalog?.get("title") as? String ?: ""
                     val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
-                    Column {
-                        if(catalog?.get("back")==true) Row(verticalAlignment=Alignment.CenterVertically) {
-                            HeaderIcon(ui,"\u8fd4\u56de\u5217\u8868",HeaderGlyph.BACK) {action {ui.desk().back()}}
-                            if(catalog["view"] in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")) NativeText(ui,(catalog["authorName"] as? String).orEmpty(),heading=true)
-                        }
-                        if(catalog?.get("view") in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")) NativeButtons(ui,listOf(
+                    val author=catalog?.get("view") in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")
+                    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        CatalogTitle(ui,platform,if(author) (catalog?.get("authorName") as? String).orEmpty() else title,
+                            if(folder || author) (catalog?.get("totalCount") as? Number)?.toLong() ?: -1 else -1,
+                            action,memory,(catalog?.get("sort") as? String) ?: "DEFAULT",catalog?.get("back")==true,folder,catalog?.get("view")=="AUTHOR_VIDEOS")
+                        if(author) NativeButtons(ui,listOf(
                             NativeButton("\u89c6\u9891",catalog?.get("view")=="AUTHOR_VIDEOS") {action {ui.desk().authorTab(false)}},
                             NativeButton("\u5408\u96c6",catalog?.get("view")=="AUTHOR_COLLECTIONS") {action {ui.desk().authorTab(true)}}))
-                        if(folder) PlaylistTitle(ui,platform,title,(catalog?.get("totalCount") as? Number)?.toLong() ?: -1,action,memory,(catalog?.get("sort") as? String) ?: "DEFAULT")
-                        else Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) { NativeText(ui,title,modifier=Modifier.weight(1f));LayoutMenu(ui,memory) }
                         if(catalog?.get("loadingAll")==true) NativeText(ui,"\u6b63\u5728\u6574\u7406\u5408\u96c6 " + catalog["loadProgress"] + " \u9875\uff0c\u5b8c\u6210\u540e\u5e94\u7528\u6392\u5e8f",true)
                     }
                 }
                 if(!rows.isNullOrEmpty() && rows.first().let {(it as? Map<*,*>)?.get("kind")=="TRACK"} && columns==1 && memory.layout==ListLayout.SINGLE) item {
-                    Row(Modifier.fillMaxWidth().padding(horizontal=20.dp)) {
-                        NativeText(ui,if(platform==AccountPlatform.BILIBILI) "\u89c6\u9891 / \u4f5c\u8005" else "\u6b4c\u66f2 / \u4f5c\u8005",true,Modifier.weight(1f))
-                        NativeText(ui,"\u5408\u96c6",true,Modifier.weight(0.65f))
-                        NativeText(ui,"\u65f6\u957f",true,Modifier.width(64.dp))
+                    Row(Modifier.fillMaxWidth().padding(horizontal=8.dp)) {
+                        Spacer(Modifier.width(11.dp+coverWidth(platform,coverMode)))
+                        NativeText(ui,if(platform==AccountPlatform.BILIBILI) "\u89c6\u9891 / \u4f5c\u8005" else "\u6b4c\u66f2 / \u4f5c\u8005",true,primaryCell())
+                        if(!narrow && middleLabel.isNotEmpty()) NativeText(ui,middleLabel,true,middleCell())
+                        Column(Modifier.width(80.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                            NativeText(ui,"\u64ad\u653e\u91cf",true)
+                            NativeText(ui,"\u65f6\u957f",true)
+                        }
                     }
                 }
                 rows?.chunked(columns)?.forEach { group ->
                     item(key=(group.first() as Map<*,*>)["token"] as String) {
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp),verticalAlignment=Alignment.Top) {
                             group.forEach { value ->
-                                Box(Modifier.weight(1f)) {CatalogRow(ui,platform,value as Map<*,*>,memory,memory.layout==ListLayout.CARDS,columns>1 || narrow,coverMode,action)}
+                                Box(Modifier.weight(1f)) {CatalogRow(ui,platform,value as Map<*,*>,memory,memory.layout==ListLayout.CARDS,columns>1 || narrow,coverMode,middleLabel,action)}
                             }
                             repeat(columns-group.size) {Spacer(Modifier.weight(1f))}
                         }
