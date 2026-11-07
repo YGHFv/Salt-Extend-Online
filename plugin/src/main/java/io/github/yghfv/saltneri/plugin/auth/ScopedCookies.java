@@ -51,7 +51,8 @@ public final class ScopedCookies {
     public synchronized void seedNeteaseRefresh(String token) throws IOException {
         if (platform != AccountPlatform.NETEASE || !safeValue(token) || token.isBlank()) throw invalid();
         if (value(URI.create("https://music.163.com/"), "MUSIC_U").isEmpty()) {
-            accept(URI.create("https://music.163.com/"), List.of("MUSIC_U=" + token + "; Path=/; Secure; Max-Age=2592000"));
+            // NeriPlayer seeds confirmed refresh credentials as domain cookies, also covering the audio API.
+            accept(URI.create("https://music.163.com/"), List.of("MUSIC_U=" + token + "; Domain=music.163.com; Path=/; Secure; Max-Age=2592000"));
         }
     }
     public synchronized String header(URI target) throws IOException {

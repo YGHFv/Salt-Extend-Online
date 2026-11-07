@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 
-/** Resolve-only, free full tracks. No entitlement guessing, preview or automatic fallback/retry. */
+/** Resolve-only full tracks. Paid tracks require login and a server-authorized full response, never previews. */
 public final class NeteaseClient {
     @FunctionalInterface interface Opener { HttpURLConnection open(URI uri, byte[] form) throws IOException; }
     public enum Quality {
@@ -77,16 +77,18 @@ public final class NeteaseClient {
         if (accountScope == null || accountScope.isBlank()) throw new IllegalArgumentException("Missing operation scope");
         if (credentials != null && !credentials.accountScope().equals(accountScope)) throw new CancellationException("Account revision changed");
         check(scope);
+        AccountCredentials session = null;
+        try {
         if (credentials != null) {
             // Recheck the original verified identity; do not silently resolve anonymously when it expires.
             try (NeteaseQrClient client = new NeteaseQrClient(clock, new AuthHttp(opener::open))) {
-                AccountCredentials verified = client.verify(credentials, scope); verified.retire();
+                session = client.verify(credentials, scope);
             }
-            boolean hasLogin = java.util.Arrays.stream(credentials.header(AUDIO_API).split(";\\s*"))
+            boolean hasLogin = java.util.Arrays.stream(session.header(AUDIO_API).split(";\\s*"))
                     .anyMatch(cookie -> cookie.startsWith("MUSIC_U=") && cookie.length() > 8);
             if (!hasLogin) throw new IOException("NetEase account cookie does not cover the audio API host");
         }
-        Map<String, Object> detail = successful(json(URI.create("https://music.163.com/api/song/detail?ids=%5B" + target.songId() + "%5D"), null, scope));
+        Map<String, Object> detail = successful(json(URI.create("https://music.163.com/api/song/detail?ids=%5B" + target.songId() + "%5D"), null, scope, session));
         Map<String, Object> song = exact(detail.get("songs"), target.songId());
         fee(song.get("fee")); if (numberOrZero(song.get("status")) < 0 || numberOrZero(song.get("st")) < 0) throw new PlatformRejected(-1);
         if (detail.get("privileges") != null) {
@@ -107,7 +109,7 @@ public final class NeteaseClient {
         URI cover = cover(album.get("picUrl"));
         Map<String, Object> parameters = new LinkedHashMap<>(); parameters.put("ids", "[" + target.songId() + "]");
         parameters.put("level", quality.key()); parameters.put("encodeType", "flac");
-        Map<String, Object> data = exact(successful(json(AUDIO_API, NeteaseEapi.form(parameters), scope)).get("data"), target.songId());
+        Map<String, Object> data = exact(successful(json(AUDIO_API, NeteaseEapi.form(parameters), scope, session)).get("data"), target.songId());
         long dataCode = BoundedJson.integer(data.get("code")); if (dataCode != 200) throw new PlatformRejected(dataCode);
         fee(data.get("fee"));
         if (data.get("freeTrialInfo") != null || flag(data.get("isPreview")) || flag(data.get("isTrial"))) throw new PlatformRejected(-1);
@@ -135,8 +137,9 @@ public final class NeteaseClient {
         check(scope);
         MediaLease lease = new MediaLease(MediaLease.Platform.NETEASE, probe.uri(), HEADERS, accountScope, probe.expiresAt(), probe.length());
         return new Resolved(TrackKey.netease(Long.toString(target.songId())), metadata, cover, audioDuration, kbps, level, mime, lease, probe.expiresAt());
+        } finally { if (session != null) session.retire(); }
     }
-    private Map<String, Object> json(URI uri, byte[] form, RequestScope scope) throws IOException {
+    private Map<String, Object> json(URI uri, byte[] form, RequestScope scope, AccountCredentials session) throws IOException {
         boolean detail = "music.163.com".equals(uri.getHost()) && "/api/song/detail".equals(uri.getPath()) && form == null;
         boolean audio = AUDIO_API.equals(uri) && form != null;
         if (!(detail || audio) || !"https".equals(uri.getScheme()) || uri.getRawUserInfo() != null || uri.getRawFragment() != null) throw invalid();
@@ -145,7 +148,7 @@ public final class NeteaseClient {
             connection.setInstanceFollowRedirects(false); connection.setUseCaches(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
             connection.setRequestMethod(form == null ? "GET" : "POST"); HEADERS.forEach(connection::setRequestProperty);
             connection.setRequestProperty("Accept", "application/json"); connection.setRequestProperty("Accept-Encoding", "identity");
-            if (credentials != null) connection.setRequestProperty("Cookie", credentials.header(uri));
+            if (session != null) connection.setRequestProperty("Cookie", session.header(uri));
             int status = connection.getResponseCode(); check(scope); if (status != 200) throw new PlatformRejected(status);
             Map<String, Object> result = JsonResponse.read(connection, scope, true); check(scope); return result;
         } finally { scope.release(connection); }
@@ -165,8 +168,9 @@ public final class NeteaseClient {
     private static long positive(Object value) throws IOException { long n = BoundedJson.integer(value); if (n <= 0) throw invalid(); return n; }
     private static long numberOrZero(Object value) throws IOException { return value == null ? 0 : BoundedJson.integer(value); }
     private static boolean flag(Object value) throws IOException { return value instanceof Boolean b ? b : numberOrZero(value) != 0; }
-    private static void fee(Object value) throws IOException {
-        long fee = BoundedJson.integer(value); if (fee != 0 && fee != 8) throw new PlatformRejected(-1);
+    private void fee(Object value) throws IOException {
+        long fee = BoundedJson.integer(value);
+        if (fee != 0 && fee != 8 && !(credentials != null && (fee == 1 || fee == 4))) throw new PlatformRejected(-1);
     }
     private static String label(Object value, boolean optional) throws IOException {
         if (value == null && optional) return ""; String text = BoundedJson.string(value);

@@ -54,7 +54,8 @@ public final class CatalogClient {
                     var song = songs.get(songId);
                     if (song == null) { items.add(new Item(Kind.TRACK, Long.toString(songId), "Unavailable #" + songId, "Missing/deleted track", 0, false)); continue; }
                     long fee = number(song.get("fee"), -1), duration = number(alias(song, "dt", "duration"), 0);
-                    boolean enabled = (fee == 0 || fee == 8) && number(alias(song, "st", "status"), 0) >= 0 && duration > 0;
+                    boolean enabled = (fee == 0 || fee == 8 || account != null && (fee == 1 || fee == 4))
+                            && number(alias(song, "st", "status"), 0) >= 0 && duration > 0;
                     List<String> artists = new ArrayList<>(); Object artistRows = alias(song, "ar", "artists");
                     if (artistRows != null) for (Object row : bounded(array(artistRows), 64)) artists.add(text(object(row).get("name")));
                     Object album = alias(song, "al", "album");

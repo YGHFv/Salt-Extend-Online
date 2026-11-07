@@ -25,26 +25,39 @@ public final class AuthHttp {
         boolean netease = "music.163.com".equals(uri.getHost()) && Set.of("/weapi/login/qrcode/unikey", "/weapi/login/qrcode/client/login", "/weapi/w/nuser/account/get").contains(uri.getPath());
         if (!"https".equals(uri.getScheme()) || (uri.getPort() != -1 && uri.getPort() != 443) || uri.getRawUserInfo() != null || uri.getRawFragment() != null
                 || !(bili || nav || netease) || (form == null) == netease) throw new IOException("Invalid login API target");
-        scope.check(); HttpURLConnection connection = opener.open(uri, form); scope.attach(connection);
+        var stage = AuthFailure.stage(uri.getPath());
+        scope.check(); HttpURLConnection connection;
+        try { connection = opener.open(uri, form); }
+        catch (IOException error) { throw AuthFailure.wrap(stage, AuthFailure.Reason.NETWORK, error); }
+        scope.attach(connection);
         try {
             connection.setInstanceFollowRedirects(false); connection.setUseCaches(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
             connection.setRequestMethod(form == null ? "GET" : "POST");
             connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36");
             connection.setRequestProperty("Referer", netease ? "https://music.163.com/" : "https://passport.bilibili.com/login");
             connection.setRequestProperty("Accept", "application/json"); connection.setRequestProperty("Accept-Encoding", "identity");
-            if (netease) { connection.setRequestProperty("Origin", "https://music.163.com"); connection.setRequestProperty("x-os", "web"); }
+            if (netease) {
+                connection.setRequestProperty("Origin", "https://music.163.com"); connection.setRequestProperty("x-os", "web");
+                connection.setRequestProperty("Accept-Language", "zh-CN,zh-Hans;q=0.9");
+                connection.setRequestProperty("Cache-Control", "no-cache"); connection.setRequestProperty("Pragma", "no-cache");
+                connection.setRequestProperty("x-channelsource", "undefined"); connection.setRequestProperty("nm-gcore-status", "1");
+            }
             String cookie = cookies.header(uri); if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
             for (var header : extras.entrySet()) {
                 if (!Set.of("x-loginmethod", "x-login-chain-id").contains(header.getKey().toLowerCase(Locale.ROOT))) throw new IOException("Invalid login API header");
                 connection.setRequestProperty(header.getKey(), header.getValue());
             }
             int status = connection.getResponseCode(); scope.check();
-            if (status != 200) throw new IOException("Login HTTP rejected (status " + status + ")");
-            Map<String, Object> json = JsonResponse.read(connection, scope, true);
-            cookies.accept(uri, JsonResponse.setCookies(connection));
+            if (status != 200) throw AuthFailure.code(stage, AuthFailure.Reason.HTTP, status);
+            Map<String, Object> json;
+            try { json = JsonResponse.read(connection, scope, true); }
+            catch (IOException error) { throw AuthFailure.wrap(stage, AuthFailure.Reason.RESPONSE, error); }
+            try { cookies.accept(uri, JsonResponse.setCookies(connection)); }
+            catch (IOException error) { throw AuthFailure.wrap(stage, AuthFailure.Reason.COOKIE, error); }
             String refresh = connection.getHeaderField("x-refresh-token");
             if (refresh != null && (refresh.length() > 4096 || refresh.chars().anyMatch(c -> c < 33 || c > 126))) throw new IOException("Invalid login refresh token");
             return new Response(json, refresh == null ? "" : refresh);
-        } finally { scope.release(connection); }
+        } catch (IOException error) { throw AuthFailure.wrap(stage, AuthFailure.Reason.NETWORK, error); }
+        finally { scope.release(connection); }
     }
 }

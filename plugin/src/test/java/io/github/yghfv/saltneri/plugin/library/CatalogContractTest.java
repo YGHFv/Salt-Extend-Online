@@ -93,6 +93,10 @@ public final class CatalogContractTest {
                 Fixture fixture = new Fixture(); Page mine = fixture.load(new Query(platform, View.MINE, 0, 1), account);
                 check(mine.title().equals(platform==AccountPlatform.BILIBILI ? "\u6536\u85cf" : "\u6211\u7684\u6b4c\u5355"));
                 check(fixture.load(new Query(platform,View.SAVED,0,1),account).title().equals("\u8ba2\u9605"));
+                if(platform==AccountPlatform.NETEASE) {
+                    var contents=fixture.load(new Query(platform,View.FOLDER,10,1),account);
+                    check(contents.items().get(1).enabled() && !contents.items().get(2).enabled());
+                }
                 check(mine.items().size() == 2 && mine.hasMore()); check(fixture.requests.getFirst().getRequestProperty("Cookie").contains("COOKIE_SECRET"));
                 if (platform == AccountPlatform.NETEASE) { check(mine.items().getFirst().subtitle().equals("Fixture creator")); Page saved = fixture.load(new Query(platform, View.SAVED, 0, 2), account); check(saved.items().size() == 1 && saved.items().getFirst().target().equals("12")); }
                 else { check(mine.items().getFirst().enabled()); check(!mine.items().getLast().enabled()); Page videos = fixture.load(new Query(platform, View.FOLDER, 20, 1), account); check(videos.items().getFirst().target().equals("BV17x411w7KC")); check(videos.items().getFirst().enabled() && !videos.items().getLast().enabled()); }

@@ -33,10 +33,11 @@ public final class AuthProtocolContractTest {
     }
     static final class Response extends HttpURLConnection {
         final String json; final List<String> cookies; final String refresh; boolean disconnected;
+        int status=200; String contentType="application/json";
         Response(URI uri, String json, List<String> cookies, String refresh) throws IOException { super(uri.toURL()); this.json = json; this.cookies = cookies; this.refresh = refresh; }
-        public void connect() { } public int getResponseCode() { return 200; }
+        public void connect() { } public int getResponseCode() { return status; }
         public java.io.InputStream getInputStream() { return new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8)); }
-        public String getHeaderField(String name) { return name.equalsIgnoreCase("Content-Type") ? "application/json" : name.equalsIgnoreCase("x-refresh-token") ? refresh : null; }
+        public String getHeaderField(String name) { return name.equalsIgnoreCase("Content-Type") ? contentType : name.equalsIgnoreCase("x-refresh-token") ? refresh : null; }
         public Map<String,List<String>> getHeaderFields() { return Map.of("Set-Cookie", cookies); }
         public void disconnect() { disconnected = true; } public boolean usingProxy() { return false; }
     }
@@ -114,12 +115,52 @@ public final class AuthProtocolContractTest {
             check(client.poll(session,scope).state()==QrAuthClient.State.WAITING_SCAN);
             check(client.poll(session,scope).state()==QrAuthClient.State.WAITING_CONFIRMATION);
             var result=client.poll(session,scope); check(result.credentials().userId().equals("42"));
+            check(result.credentials().header(URI.create("https://interface.music.163.com/eapi/song/enhance/player/url/v1")).contains("MUSIC_U=COOKIE_SECRET"));
+            fails(()->result.credentials().header(URI.create("https://m7.music.126.net/audio")));
+            var restored=client.verify(result.credentials(),scope);
+            check(restored.header(URI.create("https://interface.music.163.com/")).contains("MUSIC_U=COOKIE_SECRET")); restored.retire();
             check(netRequests.getLast().getRequestProperty("Cookie").contains("MUSIC_U=COOKIE_SECRET"));
+            check(netRequests.stream().allMatch(r->"1".equals(r.getRequestProperty("nm-gcore-status")) && "undefined".equals(r.getRequestProperty("x-channelsource"))));
             check(netRequests.get(1).getRequestProperty("x-loginmethod").equals("QrCode")); result.credentials().retire();
         }
         try (NeteaseQrClient invalid=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body) -> new Response(uri,"{\"code\":803}",List.of(),null))); RequestScope scope=new RequestScope(() -> true)) {
             fails(() -> invalid.poll(new QrAuthClient.Session(KEY,URI.create("https://music.163.com/"),"chain",CLOCK.instant().plusSeconds(10)),scope));
         }
+        ScopedCookies seeded=new ScopedCookies(AccountPlatform.NETEASE,CLOCK);
+        seeded.seedNeteaseRefresh("COOKIE_SECRET"); seeded.seedNeteaseRefresh("DO_NOT_REPLACE");
+        check(seeded.value(URI.create("https://interface.music.163.com/"),"MUSIC_U").equals("COOKIE_SECRET"));
+        seeded.clear(); seeded.accept(URI.create("https://music.163.com/"),List.of("MUSIC_U=HOST_SECRET; Path=/; Secure")); seeded.seedNeteaseRefresh("DO_NOT_REPLACE");
+        check(seeded.value(URI.create("https://interface.music.163.com/"),"MUSIC_U").isEmpty());
+        for(String profile:List.of("null","{}","{\"nickname\":\"Fixture\"}","{\"userId\":42}")) {
+            try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->new Response(uri,"{\"code\":200,\"account\":{\"id\":42},\"profile\":"+profile+"}",List.of(),null)));
+                var request=new RequestScope(()->true)) {
+                var saved=credentials(AccountPlatform.NETEASE); var verified=client.verify(saved,request);
+                check(verified.userId().equals("42")); saved.retire(); verified.retire();
+            }
+        }
+        for(String path:List.of("/weapi/login/qrcode/unikey","/weapi/login/qrcode/client/login","/weapi/w/nuser/account/get")) {
+            for(int mode=0;mode<5;mode++) {
+                final int selected=mode; var jar=new ScopedCookies(AccountPlatform.NETEASE,CLOCK);
+                var http=new AuthHttp((uri,body)->{
+                    if(selected==0) throw new java.net.SocketTimeoutException("COOKIE_SECRET https://secret.invalid");
+                    var response=new Response(uri,selected==2?"COOKIE_SECRET":"{}",selected==4?List.of("bad=COOKIE_SECRET; Domain=evil.invalid"):List.of(),null);
+                    if(selected==1) response.status=429; if(selected==3) response.contentType="text/html"; return response;
+                });
+                try(var request=new RequestScope(()->true)) {
+                    try { http.exchange(URI.create("https://music.163.com"+path),NeteaseWeapi.form(Map.of()),jar,Map.of(),request); throw new AssertionError("Expected safe failure"); }
+                    catch(AuthFailure expected) {
+                        String reason=switch(mode) {case 0->"TIMEOUT";case 1->"HTTP=429";case 4->"COOKIE";default->"RESPONSE";};
+                        check(expected.getMessage().equals(AuthFailure.stage(path)+"/"+reason));
+                        check(expected.getCause()==null && !AuthFailure.diagnostic(expected).contains("SECRET"));
+                    }
+                }
+            }
+        }
+        try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->new Response(uri,"{\"code\":-462,\"message\":\"COOKIE_SECRET\"}",List.of(),null)));var request=new RequestScope(()->true)) {
+            try { client.create(request); throw new AssertionError("Expected API failure"); }
+            catch(AuthFailure expected) { check(expected.getMessage().equals("NET_CREATE/API=-462")); }
+        }
+        check(!AuthFailure.diagnostic(new IOException("COOKIE_SECRET")).contains("COOKIE_SECRET"));
         System.out.println("PASS: "+checks+" QR protocol / scoped-cookie / WEAPI checks (fake HTTP, no real account)");
     }
     private static String decrypt(String text,String key) throws Exception {

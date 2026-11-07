@@ -179,7 +179,7 @@ public final class AccountLoginController implements AutoCloseable {
     }
     private synchronized void fail(Operation operation, Throwable error) {
         if (!valid(operation)) return; operation.cancel(); phase = Phase.ERROR;
-        status = "Login stopped (" + error.getClass().getSimpleName() + "). No risk-control retry, TLS bypass or secret logged.";
+        status = AuthFailure.diagnostic(error);
     }
     public synchronized void cancelLogin() {
         if (closed || phase == Phase.LOGGED_IN) return; startupAttempted = true; discardOperation(); phase = Phase.IDLE; status = "Pending login cancelled; QR invalid locally.";

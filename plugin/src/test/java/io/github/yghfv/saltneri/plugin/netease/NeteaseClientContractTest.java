@@ -62,7 +62,7 @@ public final class NeteaseClientContractTest {
             };
         }
         public String getHeaderField(String name) { return headers.get(name); }
-        public Map<String, List<String>> getHeaderFields() { return Map.of(); }
+        public Map<String, List<String>> getHeaderFields() { return headers.containsKey("Set-Cookie") ? Map.of("Set-Cookie",List.of(headers.get("Set-Cookie"))) : Map.of(); }
         public long getContentLengthLong() { return headers.containsKey("Content-Length") ? Long.parseLong(headers.get("Content-Length")) : -1; }
         public void disconnect() { disconnected = true; }
         public boolean usingProxy() { return false; }
@@ -74,6 +74,7 @@ public final class NeteaseClientContractTest {
         Map<String, String> mediaHeaders = Map.of("Content-Length", "1", "Content-Range", "bytes 0-0/4096");
         byte[] mediaBytes = new byte[]{42, 77}; Consumer<URI> before = uri -> { };
         String redirect; boolean redirected;
+        String refreshedCookie;
         final List<Response> requests = new ArrayList<>(); final List<byte[]> forms = new ArrayList<>();
         public HttpURLConnection open(URI uri, byte[] form) throws IOException {
             before.accept(uri); forms.add(form);
@@ -86,6 +87,7 @@ public final class NeteaseClientContractTest {
                 try (GZIPOutputStream gzip = new GZIPOutputStream(compressed)) { gzip.write(bytes); } bytes = compressed.toByteArray();
             }
             int code = json == null ? mediaStatus : status; Map<String, String> headers = json == null ? mediaHeaders : apiHeaders;
+            if(uri.getPath().equals("/weapi/w/nuser/account/get") && refreshedCookie!=null) { headers=new LinkedHashMap<>(headers); headers.put("Set-Cookie",refreshedCookie); }
             if (json == null && redirect != null && !redirected) { redirected = true; code = 302; headers = Map.of("Location", redirect); }
             Response response = new Response(uri, code, headers, bytes);
             requests.add(response); return response;
@@ -197,6 +199,17 @@ public final class NeteaseClientContractTest {
             check(signedResult.lease().belongsTo(account.accountScope())); check(signedIn.requests.size() == 4);
             check(signedIn.requests.subList(0, 3).stream().allMatch(r -> r.getRequestProperty("Cookie").contains("COOKIE_SECRET")));
             check(signedIn.requests.getLast().getRequestProperty("Cookie") == null);
+            Fixture rotated=new Fixture(); rotated.refreshedCookie="MUSIC_U=ROTATED_SECRET; Domain=music.163.com; Path=/; Secure; Max-Age=3600";
+            check(resolve(rotated,account).lease().belongsTo(account.accountScope()));
+            check(rotated.requests.subList(1,3).stream().allMatch(r->r.getRequestProperty("Cookie").contains("ROTATED_SECRET") && !r.getRequestProperty("Cookie").contains("COOKIE_SECRET")));
+            check(rotated.requests.getLast().getRequestProperty("Cookie")==null && account.isActive());
+            for(int fee:List.of(1,4)) {
+                Fixture entitled=new Fixture(); entitled.detail=DETAIL.replace("\"fee\":0","\"fee\":"+fee); entitled.audio=AUDIO.replace("\"fee\":0","\"fee\":"+fee);
+                check(resolve(entitled,account).durationMillis()==120000);
+                entitled.audio=entitled.audio.replace("\"freeTrialInfo\":null","\"freeTrialInfo\":{\"start\":0,\"end\":30}");
+                fails(()->resolve(entitled,account));
+                entitled.audio=AUDIO.replace("\"url\":\""+MEDIA+"\"","\"url\":null"); fails(()->resolve(entitled,account));
+            }
             Fixture mismatch = new Fixture(); mismatch.account = mismatch.account.replace("42", "43"); fails(() -> resolve(mismatch, account)); check(mismatch.requests.size() == 1);
             Fixture expired = new Fixture(); expired.account = "{\"code\":301}"; fails(() -> resolve(expired, account)); check(expired.requests.size() == 1);
             Fixture wrongScope = new Fixture(); try (RequestScope request = new RequestScope(() -> true)) { fails(() -> wrongScope.client(account).resolve(TARGET, NeteaseClient.Quality.HIGH, "wrong", request)); } check(wrongScope.requests.isEmpty());
@@ -205,6 +218,11 @@ public final class NeteaseClientContractTest {
         } finally { account.retire(); }
         AccountCredentials hostOnly = credentials(false);
         try { Fixture scoped = new Fixture(); fails(() -> resolve(scoped, hostOnly)); check(scoped.requests.size() == 1); } finally { hostOnly.retire(); }
+        var seeded=new ScopedCookies(AccountPlatform.NETEASE,CLOCK); seeded.seedNeteaseRefresh("REFRESH_SECRET");
+        var qrAccount=new AccountCredentials(AccountPlatform.NETEASE,"42",seeded.snapshot(),CLOCK);
+        try { Fixture fromQr=new Fixture(); check(resolve(fromQr,qrAccount).lease().belongsTo(qrAccount.accountScope()));
+            check(fromQr.requests.get(2).getRequestProperty("Cookie").contains("REFRESH_SECRET") && fromQr.requests.getLast().getRequestProperty("Cookie")==null);
+        } finally {qrAccount.retire();}
         System.out.println("PASS: " + checks + " NetEase target/EAPI/full-track/scope checks (fake API/CDN, no playback)");
     }
 }
