@@ -4,6 +4,8 @@ import io.github.yghfv.saltneri.plugin.auth.*;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import static io.github.yghfv.saltneri.plugin.library.Catalog.*;
 
 public final class PlaylistWorkflowContractTest {
@@ -55,9 +57,56 @@ public final class PlaylistWorkflowContractTest {
             check(playlist.items().get(1).target().equals("45") && playlist.items().getLast().target().equals("3"));
             library.filter(""); library.sort(Sort.DEFAULT); check(rows(library).getFirst().get("title").equals("Song 01"));
             library.sort(Sort.DURATION); check(rows(library).getFirst().get("title").equals("Song 01"));
+            library.turn(1); ready(library); count=requests.get();
+            library.requestPlaylist(); library.reload(); ready(library);
+            check(requests.get()==count+3 && library.snapshot().get("page").equals(2));
+            check(library.snapshot().get("sort").equals("DURATION") && rows(library).getFirst().get("title").equals("Song 21"));
+            check(library.takePlaylist()==null && !library.currentRow(token));
+            library.filter("Song 45"); ready(library); count=requests.get(); library.reload(); ready(library);
+            check(requests.get()==count+3 && library.snapshot().get("filter").equals("Song 45") && rows(library).size()==1);
+            check(library.snapshot().get("totalCount").equals(45L));
             library.accountChanged(AccountPlatform.BILIBILI); check(rows(library).isEmpty() && !library.currentRow(token));
             library.snapshot(AccountPlatform.NETEASE); check(rows(library).size()==1);
         }
-        System.out.println("PASS: "+checks+" platform-local navigation, whole-list filter/sort, unfiltered replacement intent and revocation checks");
+        searchAndRetry();
+        System.out.println("PASS: "+checks+" platform-local navigation, whole-list filter/sort, search/retry, unfiltered replacement intent and revocation checks");
+    }
+    private static void searchAndRetry() throws Exception {
+        var requests=new AtomicInteger(); var queried=new AtomicReference<Query>(); var fail=new AtomicBoolean();
+        var shrink=new AtomicBoolean();
+        try(LibraryController library=new LibraryController(p->null,()->true,t->{throw new AssertionError("Search/refresh played");},()->{},Clock.systemUTC(),account->(q,k,s,r)->{
+            requests.incrementAndGet(); queried.set(q);
+            if(fail.get()) throw CatalogFailure.code(CatalogFailure.Stage.NET_SEARCH,CatalogFailure.Reason.HTTP,429);
+            if(q.view()!=View.SEARCH) return new Page("Bili folder",List.of(new Item(Kind.FOLDER,"10","Folder","",1,true)),false,Instant.MAX,1);
+            var fixture=new CatalogContractTest.Fixture();
+            if(shrink.get()) fixture.netSearch=q.page()>1 ? "{\"code\":200,\"result\":{\"songCount\":1,\"songs\":[]}}"
+                    : fixture.netSearch.replace("\"songCount\":21","\"songCount\":1");
+            return new CatalogClient(null,CatalogContractTest.CLOCK,fixture).load(q,r);
+        })) {
+            library.browse(AccountPlatform.BILIBILI,View.MINE); ready(library); String biliToken=(String)rows(library).getFirst().get("token");
+            library.search(AccountPlatform.NETEASE,"music"); ready(library);
+            check(queried.get().platform()==AccountPlatform.NETEASE && queried.get().keyword().equals("music"));
+            check(rows(library).size()==1 && rows(library).getFirst().get("title").equals("Free"));
+            check(library.snapshot().get("totalPages").equals(2) && library.snapshot().get("more").equals(true));
+            library.turn(1); ready(library); var second=queried.get(); String token=(String)rows(library).getFirst().get("token");
+            check(second.page()==2 && second.keyword().equals("music") && library.snapshot().get("more").equals(false));
+            int before=requests.get(); library.snapshot(AccountPlatform.BILIBILI);
+            check(rows(library).getFirst().get("token").equals(biliToken));
+            library.snapshot(AccountPlatform.NETEASE); check(rows(library).getFirst().get("token").equals(token) && requests.get()==before);
+            fail.set(true); library.reload();
+            long until=System.nanoTime()+3_000_000_000L;
+            while(library.snapshot().get("error").toString().isEmpty() && System.nanoTime()<until) Thread.sleep(10);
+            check(library.snapshot().get("error").toString().contains("NET_SEARCH/HTTP=429"));
+            check(rows(library).isEmpty() && !library.currentRow(token) && requests.get()==before+1);
+            Thread.sleep(100); check(requests.get()==before+1 && library.takePlaylist()==null);
+            fail.set(false); library.reload(); ready(library);
+            check(queried.get().equals(second) && rows(library).size()==1 && library.snapshot().get("error").equals(""));
+            shrink.set(true); before=requests.get(); library.reload(); ready(library);
+            check(requests.get()==before+2 && queried.get().page()==1 && library.snapshot().get("page").equals(1));
+            check(library.snapshot().get("totalPages").equals(1) && library.snapshot().get("more").equals(false) && rows(library).size()==1);
+            library.accountChanged(AccountPlatform.NETEASE); check(rows(library).isEmpty());
+            try { library.reload(); throw new AssertionError("Revoked query refreshed"); } catch(IllegalStateException expected) { checks++; }
+            library.snapshot(AccountPlatform.BILIBILI); check(library.currentRow(biliToken));
+        }
     }
 }

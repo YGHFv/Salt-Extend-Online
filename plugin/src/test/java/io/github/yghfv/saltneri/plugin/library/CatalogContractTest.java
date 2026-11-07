@@ -45,10 +45,16 @@ public final class CatalogContractTest {
         String personal = "{\"code\":200,\"more\":true,\"playlist\":[{\"id\":10,\"name\":\"Liked\",\"trackCount\":22,\"creator\":{\"userId\":42,\"nickname\":\"Fixture creator\"},\"specialType\":5},{\"id\":11,\"name\":\"Mine\",\"creator\":{\"userId\":42,\"nickname\":\"Fixture creator\"}},{\"id\":12,\"name\":\"Saved\",\"creator\":{\"userId\":99},\"subscribed\":true}]}";
         String detail = "{\"code\":200,\"playlist\":{\"id\":10,\"name\":\"Playlist\",\"trackIds\":[{\"id\":1},{\"id\":2},{\"id\":3}]}}";
         String songs = "{\"code\":200,\"songs\":[{\"id\":2,\"name\":\"Paid\",\"fee\":1,\"dt\":120000,\"ar\":[]},{\"id\":1,\"name\":\"Free\",\"fee\":0,\"duration\":120000,\"artists\":[{\"name\":\"Artist\"}]}]}";
+        String netSearch = "{\"code\":200,\"result\":{\"songCount\":21,\"songs\":["
+                + "{\"id\":1,\"name\":\"Free\",\"fee\":0,\"dt\":120000,\"ar\":[{\"name\":\"A\"},{\"name\":\"B\"}],\"al\":{\"picUrl\":\"http://p1.music.126.net/cover.jpg\"}},"
+                + "{\"id\":2,\"name\":\"Paid\",\"fee\":1,\"duration\":180000,\"artists\":[{\"name\":\"Legacy artist\"}],\"album\":{\"picUrl\":\"https://p2.music.126.net/legacy.jpg\"}},"
+                + "{\"id\":3,\"name\":\"Deleted\",\"fee\":0,\"dt\":120000,\"st\":-1},{\"id\":0,\"name\":\"Invalid\"},"
+                + "{\"id\":1,\"name\":\"Duplicate\"},{\"id\":4,\"name\":\" \"}]}}";
+        byte[] searchForm;
         String created = "{\"code\":0,\"data\":{\"count\":30,\"list\":[{\"id\":20,\"mid\":42,\"title\":\"Favorites\",\"media_count\":5},{\"season_id\":30,\"name\":\"Collection\",\"type\":21}]}}";
         String resources = "{\"code\":0,\"data\":{\"info\":{\"id\":20,\"title\":\"Favorites\"},\"has_more\":true,\"medias\":[{\"id\":1,\"type\":2,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60},{\"id\":2,\"type\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
         String collection = "{\"code\":0,\"data\":{\"meta\":{\"season_id\":30,\"mid\":99,\"name\":\"Collection\",\"total\":21},\"page\":{\"total\":21},\"archives\":[{\"aid\":1,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60,\"pic\":\"//i0.hdslb.com/fixture.jpg\"},{\"aid\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
-        String identity = "42"; boolean csrf = true;
+        String identity = "42"; boolean csrf = true, preheated;
         String nextCreated;
         String search = "{\"code\":0,\"data\":{\"page\":1,\"pagesize\":20,\"numResults\":21,\"numPages\":2,\"result\":["
                 + "{\"type\":\"video\",\"bvid\":\"BV17x411w7KC\",\"title\":\"A <em class=\\\"keyword\\\">song</em> &amp; music\",\"author\":\"Artist\",\"duration\":\"04:16\",\"pic\":\"//i0.hdslb.com/song.jpg\"},"
@@ -64,6 +70,7 @@ public final class CatalogContractTest {
                 case "/x/web-interface/nav" -> "{\"code\":0,\"data\":{\"isLogin\":true,\"mid\":" + identity + ",\"wbi_img\":{\"img_url\":\"https://i0.hdslb.com/bfs/wbi/abcdefghijklmnopqrstuvwxyz012345.png\",\"sub_url\":\"https://i0.hdslb.com/bfs/wbi/012345abcdefghijklmnopqrstuvwxyz.png\"}}}";
                 case "/weapi/personalized/playlist" -> discovery; case "/weapi/user/playlist" -> personal;
                 case "/api/v6/playlist/detail" -> detail; case "/api/song/detail" -> songs;
+                case "/weapi/cloudsearch/get/web" -> netSearch;
                 case "/x/v3/fav/folder/created/list", "/x/v3/fav/folder/collected/list" -> created;
                 case "/x/v3/fav/resource/list" -> resources;
                 case "/x/polymer/web-space/seasons_archives_list" -> collection;
@@ -72,7 +79,9 @@ public final class CatalogContractTest {
             };
             if (uri.getPath().endsWith("/collected/list") && uri.getQuery().contains("pn=2") && nextCreated != null) json = nextCreated;
             if (uri.getPath().endsWith("/seasons_archives_list") && uri.getQuery().contains("page_size=1&")) json = collectionArtwork;
-            if (uri.getPath().startsWith("/weapi/") && !uri.getPath().contains("account/get")) { check(form != null); check(uri.getRawQuery().equals("csrf_token=fixture_csrf")); }
+            if (uri.getPath().equals("/") && csrf) preheated=true;
+            if (uri.getPath().startsWith("/weapi/") && !uri.getPath().contains("account/get")) { check(form != null); check(uri.getRawQuery().equals("csrf_token="+(preheated ? "fixture_csrf" : ""))); }
+            if (uri.getPath().equals("/weapi/cloudsearch/get/web")) searchForm = form.clone();
             Response response = new Response(uri, json, uri.getPath().equals("/") && csrf ? List.of("__csrf=fixture_csrf; Path=/; Secure") : List.of());
             if (uri.getPath().equals(statusPath)) response.status = status;
             if (uri.getPath().equals(htmlPath)) response.contentType = "text/html";
@@ -82,7 +91,7 @@ public final class CatalogContractTest {
     }
     public static void main(String[] args) throws Exception {
         Fixture publicPage = new Fixture(); Page discovery = publicPage.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null);
-        check(discovery.items().size() == 1 && !discovery.hasMore()); check(publicPage.requests.size() == 2); check(publicPage.requests.stream().noneMatch(r -> String.valueOf(r.getRequestProperty("Cookie")).contains("MUSIC_U")));
+        check(discovery.items().size() == 1 && !discovery.hasMore()); check(publicPage.requests.size() == 1); check(publicPage.requests.stream().noneMatch(r -> String.valueOf(r.getRequestProperty("Cookie")).contains("MUSIC_U")));
         check(publicPage.requests.stream().allMatch(r -> r.disconnected));
         Page publicSongs = new Fixture().load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null);
         check(publicSongs.items().size() == 3); check(publicSongs.items().get(0).target().equals("1") && publicSongs.items().get(0).enabled());
@@ -107,8 +116,14 @@ public final class CatalogContractTest {
             safeFailure(() -> new Fixture().load(new Query(platform, View.MINE, 0, 1), null),
                     platform == AccountPlatform.BILIBILI ? Stage.BILI_CREATED : Stage.NET_PLAYLISTS, Reason.LOGIN_REQUIRED, null);
         }
-        Fixture missingCsrf = new Fixture(); missingCsrf.csrf = false; fails(() -> missingCsrf.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null)); check(missingCsrf.requests.size() == 1);
-        safeFailure(() -> missingCsrf.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null), Stage.NET_CSRF, Reason.CSRF, null);
+        Fixture missingCsrf = new Fixture(); missingCsrf.csrf = false;
+        check(missingCsrf.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null).items().size()==1 && missingCsrf.requests.size()==1);
+        AccountCredentials csrfAccount=account(AccountPlatform.NETEASE);
+        try {
+            Fixture authenticated=new Fixture(); authenticated.csrf=false;
+            safeFailure(()->authenticated.load(new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0,"music"),csrfAccount),Stage.NET_CSRF,Reason.CSRF,null);
+            check(authenticated.requests.size()==2 && authenticated.requests.stream().noneMatch(r->r.getURL().getPath().contains("cloudsearch")));
+        } finally { csrfAccount.retire(); }
         AccountCredentials bili = account(AccountPlatform.BILIBILI);
         try {
             Fixture results = new Fixture();
@@ -127,7 +142,7 @@ public final class CatalogContractTest {
             safeFailure(() -> results.load(searchQuery,bili),Stage.BILI_SEARCH,Reason.API,-412L);
             safeFailure(() -> results.load(searchQuery,null),Stage.BILI_SEARCH,Reason.LOGIN_REQUIRED,null);
             for(String invalid : List.of("", " ", "a\nb", "x".repeat(101))) fails(() -> new Query(AccountPlatform.BILIBILI,View.SEARCH,0,1,0,invalid));
-            fails(() -> new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0,"music"));
+            check(new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0,"music").platform()==AccountPlatform.NETEASE);
             check(new Fixture().load(new Query(AccountPlatform.BILIBILI,View.MINE,0,1),bili).totalPages()==2);
             check(new Fixture().load(new Query(AccountPlatform.BILIBILI,View.COLLECTION,30,1,99),bili).totalPages()==2);
             for (View view : List.of(View.FOLDER, View.COLLECTION)) {
@@ -246,6 +261,7 @@ public final class CatalogContractTest {
             Fixture verifyDenied = new Fixture(); verifyDenied.identity = "43";
             safeFailure(() -> verifyDenied.load(new Query(AccountPlatform.BILIBILI, View.MINE, 0, 1), bili), Stage.BILI_VERIFY, Reason.AUTH, null);
         } finally { bili.retire(); }
+        neteaseSearch();
         Fixture wrongFolder = new Fixture(); wrongFolder.detail = wrongFolder.detail.replace("\"id\":10", "\"id\":99"); fails(() -> wrongFolder.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
         Fixture duplicates = new Fixture(); duplicates.detail = duplicates.detail.replace("\"id\":2", "\"id\":1"); fails(() -> duplicates.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
         Fixture foreign = new Fixture(); foreign.songs = foreign.songs.replace("\"id\":2", "\"id\":99"); fails(() -> foreign.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
@@ -257,7 +273,7 @@ public final class CatalogContractTest {
         safeFailure(() -> html.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null), Stage.NET_DISCOVER, Reason.RESPONSE, null);
         Fixture httpDenied = new Fixture(); httpDenied.statusPath = "/weapi/personalized/playlist"; httpDenied.status = 429;
         safeFailure(() -> httpDenied.load(new Query(AccountPlatform.NETEASE, View.DISCOVER, 0, 1), null), Stage.NET_DISCOVER, Reason.HTTP, 429L);
-        check(httpDenied.requests.size() == 2 && httpDenied.requests.stream().allMatch(r -> r.disconnected));
+        check(httpDenied.requests.size() == 1 && httpDenied.requests.stream().allMatch(r -> r.disconnected));
         Map<Reason, IOException> networkErrors = Map.of(Reason.NETWORK, new IOException("COOKIE_SECRET https://example.invalid/UID_SECRET"),
                 Reason.DNS, new UnknownHostException("UID_SECRET"), Reason.TIMEOUT, new SocketTimeoutException("COOKIE_SECRET"),
                 Reason.TLS, new javax.net.ssl.SSLException("URL_SECRET"));
@@ -294,5 +310,69 @@ public final class CatalogContractTest {
             fails(() -> http.json(URI.create("https://evil.example/api/song/detail"), null, scope));
         }
         System.out.println("PASS: " + checks + " catalog protocol/pagination/identity/read-only checks (synthetic lists)");
+    }
+    private static void neteaseSearch() throws Exception {
+        Query first = new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0," \u6d1b\u5929\u4f9d & music ");
+        Query second = new Query(AccountPlatform.NETEASE,View.SEARCH,0,2,0,first.keyword());
+        check(CatalogClient.neteaseSearchParameters(first).equals(Map.of("s",first.keyword(),"type","1","limit","20","offset","0","total","true")));
+        check(CatalogClient.neteaseSearchParameters(second).get("offset").equals("20"));
+        Fixture fixture = new Fixture(); Page found = fixture.load(first,null);
+        check(found.title().equals("\u641c\u7d22\uff1a"+first.keyword()) && found.totalCount()==21 && found.totalPages()==2 && found.hasMore());
+        check(found.items().size()==3 && found.items().getFirst().enabled() && found.items().stream().filter(Item::enabled).count()==1);
+        check(found.items().getFirst().subtitle().equals("A / B") && found.items().getFirst().count()==120000);
+        check(found.items().getFirst().cover().toString().equals("https://p1.music.126.net/cover.jpg"));
+        check(found.items().get(1).subtitle().equals("Legacy artist") && found.items().get(1).count()==180000);
+        check(found.items().get(1).cover().toString().equals("https://p2.music.126.net/legacy.jpg"));
+        check(fixture.requests.size()==1 && fixture.requests.stream().allMatch(r->r.disconnected));
+        check(fixture.requests.stream().noneMatch(r->String.valueOf(r.getRequestProperty("Cookie")).contains("MUSIC_U")));
+        String form = new String(fixture.searchForm,StandardCharsets.US_ASCII);
+        check(form.startsWith("params=") && form.contains("&encSecKey=") && !form.contains("music"));
+        check(!fixture.requests.getLast().getURL().toString().contains("music%") && !first.toString().contains(first.keyword()));
+        check(!fixture.load(second,null).hasMore());
+        AccountCredentials account = account(AccountPlatform.NETEASE);
+        try {
+            Fixture signed = new Fixture(); var page = signed.load(first,account);
+            check(page.items().get(1).enabled() && !page.items().get(2).enabled());
+            check(signed.requests.getFirst().getURL().getPath().equals("/weapi/w/nuser/account/get"));
+            check(signed.requests.getLast().getRequestProperty("Cookie").contains("COOKIE_SECRET"));
+            signed.identity="43"; safeFailure(()->signed.load(first,account),Stage.NET_VERIFY,Reason.AUTH,null);
+            account.retire(); fails(()->signed.load(first,account));
+        } finally { account.retire(); }
+        for(String response:List.of("{\"code\":200,\"result\":{\"songCount\":0}}", "{\"code\":200,\"result\":{}}", "{\"code\":200}")) {
+            Fixture empty = new Fixture(); empty.netSearch=response; Page page=empty.load(first,null);
+            check(page.items().isEmpty() && !page.hasMore() && page.totalPages()==1 && page.totalCount()==0);
+        }
+        for(String total:List.of("0","-1","1.5","\"21\"","9223372036854775808")) {
+            Fixture bad = new Fixture(); bad.netSearch=bad.netSearch.replace("\"songCount\":21","\"songCount\":"+total);
+            safeFailure(()->bad.load(first,null),Stage.NET_SEARCH,Reason.RESPONSE,null);
+        }
+        Fixture huge = new Fixture(); huge.netSearch=huge.netSearch.replace("\"songCount\":21","\"songCount\":9223372036854775807");
+        Page last=huge.load(new Query(AccountPlatform.NETEASE,View.SEARCH,0,500,0,"music"),null);
+        check(last.totalPages()==500 && !last.hasMore());
+        for(String response:List.of("{\"code\":200,\"result\":[]}","{\"code\":200,\"result\":{\"songs\":{}}}",
+                "{\"code\":200,\"result\":{\"songCount\":21,\"songs\":["+String.join(",",Collections.nCopies(21,"{}"))+"]}}")) {
+            Fixture bad = new Fixture(); bad.netSearch=response; safeFailure(()->bad.load(first,null),Stage.NET_SEARCH,Reason.RESPONSE,null);
+        }
+        Fixture denied = new Fixture(); denied.netSearch="{\"code\":-462,\"message\":\"COOKIE_SECRET\"}";
+        safeFailure(()->denied.load(first,null),Stage.NET_SEARCH,Reason.API,-462L); check(denied.requests.size()==1);
+        for(long code:List.of(301L,50000005L)) {
+            Fixture login=new Fixture(); login.netSearch="{\"code\":"+code+",\"message\":\"COOKIE_SECRET\"}";
+            safeFailure(()->login.load(first,null),Stage.NET_SEARCH,Reason.API,code);
+            check(login.requests.size()==1 && CatalogFailure.diagnostic(CatalogFailure.code(Stage.NET_SEARCH,Reason.API,code)).contains("\u767b\u5f55\u7f51\u6613\u4e91"));
+        }
+        check(!CatalogFailure.diagnostic(CatalogFailure.code(Stage.BILI_SEARCH,Reason.API,50000005L)).contains("\u767b\u5f55\u7f51\u6613\u4e91"));
+        Fixture rate = new Fixture(); rate.statusPath="/weapi/cloudsearch/get/web"; rate.status=429;
+        safeFailure(()->rate.load(first,null),Stage.NET_SEARCH,Reason.HTTP,429L); check(rate.requests.size()==1);
+        Fixture html = new Fixture(); html.htmlPath="/weapi/cloudsearch/get/web";
+        safeFailure(()->html.load(first,null),Stage.NET_SEARCH,Reason.RESPONSE,null);
+        for(String invalid:List.of("", " ", "a\nb", "x".repeat(101))) fails(()->new Query(AccountPlatform.NETEASE,View.SEARCH,0,1,0,invalid));
+        URI endpoint=URI.create("https://music.163.com/weapi/cloudsearch/get/web");
+        HttpURLConnection post=CatalogHttp.openPinned(endpoint,new byte[]{42}); check(post.getRequestMethod().equals("POST")); post.disconnect();
+        try(CatalogHttp http=new CatalogHttp(AccountPlatform.NETEASE,null,CLOCK,(u,f)->{throw new AssertionError("Invalid search request escaped policy");});
+            RequestScope request=new RequestScope(()->true)) {
+            fails(()->http.json(endpoint,null,request));
+            fails(()->http.json(URI.create("https://evil.example/weapi/cloudsearch/get/web"),new byte[]{42},request));
+            fails(()->http.json(URI.create("http://music.163.com/weapi/cloudsearch/get/web"),new byte[]{42},request));
+        }
     }
 }

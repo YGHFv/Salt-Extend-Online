@@ -118,7 +118,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outs
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.8.6-web-verification' } else { '0.1.0-hostprobe' }
+$pluginVersion = if ($Experimental) { '0.8.7-search-refresh' } else { '0.1.0-hostprobe' }
 $pluginName = 'Salt Extend Online'
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }

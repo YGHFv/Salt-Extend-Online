@@ -33,6 +33,8 @@ public final class NativeDesk {
     }
     public void browse(AccountPlatform platform, Catalog.View view) { check(); library.browse(platform, view); }
     public void search(String keyword) { check(); library.search(keyword); }
+    public void search(AccountPlatform platform, String keyword) { check(); library.search(platform, keyword); }
+    public void reload() { check(); library.reload(); }
     public void filter(String keyword) { check(); library.filter(keyword); }
     public void sort(Catalog.Sort order) { check(); library.sort(order); }
     public void playPlaylist() { check(); library.requestPlaylist(); }

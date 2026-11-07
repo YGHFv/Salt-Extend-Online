@@ -55,16 +55,22 @@ public final class HeaderSearchRenderTest {
         Clock clock=Clock.systemUTC(); var login=new AtomicReference<>(signedIn("revision-one"));
         var lastAction=new AtomicReference<NativeDesk.Action>(); var queried=new AtomicReference<Catalog.Query>();
         var queues=new AtomicInteger(); var avatarRequests=new AtomicInteger(); var armed=new AtomicBoolean();
+        var failCatalog=new AtomicBoolean();
         try(OnlinePlaybackController player=new OnlinePlaybackController(p->null,()->true,armed::get,(audio,active)->queues.incrementAndGet(),clock,
                     a->(target,quality,scope,request)->{
                         var expiry=clock.instant().plusSeconds(300);
-                        return new OnlinePlaybackController.Audio(TrackKey.bilibili(target.id(),123),new Metadata("Search hit","Artist","",""),
-                                new MediaLease(MediaLease.Platform.BILIBILI,URI.create("https://upos-fixture.bilivideo.com/audio"),Map.of(),scope,expiry,4096),expiry);
+                        boolean net=target.platform()==AccountPlatform.NETEASE;
+                        return new OnlinePlaybackController.Audio(net ? TrackKey.netease(target.id()) : TrackKey.bilibili(target.id(),123),new Metadata("Search hit","Artist","",""),
+                                new MediaLease(net ? MediaLease.Platform.NETEASE : MediaLease.Platform.BILIBILI,
+                                        URI.create(net ? "https://m7.music.126.net/audio" : "https://upos-fixture.bilivideo.com/audio"),Map.of(),scope,expiry,4096),expiry);
                     });
             LibraryController library=new LibraryController(p->null,()->true,t->{},()->player.invalidate("Navigation"),clock,
                     a->(query,quality,scope,request)->{
                         queried.set(query);
-                        return new Catalog.Page("Search results",List.of(new Catalog.Item(Catalog.Kind.TRACK,"BV17x411w7KC","Search hit","Artist",120000,true)),false,clock.instant().plusSeconds(300),1);
+                        if(failCatalog.get()) throw CatalogFailure.code(CatalogFailure.Stage.NET_SEARCH,CatalogFailure.Reason.HTTP,429);
+                        if(query.keyword().equals("empty")) return new Catalog.Page("Search results",List.of(),false,clock.instant().plusSeconds(300),1);
+                        boolean net=query.platform()==AccountPlatform.NETEASE;
+                        return new Catalog.Page("Search results",List.of(new Catalog.Item(Catalog.Kind.TRACK,net ? "123" : "BV17x411w7KC","Search hit","Artist",120000,true)),net && query.page()==1,clock.instant().plusSeconds(300),net ? 2 : 1);
                     })) {
             NativeDesk desk=new NativeDesk(library,player,p->login.get(),(p,action)->{
                 lastAction.set(action);
@@ -153,6 +159,34 @@ public final class HeaderSearchRenderTest {
                             check(find(scene,"\u5b98\u65b9\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
                             click(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55"); check(lastAction.get()==NativeDesk.Action.CANCEL_LOGIN);
                             check(find(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
+                            queried.set(null);
+                            var setText=SemanticsActions.INSTANCE.getSetText();
+                            if(find(scene,null,setText)!=null) click(scene,"\u641c\u7d22\u7f51\u6613\u4e91");
+                            click(scene,"\u641c\u7d22\u7f51\u6613\u4e91");
+                            var field=find(scene,null,setText); check(field!=null);
+                            var icon=find(scene,"\u641c\u7d22\u7f51\u6613\u4e91",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                            check(field.getBoundsInRoot().getRight()<=icon.getLeft() && icon.getRight()<=width);
+                            check(Boolean.TRUE.equals(field.getConfig().get(setText).getAction().invoke(new AnnotatedString("netease music",List.of(),List.of())))); render(scene);
+                            var submit=SemanticsActions.INSTANCE.getOnImeAction();
+                            check(Boolean.TRUE.equals(find(scene,null,submit).getConfig().get(submit).getAction().invoke())); render(scene);
+                            check(queried.get().platform()==AccountPlatform.NETEASE && queried.get().keyword().equals("netease music"));
+                            click(scene,"\u641c\u7d22\u7f51\u6613\u4e91"); check(find(scene,null,setText)==null);
+                            check(find(scene,"1/2",null)!=null && find(scene,"Search hit",null)!=null);
+                            click(scene,"\u4e0b\u4e00\u9875"); check(queried.get().page()==2 && find(scene,"2/2",null)!=null);
+                            failCatalog.set(true); click(scene,"\u5237\u65b0\u5f53\u524d\u5217\u8868");
+                            check(find(scene,"NET_SEARCH/HTTP=429",null)!=null && find(scene,"Search hit",null)==null);
+                            check(find(scene,"\u91cd\u8bd5\u5f53\u524d\u5217\u8868",SemanticsActions.INSTANCE.getOnClick())!=null);
+                            failCatalog.set(false); click(scene,"\u91cd\u8bd5\u5f53\u524d\u5217\u8868");
+                            check(queried.get().page()==2 && queried.get().keyword().equals("netease music") && find(scene,"2/2",null)!=null);
+                            int before=queues.get(); var hit=find(scene,"Search hit",null).getBoundsInRoot();
+                            NativePageRenderTest.tap(scene,(hit.getLeft()+hit.getRight())/2,(hit.getTop()+hit.getBottom())/2,2000); Thread.sleep(70);
+                            NativePageRenderTest.tap(scene,(hit.getLeft()+hit.getRight())/2,(hit.getTop()+hit.getBottom())/2,2110);
+                            waitFor(()->queues.get()==before+1);
+                            click(scene,"\u641c\u7d22\u7f51\u6613\u4e91"); field=find(scene,null,setText);
+                            check(Boolean.TRUE.equals(field.getConfig().get(setText).getAction().invoke(new AnnotatedString("empty",List.of(),List.of())))); render(scene);
+                            check(Boolean.TRUE.equals(find(scene,null,submit).getConfig().get(submit).getAction().invoke())); render(scene);
+                            check(find(scene,"\u5f53\u9875\u6ca1\u6709\u53ef\u64ad\u653e\u7684\u641c\u7d22\u7ed3\u679c",null)!=null);
+                            check(find(scene,"\u4e0b\u4e00\u9875",null)==null && find(scene,"\u4e0a\u4e00\u9875",null)==null);
                         } catch(Exception error){throw new AssertionError(error);} finally {scene.close();}
                     });
                 }

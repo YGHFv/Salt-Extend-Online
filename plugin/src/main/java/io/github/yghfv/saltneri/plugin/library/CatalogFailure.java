@@ -9,7 +9,7 @@ import javax.net.ssl.SSLException;
 /** Only allowlisted stages and numeric codes cross into the UI; never retain upstream messages. */
 public final class CatalogFailure extends IOException {
     public enum Stage { SESSION, BILI_VERIFY, NET_VERIFY, NET_CSRF, BILI_CREATED, BILI_SAVED, BILI_CONTENTS, BILI_COLLECTION, BILI_SEARCH,
-        BILI_DISCOVER, NET_DISCOVER, NET_PLAYLISTS, NET_CONTENTS, NET_SONGS, UNKNOWN }
+        BILI_DISCOVER, NET_DISCOVER, NET_PLAYLISTS, NET_CONTENTS, NET_SONGS, NET_SEARCH, UNKNOWN }
     public enum Reason { HTTP, API, RESPONSE, AUTH, LOGIN_REQUIRED, DNS, TLS, TIMEOUT, NETWORK, POLICY, CSRF }
     private final Stage stage;
     private final Reason reason;
@@ -38,6 +38,9 @@ public final class CatalogFailure extends IOException {
         CatalogFailure safe = error instanceof CatalogFailure known ? known : of(Stage.UNKNOWN, Reason.RESPONSE);
         return "\u5217\u8868\u8bfb\u53d6\u5931\u8d25 [" + safe.getMessage() + "]\uff1b"
                 + (safe.reason == Reason.LOGIN_REQUIRED ? "\u8bf7\u5148\u626b\u7801\u767b\u5f55\uff1b" : "")
+                + (safe.stage.name().startsWith("NET_") && safe.reason == Reason.API
+                    && (Long.valueOf(301).equals(safe.code) || Long.valueOf(50000005).equals(safe.code))
+                    ? "\u8bf7\u5148\u767b\u5f55\u7f51\u6613\u4e91\uff0c\u5df2\u767b\u5f55\u8bf7\u91cd\u65b0\u767b\u5f55\uff1b" : "")
                 + "\u672a\u64ad\u653e\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5";
     }
 }

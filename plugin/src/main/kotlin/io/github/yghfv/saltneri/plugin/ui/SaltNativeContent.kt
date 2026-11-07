@@ -163,7 +163,7 @@ private fun Cover(ui: SaltNativeUi, token: String) {
     }
 }
 
-private enum class HeaderGlyph { SEARCH, ACCOUNT, PLAY, SORT }
+private enum class HeaderGlyph { SEARCH, ACCOUNT, PLAY, SORT, REFRESH }
 
 @Composable
 private fun HeaderIcon(ui: SaltNativeUi, label: String, glyph: HeaderGlyph, click: () -> Unit) {
@@ -190,6 +190,11 @@ private fun HeaderIcon(ui: SaltNativeUi, label: String, glyph: HeaderGlyph, clic
             drawLine(color, Offset(size.width * 0.61f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
             drawLine(color, Offset(size.width * 0.95f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
         }
+        HeaderGlyph.REFRESH -> {
+            drawArc(color, 40f, 285f, false, Offset(size.width * 0.16f, size.height * 0.16f), Size(size.width * 0.68f, size.height * 0.68f), style = Stroke(2.dp.toPx()))
+            drawLine(color, Offset(size.width * 0.79f, size.height * 0.13f), Offset(size.width * 0.79f, size.height * 0.36f), 2.dp.toPx())
+            drawLine(color, Offset(size.width * 0.57f, size.height * 0.36f), Offset(size.width * 0.79f, size.height * 0.36f), 2.dp.toPx())
+        }
         }
     } }
     Box(Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = click).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
@@ -212,11 +217,12 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
     val menuOffset = with(LocalDensity.current) { 44.dp.roundToPx() }
     Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         NativeText(ui, name(platform), modifier = if(memory.searching) Modifier.width(105.dp) else Modifier.weight(1f), heading = true)
-        if (platform == AccountPlatform.BILIBILI) {
-            if(memory.searching) SearchInput(ui,memory.searchText,{memory.searchText=it},modifier=Modifier.weight(1f)) { keyword -> action {ui.desk().search(keyword);memory.view=Catalog.View.SEARCH} }
-            HeaderIcon(ui, "\u641c\u7d22B\u7ad9", HeaderGlyph.SEARCH) {
-                memory.searching = !memory.searching
-            }
+        val searchLabel = if(platform == AccountPlatform.BILIBILI) "\u641c\u7d22B\u7ad9" else "\u641c\u7d22\u7f51\u6613\u4e91"
+        if(memory.searching) SearchInput(ui,memory.searchText,{memory.searchText=it},modifier=Modifier.weight(1f),label=searchLabel) { keyword ->
+            action {ui.desk().search(platform,keyword);memory.view=Catalog.View.SEARCH;memory.localSearch=false;memory.localText=""}
+        }
+        HeaderIcon(ui, searchLabel, HeaderGlyph.SEARCH) {
+            memory.searching = !memory.searching
         }
         Spacer(Modifier.width(8.dp))
         Box {
@@ -240,18 +246,19 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
 }
 
 @Composable
-private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> Unit, inside: Boolean = false, modifier: Modifier = Modifier, submit: (String) -> Unit) {
+private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> Unit, inside: Boolean = false, modifier: Modifier = Modifier,
+                        label: String = "\u641c\u7d22B\u7ad9", submit: (String) -> Unit) {
     val focus = remember { FocusRequester() }
     val palette = ui.palette(currentComposer)
     val search = { if (inside || keyword.isNotBlank()) submit(keyword.trim()) }
     LaunchedEffect(Unit) { focus.requestFocus() }
         BasicTextField(value = keyword, onValueChange = { if (it.length <= 100 && it.none { c -> c.isISOControl() }) change(it) },
             modifier = modifier.border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.5f), palette.shape())
-                .padding(horizontal=8.dp,vertical=10.dp).focusRequester(focus).semantics { contentDescription = if(inside) "\u5408\u96c6\u5185\u641c\u7d22\u8f93\u5165" else "B\u7ad9\u641c\u7d22\u8f93\u5165" },
+                .padding(horizontal=8.dp,vertical=10.dp).focusRequester(focus).semantics { contentDescription = if(inside) "\u5408\u96c6\u5185\u641c\u7d22\u8f93\u5165" else label.removePrefix("\u641c\u7d22") + "\u641c\u7d22\u8f93\u5165" },
             textStyle = palette.main().copy(color = Color(palette.text().toULong())), singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }),
             cursorBrush = SolidColor(Color(palette.accent().toULong())), decorationBox = { field ->
-                Box { if (keyword.isEmpty()) NativeText(ui, if(inside) "\u5408\u96c6\u5185\u641c\u7d22" else "\u641c\u7d22 B\u7ad9", true); field() }
+                Box { if (keyword.isEmpty()) NativeText(ui, if(inside) "\u5408\u96c6\u5185\u641c\u7d22" else "\u641c\u7d22 " + label.removePrefix("\u641c\u7d22"), true); field() }
             })
 }
 
@@ -404,6 +411,14 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                                 NativeText(ui, row["subtitle"] as String, true, Modifier.fillMaxWidth())
                             }
                         }
+                    }
+                }
+                if (catalog?.get("loaded") == true && rows.isNullOrEmpty()) item {
+                    NativeText(ui, if(catalog["view"] == "SEARCH") "\u5f53\u9875\u6ca1\u6709\u53ef\u64ad\u653e\u7684\u641c\u7d22\u7ed3\u679c" else "\u5f53\u9875\u6682\u65e0\u53ef\u663e\u793a\u7684\u5185\u5bb9", true)
+                }
+                if ((catalog?.get("view") as? String).orEmpty().isNotEmpty()) item(key = "catalog-refresh") {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        HeaderIcon(ui, if((catalog?.get("error") as? String).orEmpty().isEmpty()) "\u5237\u65b0\u5f53\u524d\u5217\u8868" else "\u91cd\u8bd5\u5f53\u524d\u5217\u8868", HeaderGlyph.REFRESH) { action {ui.desk().reload()} }
                     }
                 }
                 val page = (catalog?.get("page") as? Number)?.toInt() ?: 1

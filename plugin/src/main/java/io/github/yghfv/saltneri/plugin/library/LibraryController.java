@@ -78,8 +78,20 @@ public final class LibraryController implements AutoCloseable {
         this.platform = platform; reset(current()); load(current(),new Query(platform,view,0,1));
     }
     public synchronized void search(String keyword) {
-        Query q = new Query(AccountPlatform.BILIBILI,View.SEARCH,0,1,0,keyword);
+        search(AccountPlatform.BILIBILI, keyword);
+    }
+    public synchronized void search(AccountPlatform destination, String keyword) {
+        Query q = new Query(destination,View.SEARCH,0,1,0,keyword);
         platform = q.platform(); reset(current()); load(current(),q);
+    }
+    /** Explicit refresh preserves location/order but never resumes a previous play intent. */
+    public synchronized void reload() {
+        State s = current(); if (s.query == null) throw new IllegalStateException("No current catalog");
+        s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.rows.clear();
+        s.playPending = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
+        if (s.fullMode) {
+            navigation.run(); s.account = accounts.apply(s.platform); s.complete.start(at(s.query,1),"all");
+        } else load(s,s.query);
     }
     private void reset(State s) {
         s.complete.invalidate(""); s.contents = null; s.fullMode = false; s.playPending = false;
@@ -114,6 +126,10 @@ public final class LibraryController implements AutoCloseable {
         }
         Page page = raw.resolved();
         if (page != s.visible) {
+            if (page != null && page.totalPages() > 0 && s.query.page() > page.totalPages()) {
+                // A refreshed catalog can shrink; fetch its last page rather than publishing 2/1.
+                load(s,at(s.query,page.totalPages())); return s.loader.snapshot();
+            }
             s.visible = page; s.rows.clear();
             if (page != null) {
                 s.title=page.title();

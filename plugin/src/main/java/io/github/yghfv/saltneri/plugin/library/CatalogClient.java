@@ -38,6 +38,23 @@ public final class CatalogClient {
         } catch (IOException error) { throw CatalogFailure.wrap(Stage.SESSION, Reason.RESPONSE, error); }
     }
     private Page netease(Query query, CatalogHttp http, RequestScope request) throws IOException {
+        if (query.view() == View.SEARCH) {
+            String csrf = http.csrf(request);
+            var root = success(http.json(URI.create("https://music.163.com/weapi/cloudsearch/get/web?csrf_token=" + encode(csrf)),
+                    NeteaseWeapi.form(neteaseSearchParameters(query)), request), 200, http.stage());
+            var result = root.get("result") == null ? Map.<String,Object>of() : object(root.get("result"));
+            var songs = bounded(arrayOrEmpty(result.get("songs")), 20);
+            long total = number(result.get("songCount"), songs.isEmpty() ? 0 : -1);
+            if (total < 0 || total == 0 && !songs.isEmpty()) throw invalid();
+            List<Item> items = new ArrayList<>(); Set<Long> unique = new HashSet<>();
+            for (Object row : songs) {
+                var song = object(row); long songId = number(song.get("id"), 0);
+                if (songId <= 0 || optional(song.get("name")).isBlank() || !unique.add(songId)) continue;
+                items.add(neteaseSong(song));
+            }
+            // Pagination counts upstream results, not the remaining playable rows.
+            return page("\u641c\u7d22\uff1a" + query.keyword(), items, query.page() < 500 && query.page() * 20L < total, total);
+        }
         if (query.view() == View.FOLDER) {
             Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", "0", "s", "0")), request), 200, http.stage());
             Map<String, Object> list = object(root.get("playlist")); if (id(list.get("id")) != query.folder()) throw invalid();
@@ -53,14 +70,7 @@ public final class CatalogClient {
                 for (long songId : selected) {
                     var song = songs.get(songId);
                     if (song == null) { items.add(new Item(Kind.TRACK, Long.toString(songId), "Unavailable #" + songId, "Missing/deleted track", 0, false)); continue; }
-                    long fee = number(song.get("fee"), -1), duration = number(alias(song, "dt", "duration"), 0);
-                    boolean enabled = (fee == 0 || fee == 8 || account != null && (fee == 1 || fee == 4))
-                            && number(alias(song, "st", "status"), 0) >= 0 && duration > 0;
-                    List<String> artists = new ArrayList<>(); Object artistRows = alias(song, "ar", "artists");
-                    if (artistRows != null) for (Object row : bounded(array(artistRows), 64)) artists.add(text(object(row).get("name")));
-                    Object album = alias(song, "al", "album");
-                    items.add(new Item(Kind.TRACK, Long.toString(songId), text(song.get("name")), String.join(" / ", artists) + (enabled ? "" : " / unavailable or paid"), duration, enabled,
-                            cover(AccountPlatform.NETEASE, album instanceof Map<?,?> ? object(album).get("picUrl") : null)));
+                    items.add(neteaseSong(song));
                 }
             }
             return page(text(list.get("name")), items, offset + 20 < ids.size(), ids.size());
@@ -81,6 +91,21 @@ public final class CatalogClient {
         }
         return page(viewTitle(query), items, query.view() != View.DISCOVER && Boolean.TRUE.equals(root.get("more")),
                 query.view() == View.DISCOVER ? items.size() : number(root.get("count"), -1));
+    }
+    private Item neteaseSong(Map<String, Object> song) throws IOException {
+        long fee = number(song.get("fee"), -1), duration = number(alias(song, "dt", "duration"), 0);
+        String title = text(song.get("name"));
+        boolean enabled = !title.isBlank() && (fee == 0 || fee == 8 || account != null && (fee == 1 || fee == 4))
+                && number(alias(song, "st", "status"), 0) >= 0 && duration > 0;
+        List<String> artists = new ArrayList<>(); Object artistRows = alias(song, "ar", "artists");
+        if (artistRows != null) for (Object row : bounded(array(artistRows), 64)) artists.add(text(object(row).get("name")));
+        Object album = alias(song, "al", "album");
+        return new Item(Kind.TRACK, Long.toString(id(song.get("id"))), title, String.join(" / ", artists), duration, enabled,
+                cover(AccountPlatform.NETEASE, album instanceof Map<?,?> ? object(album).get("picUrl") : null));
+    }
+    static Map<String, Object> neteaseSearchParameters(Query query) {
+        return Map.of("s", query.keyword(), "type", "1", "limit", "20",
+                "offset", Integer.toString((query.page() - 1) * 20), "total", "true");
     }
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
         if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return BiliDiscovery.load(query,http,request,clock);

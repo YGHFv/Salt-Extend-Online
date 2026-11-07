@@ -17,7 +17,7 @@ public final class CatalogHttp implements AutoCloseable {
     private static final Set<String> BILI = Set.of("/x/v3/fav/folder/created/list", "/x/v3/fav/folder/collected/list", "/x/v3/fav/resource/list",
             "/x/web-interface/nav", "/x/polymer/web-space/seasons_archives_list", "/x/web-interface/wbi/search/type",
             "/x/copyright-music-publicity/toplist/all_period", "/x/copyright-music-publicity/toplist/music_list");
-    private static final Set<String> NET = Set.of("/weapi/personalized/playlist", "/weapi/user/playlist", "/api/v6/playlist/detail", "/api/song/detail");
+    private static final Set<String> NET = Set.of("/weapi/personalized/playlist", "/weapi/user/playlist", "/api/v6/playlist/detail", "/api/song/detail", "/weapi/cloudsearch/get/web");
     private final Opener opener;
     private final ScopedCookies cookies;
     private final AccountCredentials account;
@@ -46,8 +46,10 @@ public final class CatalogHttp implements AutoCloseable {
         check(request);
     }
     public String csrf(RequestScope request) throws IOException {
+        check(request);
         URI home = URI.create("https://music.163.com/"); String csrf = cookies.value(home, "__csrf");
-        if (!csrf.isEmpty()) return csrf;
+        // NeriPlayer preheats authenticated WEAPI sessions only; public reads allow an empty token.
+        if (account == null || !csrf.isEmpty()) return csrf;
         stage = Stage.NET_CSRF;
         check(request); HttpURLConnection connection = open(home, null); request.attach(connection);
         try {
@@ -98,6 +100,7 @@ public final class CatalogHttp implements AutoCloseable {
             case "/weapi/user/playlist" -> Stage.NET_PLAYLISTS;
             case "/api/v6/playlist/detail" -> Stage.NET_CONTENTS;
             case "/api/song/detail" -> Stage.NET_SONGS;
+            case "/weapi/cloudsearch/get/web" -> Stage.NET_SEARCH;
             default -> Stage.UNKNOWN;
         };
     }

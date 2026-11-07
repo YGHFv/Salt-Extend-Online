@@ -18,7 +18,7 @@ public final class Catalog {
                     || (view == View.MUSIC_HOT || view == View.MUSIC_ORIGINAL) && platform != AccountPlatform.BILIBILI
                     || (view == View.FOLDER || view == View.COLLECTION ? folder <= 0 : folder != 0)
                     || (view == View.COLLECTION ? platform != AccountPlatform.BILIBILI || owner <= 0 : owner != 0)
-                    || (view == View.SEARCH ? platform != AccountPlatform.BILIBILI || keyword.isEmpty() || keyword.length() > 100
+                    || (view == View.SEARCH ? keyword.isEmpty() || keyword.length() > 100
                         || keyword.chars().anyMatch(c -> Character.isISOControl(c)) : !keyword.isEmpty()))
                 throw new IllegalArgumentException("Invalid catalog query");
         }
