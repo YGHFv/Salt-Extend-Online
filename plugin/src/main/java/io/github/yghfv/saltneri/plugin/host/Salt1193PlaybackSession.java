@@ -157,7 +157,12 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         // Each preparation keeps its logical identity; only its account-scoped expiring URL is renewed.
         String nonce = UUID.randomUUID().toString();
         PlaybackCoverFile cover = null;
-        if (metadata.coverPng() != null) {
+        if (renewer != null) {
+            // Keep a recoverable artwork path even when the initial image request fails.
+            try { cover = PlaybackCoverFile.reserve(); } catch (IOException ignored) { }
+            if (cover != null && metadata.coverPng() != null)
+                try { cover.replace(metadata.coverPng()); } catch (IOException ignored) { }
+        } else if (metadata.coverPng() != null) {
             try { cover = PlaybackCoverFile.create(metadata.coverPng()); }
             catch (IOException ignored) { /* Artwork failure must not prevent explicit audio playback. */ }
         }

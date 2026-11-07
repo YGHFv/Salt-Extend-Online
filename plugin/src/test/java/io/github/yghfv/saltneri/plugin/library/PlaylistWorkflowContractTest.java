@@ -69,7 +69,40 @@ public final class PlaylistWorkflowContractTest {
             library.snapshot(AccountPlatform.NETEASE); check(rows(library).size()==1);
         }
         searchAndRetry();
+        failedFullLoad();
         System.out.println("PASS: "+checks+" platform-local navigation, whole-list filter/sort, search/retry, unfiltered replacement intent and revocation checks");
+    }
+    private static void failedFullLoad() throws Exception {
+        var fail=new AtomicBoolean();
+        var pause=new AtomicBoolean();
+        var started=new java.util.concurrent.CountDownLatch(1);
+        var resume=new java.util.concurrent.CountDownLatch(1);
+        try(var library=new LibraryController(p->null,()->true,t->{},()->{},Clock.systemUTC(),account->(q,k,s,r)->{
+            if(q.view()!=View.FOLDER) return new Page("Folders",List.of(new Item(Kind.FOLDER,"10","Folder","Author",21,true)),false,Instant.MAX,1);
+            if(fail.get()) throw new java.io.IOException("Fixture complete failure");
+            if(pause.get() && k.equals("all")) { started.countDown(); resume.await(3,java.util.concurrent.TimeUnit.SECONDS); r.check(); }
+            var items=new ArrayList<Item>();
+            for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) items.add(new Item(Kind.TRACK,""+i,"Track "+i,"Author",0,true));
+            return new Page("Folder",items,q.page()==1,Instant.MAX,2,21);
+        })) {
+            library.browse(AccountPlatform.NETEASE,View.MINE); ready(library);
+            library.choose((String)rows(library).getFirst().get("token")); ready(library);
+            fail.set(true); library.requestPlaylist();
+            long until=System.nanoTime()+3_000_000_000L;
+            while(library.snapshot().get("error").equals("") && System.nanoTime()<until) Thread.sleep(10);
+            check(!library.snapshot().get("error").equals("") && rows(library).size()==20);
+            check(library.takePlaylist()==null);
+            fail.set(false); library.turn(1); ready(library);
+            check(library.snapshot().get("page").equals(2) && rows(library).getFirst().get("title").equals("Track 21"));
+            check(library.snapshot().get("error").equals(""));
+            pause.set(true); library.requestPlaylist();
+            check(started.await(3,java.util.concurrent.TimeUnit.SECONDS));
+            check(rows(library).size()==1 && library.snapshot().get("page").equals(2));
+            library.sort(Sort.REVERSE);
+            check(rows(library).isEmpty() && library.snapshot().get("page").equals(1));
+            resume.countDown(); ready(library);
+            check(rows(library).getFirst().get("title").equals("Track 21") && library.snapshot().get("error").equals(""));
+        } finally { resume.countDown(); }
     }
     private static void searchAndRetry() throws Exception {
         var requests=new AtomicInteger(); var queried=new AtomicReference<Query>(); var fail=new AtomicBoolean();

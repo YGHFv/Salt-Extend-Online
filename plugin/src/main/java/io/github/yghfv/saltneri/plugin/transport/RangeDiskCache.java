@@ -8,9 +8,14 @@ import java.util.function.BooleanSupplier;
 /** Per-runtime, lease-scoped range cache. Only complete validated ranges, never URLs/cookies, reach disk. */
 public final class RangeDiskCache implements AutoCloseable {
     public static final long DEFAULT_LIMIT=2L*1024*1024*1024;
-    private record Key(Object owner,ByteRange range) { }
+    private static final long MAX_RANGE_BYTES=ByteRange.MAX_REQUEST_BYTES;
+    private record Key(Object owner,ByteRange range) {
+        @Override public boolean equals(Object value) { return value instanceof Key key && owner==key.owner && range.equals(key.range); }
+        @Override public int hashCode() { return 31*System.identityHashCode(owner)+range.hashCode(); }
+    }
     private record FileEntry(Path path,int bytes) { }
     private final LinkedHashMap<Key,FileEntry> files=new LinkedHashMap<>(16,0.75f,true);
+    private final Map<Object,NavigableMap<Long,Set<Key>>> ranges=new IdentityHashMap<>();
     private Path directory;
     private long limit=DEFAULT_LIMIT,used,revision;
     private boolean closed;
@@ -29,8 +34,11 @@ public final class RangeDiskCache implements AutoCloseable {
         Key key=new Key(owner,range); FileEntry entry=files.get(key);
         if(entry==null) {
             // A prefetched prefix can satisfy the smaller ranges Salt reads from that same lease.
-            for(Key candidate:files.keySet()) if(candidate.owner()==owner && candidate.range().first()<=range.first()
-                    && candidate.range().last()>=range.last()) { key=candidate; break; }
+            var index=ranges.get(owner);
+            if(index==null || range.length()>MAX_RANGE_BYTES) return null;
+            // Only same-lease starts within one maximum-sized block can contain this request.
+            search: for(var keys:index.subMap(Math.max(0,range.last()-MAX_RANGE_BYTES+1),true,range.first(),true).descendingMap().values())
+                for(Key candidate:keys) if(candidate.range().last()>=range.last()) { key=candidate; break search; }
             entry=files.get(key); if(entry==null) return null;
         }
         try(var input=Files.newInputStream(entry.path(),LinkOption.NOFOLLOW_LINKS)) {
@@ -42,7 +50,7 @@ public final class RangeDiskCache implements AutoCloseable {
     }
     synchronized void put(Object owner,ByteRange range,byte[] bytes,long captured,BooleanSupplier valid) {
         if(closed || captured!=revision || !valid.getAsBoolean() || bytes.length!=range.length()
-                || bytes.length<1 || bytes.length>4*1024*1024 || bytes.length>limit) return;
+                || bytes.length<1 || bytes.length>MAX_RANGE_BYTES || bytes.length>limit) return;
         Key key=new Key(owner,range); if(files.containsKey(key)) return;
         try {
             if(directory==null) directory=Files.createDirectory(Path.of(System.getProperty("java.io.tmpdir")).toRealPath().resolve("saltneri-audio-cache-"+UUID.randomUUID()));
@@ -50,13 +58,14 @@ public final class RangeDiskCache implements AutoCloseable {
             var entry=new FileEntry(directory.resolve(UUID.randomUUID()+".range"),bytes.length);
             // Account reserved bytes before writing; failed deletion must never pretend disk space was freed.
             files.put(key,entry); used+=entry.bytes();
+            ranges.computeIfAbsent(owner,ignored->new TreeMap<>()).computeIfAbsent(range.first(),ignored->new LinkedHashSet<>()).add(key);
             try { Files.write(entry.path(),bytes,StandardOpenOption.CREATE_NEW); }
             catch(IOException error) { remove(key,entry); }
         } catch(IOException ignored) { /* Cache failures must not interrupt a valid audio stream. */ }
     }
     private boolean trim(long incoming) {
-        for(var entry:List.copyOf(files.entrySet())) {
-            if(used+incoming<=limit && files.size()<8192) return true;
+        while(!files.isEmpty() && (used+incoming>limit || incoming>0 && files.size()>=8192)) {
+            var entry=files.entrySet().iterator().next();
             if(!remove(entry.getKey(),entry.getValue())) return false;
         }
         return used+incoming<=limit;
@@ -65,12 +74,19 @@ public final class RangeDiskCache implements AutoCloseable {
         if(!safeDirectory()) return false;
         try {
             Files.deleteIfExists(entry.path());
-            if(files.remove(key,entry)) used-=entry.bytes();
+            if(files.remove(key,entry)) {
+                used-=entry.bytes();
+                var index=ranges.get(key.owner()); var keys=index.get(key.range().first());
+                keys.remove(key); if(keys.isEmpty()) index.remove(key.range().first());
+                if(index.isEmpty()) ranges.remove(key.owner());
+            }
             return true;
         } catch(IOException error) { return false; }
     }
     synchronized void revoke(Object owner) {
-        for(var entry:List.copyOf(files.entrySet())) if(entry.getKey().owner()==owner) remove(entry.getKey(),entry.getValue());
+        var index=ranges.get(owner); if(index==null) return;
+        var keys=index.values().stream().flatMap(Set::stream).toList();
+        for(Key key:keys) remove(key,files.get(key));
     }
     public synchronized void clear() {
         revision++;

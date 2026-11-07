@@ -9,6 +9,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+& python (Join-Path $root 'scripts/verify-project.py')
+if ($LASTEXITCODE -ne 0) { throw 'Project metadata or contract matrix validation failed.' }
+& python (Join-Path $root 'scripts/test-inspector.py')
+if ($LASTEXITCODE -ne 0) { throw 'Class inspector tests failed.' }
+& (Join-Path $PSScriptRoot 'test-core.ps1') -JdkHome $JdkHome
+$pluginMetadata = Get-Content -LiteralPath (Join-Path $root 'plugin.properties') -Raw | ConvertFrom-StringData
 & python (Join-Path $root 'scripts/verify-vendor.py')
 if ($LASTEXITCODE -ne 0) { throw 'Vendored QR source verification failed.' }
 $salt = [System.IO.Path]::GetFullPath($SaltHome)
@@ -52,98 +58,39 @@ Copy-Item -LiteralPath (Join-Path $root 'licenses/Simple-Icons-CC0.txt') -Destin
 $testSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'plugin/src/test/java') -Filter '*.java' -Recurse | ForEach-Object { $_.FullName })
 & $javac --release 25 -encoding UTF-8 -proc:none -classpath "$classes;$hostPackage" -d $tests @testSources
 if ($LASTEXITCODE -ne 0) { throw 'Host smoke test compilation failed.' }
-& $java '-Dfile.encoding=UTF-8' -classpath "$tests;$classes;$hostPackage" io.github.yghfv.saltneri.plugin.host.HostProfileSmokeTest
-if ($LASTEXITCODE -ne 0) { throw 'Host fingerprint and native media smoke tests failed.' }
 $temporaryFiles = Join-Path $build 'tmp'
 New-Item -ItemType Directory -Path $temporaryFiles -Force | Out-Null
-foreach ($test in @(
-    'io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest',
-    'io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest',
-    'io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest',
-    'io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest',
-    'io.github.yghfv.saltneri.plugin.net.PinnedHttpsContractTest',
-    'io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest',
-    'io.github.yghfv.saltneri.plugin.bilibili.BiliClientContractTest',
-    'io.github.yghfv.saltneri.plugin.bilibili.BiliResolutionContractTest',
-    'io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest',
-    'io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest',
-    'io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsContractTest',
-    'io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest',
-    'io.github.yghfv.saltneri.plugin.library.CatalogContractTest',
-    'io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest',
-    'io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest',
-    'io.github.yghfv.saltneri.plugin.library.PlaylistWorkflowContractTest',
-    'io.github.yghfv.saltneri.plugin.library.BiliDiscoveryContractTest',
-    'io.github.yghfv.saltneri.plugin.host.LazyPlaylistContractTest',
-    'io.github.yghfv.saltneri.plugin.host.LazyPlaylistCoverContractTest',
-    'io.github.yghfv.saltneri.plugin.host.NativePlaylistOrderContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.PlaylistPrefetchContractTest',
-    'io.github.yghfv.saltneri.plugin.library.CatalogBulkContractTest',
-    'io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest',
-    'io.github.yghfv.saltneri.plugin.host.WindowsAppShortcutContractTest',
-    'io.github.yghfv.saltneri.plugin.ui.NativeUiContractTest',
-    'io.github.yghfv.saltneri.plugin.ui.SaltPageContentBindingContractTest',
-    'io.github.yghfv.saltneri.plugin.ui.NativeHookTransformTest',
-    'io.github.yghfv.saltneri.plugin.ui.NativePageRenderTest',
-    'io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest',
-    'io.github.yghfv.saltneri.plugin.ui.PlaylistRenderTest',
-    'io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest',
-    'io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest',
-    'io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest',
-    'io.github.yghfv.saltneri.plugin.ui.NativeDeskPlaybackContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.TransportContractTest',
-    'io.github.yghfv.saltneri.plugin.host.InterceptorContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.HostRangeIntegrationTest',
-    'io.github.yghfv.saltneri.plugin.transport.BiliResolvedIntegrationTest',
-    'io.github.yghfv.saltneri.plugin.transport.NeteaseResolvedIntegrationTest',
-    'io.github.yghfv.saltneri.plugin.transport.PlaybackSessionContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.QueueReplayContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest',
-    'io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest',
-    'io.github.yghfv.saltneri.plugin.host.EngineLinkContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.DiagnosticContractTest',
-    'io.github.yghfv.saltneri.plugin.transport.PlatformPlaybackContractTest'
-)) {
-    & $java '-Dfile.encoding=UTF-8' '--enable-native-access=ALL-UNNAMED' "-Dskiko.library.path=$(Join-Path $salt 'app')" "-Djava.io.tmpdir=$temporaryFiles" -classpath "$tests;$classes;$hostPackage" $test
-    if ($LASTEXITCODE -ne 0) { throw "Plugin contract test failed: $test" }
+function Invoke-Contract([string]$Test, [switch]$BaseOnly) {
+    $runtime = if ($BaseOnly) { 'base' } else { 'host' }
+    $log = Join-Path $build "$Test.$runtime.log"
+    $arguments = @('-Dfile.encoding=UTF-8', "-Djava.io.tmpdir=$temporaryFiles")
+    if ($BaseOnly) { $arguments += @('--limit-modules=java.base', '-classpath', "$tests;$classes") }
+    else { $arguments += @('--enable-native-access=ALL-UNNAMED', "-Dskiko.library.path=$(Join-Path $salt 'app')", '-classpath', "$tests;$classes;$hostPackage") }
+    & $java @arguments $Test 2>&1 | Tee-Object -FilePath $log
+    # Background coroutine/thread failures can otherwise leave a successful process exit code.
+    if ($LASTEXITCODE -ne 0 -or (Select-String -LiteralPath $log -Pattern 'ComposeRuntimeError|AssertionError|Exception in thread|Traceback|^FAIL' -Quiet)) {
+        throw "Plugin contract failed ($runtime): $Test; see $log"
+    }
 }
-# The transport must also work without optional modules absent from Salt's bundled runtime.
-& $java '--limit-modules=java.base' -classpath "$tests;$classes" io.github.yghfv.saltneri.plugin.transport.TransportContractTest
-if ($LASTEXITCODE -ne 0) { throw 'Transport requires modules outside java.base.' }
-& $java '--limit-modules=java.base' -classpath "$tests;$classes" io.github.yghfv.saltneri.plugin.net.PinnedHttpsContractTest
-if ($LASTEXITCODE -ne 0) { throw 'Pinned HTTPS requires modules outside java.base.' }
-foreach ($test in @('io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest', 'io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest')) {
-    & $java '--limit-modules=java.base' "-Djava.io.tmpdir=$temporaryFiles" -classpath "$tests;$classes" $test
-    if ($LASTEXITCODE -ne 0) { throw "Cache/settings requires modules outside java.base: $test" }
+$testMatrix = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'contract-tests.json') -Raw | ConvertFrom-Json
+foreach ($entry in $testMatrix.tests) {
+    Invoke-Contract -Test $entry.class
+    if ($entry.baseOnly) { Invoke-Contract -Test $entry.class -BaseOnly }
 }
-foreach ($test in @('io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest', 'io.github.yghfv.saltneri.plugin.bilibili.BiliClientContractTest', 'io.github.yghfv.saltneri.plugin.bilibili.BiliResolutionContractTest', 'io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest', 'io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest', 'io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsContractTest')) {
-    & $java '--limit-modules=java.base' -classpath "$tests;$classes" $test
-    if ($LASTEXITCODE -ne 0) { throw "Platform resolver requires modules outside java.base: $test" }
-}
-foreach ($test in @('io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest','io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest','io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest')) {
-    & $java '--limit-modules=java.base' "-Djava.io.tmpdir=$temporaryFiles" -classpath "$tests;$classes" $test
-    if ($LASTEXITCODE -ne 0) { throw "Login requires modules outside java.base: $test" }
-}
-foreach ($test in @('io.github.yghfv.saltneri.plugin.library.CatalogContractTest','io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest','io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest')) {
-    & $java '--limit-modules=java.base' -classpath "$tests;$classes" $test
-    if ($LASTEXITCODE -ne 0) { throw "Library requires modules outside java.base: $test" }
-}
-& $java '--limit-modules=java.base' -classpath "$tests;$classes" io.github.yghfv.saltneri.plugin.ui.NativeDeskPlaybackContractTest
-if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outside java.base.' }
 
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.8.12-playlist-preload' } else { '0.1.0-hostprobe' }
-$pluginName = 'Salt Extend Online'
+$pluginVersion = if ($Experimental) { $pluginMetadata.version } else { $pluginMetadata.passiveVersion }
+$pluginName = $pluginMetadata.name
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }
 $manifest = @"
 Manifest-Version: 1.0
 Plugin-Class: io.github.yghfv.saltneri.plugin.$pluginClass
-Plugin-Id: io.github.yghfv.saltneri.online
+Plugin-Id: $($pluginMetadata.id)
 Plugin-Version: $pluginVersion
-Plugin-Provider: YGHFv
+Plugin-Provider: $($pluginMetadata.provider)
 Plugin-Name: $pluginName
 Plugin-Description: $pluginDescription
 Plugin-Has-Config: true
@@ -161,7 +108,7 @@ foreach ($line in ($manifest -split '\r?\n')) {
 [System.IO.File]::WriteAllText((Join-Path $meta 'MANIFEST.MF'), [string]::Join("`r`n", $manifestLines) + "`r`n`r`n", [System.Text.Encoding]::ASCII)
 $destination = Join-Path $root 'plugin/build/libs'
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
-$artifact = Join-Path $destination "plugin-io.github.yghfv.saltneri.online-$pluginVersion.spmod"
+$artifact = Join-Path $destination "plugin-$($pluginMetadata.id)-$pluginVersion.spmod"
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $temporary = Join-Path $build 'hostprobe.zip'
 # Only classes/resources go into the artifact, never the proprietary host package.

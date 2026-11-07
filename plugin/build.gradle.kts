@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     `java-library`
     kotlin("jvm") version "2.4.0"
@@ -6,6 +8,9 @@ plugins {
 }
 
 val experimentalAdapter = providers.gradleProperty("experimentalHostAdapter").orNull == "true"
+val pluginMetadata = Properties().apply {
+    rootProject.file("plugin.properties").inputStream().use { load(it) }
+}
 sourceSets.main {
     resources.exclude("preference_config*.json")
 }
@@ -38,71 +43,25 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
     }
 }
 
-tasks.register<JavaExec>("transportContractTest") {
-    dependsOn(tasks.testClasses)
-    classpath = sourceSets.test.get().runtimeClasspath
-    mainClass.set("io.github.yghfv.saltneri.plugin.transport.TransportContractTest")
-    jvmArgs("--limit-modules=java.base")
-}
-
-tasks.check {
-    dependsOn("transportContractTest")
-}
-
-listOf(
-    "nativeUiContractTest" to "io.github.yghfv.saltneri.plugin.ui.NativeUiContractTest",
-    "saltPageContentBindingContractTest" to "io.github.yghfv.saltneri.plugin.ui.SaltPageContentBindingContractTest",
-    "nativeHookTransformTest" to "io.github.yghfv.saltneri.plugin.ui.NativeHookTransformTest",
-    "coverLoaderContractTest" to "io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest",
-    "nativeQueueContractTest" to "io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest",
-    "playbackCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest",
-    "lazyPlaylistCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.LazyPlaylistCoverContractTest",
-    "nativePlaylistOrderContractTest" to "io.github.yghfv.saltneri.plugin.host.NativePlaylistOrderContractTest",
-    "playlistPrefetchContractTest" to "io.github.yghfv.saltneri.plugin.transport.PlaylistPrefetchContractTest",
-    "catalogBulkContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogBulkContractTest",
-    "onlineLyricsContractTest" to "io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest",
-    "queueReplayContractTest" to "io.github.yghfv.saltneri.plugin.transport.QueueReplayContractTest",
-    "windowsMediaIdentityContractTest" to "io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest",
-    "windowsAppShortcutContractTest" to "io.github.yghfv.saltneri.plugin.host.WindowsAppShortcutContractTest"
-).forEach { (taskName, testClass) ->
+val contractMatrix = groovy.json.JsonSlurper().parse(rootProject.file("scripts/contract-tests.json")) as Map<*, *>
+(contractMatrix["tests"] as List<*>).forEach { value ->
+    val entry = value as Map<*, *>
+    val testClass = entry["class"] as String
+    val taskName = testClass.substringAfterLast('.').replaceFirstChar { it.lowercase() }
     tasks.register<JavaExec>(taskName) {
         dependsOn(tasks.testClasses)
         classpath = sourceSets.test.get().runtimeClasspath
         mainClass.set(testClass)
-        val tempFiles = layout.buildDirectory.dir("native-ui-contract-tmp")
+        val tempFiles = layout.buildDirectory.dir("contract-tmp/$taskName")
         doFirst { tempFiles.get().asFile.mkdirs() }
-        jvmArgs("-Djava.io.tmpdir=" + tempFiles.get().asFile.absolutePath)
-    }
-    tasks.check { dependsOn(taskName) }
-}
-
-listOf(
-    "pinnedHttpsContractTest" to "io.github.yghfv.saltneri.plugin.net.PinnedHttpsContractTest",
-    "boundedJsonContractTest" to "io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest",
-    "biliClientContractTest" to "io.github.yghfv.saltneri.plugin.bilibili.BiliClientContractTest",
-    "biliResolutionContractTest" to "io.github.yghfv.saltneri.plugin.bilibili.BiliResolutionContractTest",
-    "neteaseClientContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest",
-    "neteaseResolutionContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest",
-    "neteaseLyricsContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsContractTest",
-    "catalogContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogContractTest",
-    "catalogCacheContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest",
-    "libraryWorkflowContractTest" to "io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest",
-    "nativeDeskPlaybackContractTest" to "io.github.yghfv.saltneri.plugin.ui.NativeDeskPlaybackContractTest",
-    "authProtocolContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest",
-    "authLifecycleContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest",
-    "webLoginContractTest" to "io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest",
-    "windowsDpapiContractTest" to "io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest",
-    "rangeDiskCacheContractTest" to "io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest",
-    "playbackSettingsContractTest" to "io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest"
-).forEach { (taskName, testClass) ->
-    tasks.register<JavaExec>(taskName) {
-        dependsOn(tasks.testClasses)
-        classpath = sourceSets.test.get().runtimeClasspath
-        mainClass.set(testClass)
-        jvmArgs("--limit-modules=java.base")
-        val tempFiles = layout.buildDirectory.dir("contract-tmp")
-        doFirst { tempFiles.get().asFile.mkdirs() }
-        jvmArgs("-Djava.io.tmpdir=" + tempFiles.get().asFile.absolutePath)
+        jvmArgs("-Dfile.encoding=UTF-8", "-Djava.io.tmpdir=" + tempFiles.get().asFile.absolutePath)
+        if (entry["baseOnly"] == true) jvmArgs("--limit-modules=java.base")
+        else {
+            jvmArgs("--enable-native-access=ALL-UNNAMED")
+            providers.gradleProperty("saltHostPackage").orNull?.let {
+                jvmArgs("-Dskiko.library.path=" + file(it).parentFile.absolutePath)
+            }
+        }
     }
     tasks.check { dependsOn(taskName) }
 }
@@ -110,8 +69,11 @@ listOf(
 tasks.register<Exec>("verifyQrVendor") {
     commandLine("python", rootProject.file("scripts/verify-vendor.py").absolutePath)
 }
+tasks.register<Exec>("verifyProject") {
+    commandLine("python", rootProject.file("scripts/verify-project.py").absolutePath)
+}
 tasks.compileJava {
-    dependsOn("verifyQrVendor")
+    dependsOn("verifyQrVendor", "verifyProject")
     // The checked-in extension index is shared with the offline local build.
     options.compilerArgs.add("-proc:none")
 }
@@ -130,10 +92,10 @@ tasks.processResources {
 
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
-    PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.12-playlist-preload" else project.version.toString()
-    PluginProvider = "YGHFv"
-    PluginName = "Salt Extend Online"
+    PluginId = pluginMetadata.getProperty("id")
+    PluginVersion = pluginMetadata.getProperty(if (experimentalAdapter) "version" else "passiveVersion")
+    PluginProvider = pluginMetadata.getProperty("provider")
+    PluginName = pluginMetadata.getProperty("name")
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."
     PluginPermissions = if (experimentalAdapter) listOf(com.xuncorp.spw.workshop.gradle.PluginPermission.CLASS_TRANSFORM) else emptyList()
     PluginHasConfig = true

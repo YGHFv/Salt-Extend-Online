@@ -1,0 +1,251 @@
+{
+  "schema": 1,
+  "offlineSources": [
+    "transport/ByteRange.java",
+    "transport/DiagnosticTone.java",
+    "transport/MediaLease.java",
+    "transport/LoopbackRangeServer.java",
+    "transport/RangeDiskCache.java",
+    "net/RequestScope.java",
+    "net/PinnedHttpsConnection.java",
+    "net/BoundedJson.java",
+    "net/JsonResponse.java"
+  ],
+  "tests": [
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.HostProfileSmokeTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.net.PinnedHttpsContractTest",
+      "baseOnly": true,
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest",
+      "baseOnly": true,
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.bilibili.BiliClientContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.bilibili.BiliResolutionContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.CatalogContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.PlaylistWorkflowContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.BiliDiscoveryContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.LazyPlaylistContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.LazyPlaylistCoverContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.NativePlaylistOrderContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.PlaylistPrefetchContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.CatalogBulkContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.WindowsAppShortcutContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NativeUiContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.SaltPageContentBindingContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NativeHookTransformTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NativePageRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.HeaderSearchRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.PlaylistRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NativeDeskPlaybackContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.TransportContractTest",
+      "baseOnly": true,
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.InterceptorContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.HostRangeIntegrationTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.BiliResolvedIntegrationTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.NeteaseResolvedIntegrationTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.PlaybackSessionContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.QueueReplayContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest",
+      "baseOnly": true,
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.EngineLinkContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.DiagnosticContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.transport.PlatformPlaybackContractTest",
+      "baseOnly": false,
+      "offline": false
+    }
+  ]
+}

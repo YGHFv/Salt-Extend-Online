@@ -7,6 +7,9 @@ import zipfile
 
 
 def validate(path, experimental):
+    metadata = dict(line.split("=", 1) for line in
+                    (pathlib.Path(__file__).resolve().parents[1] / "plugin.properties").read_text(encoding="ascii").splitlines()
+                    if line and not line.startswith("#"))
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         if len(set(names)) != len(names):
@@ -31,12 +34,14 @@ def validate(path, experimental):
         entry_class = "ExperimentalPlugin" if experimental else "MainPlugin"
         if attributes["Plugin-Class"] != "io.github.yghfv.saltneri.plugin." + entry_class:
             raise ValueError("Wrong plugin entry point")
-        if attributes["Plugin-Id"] != "io.github.yghfv.saltneri.online":
+        if attributes["Plugin-Id"] != metadata["id"]:
             raise ValueError("Unexpected plugin ID")
-        if attributes["Plugin-Name"] != "Salt Extend Online":
+        if attributes["Plugin-Name"] != metadata["name"]:
             raise ValueError("Unexpected mod display name")
+        if attributes["Plugin-Version"] != metadata["version" if experimental else "passiveVersion"]:
+            raise ValueError("Unexpected mod version")
         if experimental:
-            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.12-playlist-preload":
+            if attributes.get("Plugin-Permissions") != "class-transform":
                 raise ValueError("Experimental permission/version missing")
         elif "Plugin-Permissions" in attributes:
             raise ValueError("Passive artifact requests permissions")

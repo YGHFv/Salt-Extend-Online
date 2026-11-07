@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "title": "Salt Extend Online · 设置（0.8.12）",
+      "title": "Salt Extend Online · 设置",
       "config": "config.json",
       "preferences": [
         {

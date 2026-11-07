@@ -115,7 +115,7 @@ public final class LibraryController implements AutoCloseable {
         s.knownPages = 0; s.totalCount = -1; s.creator = ""; s.filter = ""; s.sort = Sort.DEFAULT; s.error = ""; s.title="";
     }
     private void load(State s, Query next) {
-        navigation.run(); s.rows.clear(); s.visible = null; s.query = next; s.account=accounts.apply(s.platform); s.loader.start(next,"read");
+        navigation.run(); s.rows.clear(); s.visible = null; s.error = ""; s.query = next; s.account=accounts.apply(s.platform); s.loader.start(next,"read");
     }
     private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword()); }
     public synchronized void turn(int direction) {
@@ -142,7 +142,11 @@ public final class LibraryController implements AutoCloseable {
         if (s.fullMode) {
             var all = s.complete.snapshot();
             if (all.resolved() != s.contents) { s.contents = all.resolved(); s.rows.clear(); s.visible = null; if (s.contents != null) rebuild(s); }
-            if (all.failed()) s.playPending = false;
+            if (all.failed()) {
+                s.playPending = false;
+                // Bulk failure must not strand a preserved, otherwise usable paginated catalog.
+                if(s.visible!=null) { s.fullMode=false; s.error=all.status(); s.complete.invalidate(""); }
+            }
             return all;
         }
         Page page = raw.resolved();
@@ -191,7 +195,9 @@ public final class LibraryController implements AutoCloseable {
     }
     private void complete(State s) { complete(s,false); }
     private void complete(State s,boolean preserveVisible) {
-        if (!s.fullMode) { s.fullMode=true; if(!preserveVisible) { s.rows.clear(); s.visible=null; } s.complete.start(at(s.query,1),"all"); }
+        s.error="";
+        if(!preserveVisible && s.contents==null) { s.rows.clear(); s.visible=null; }
+        if (!s.fullMode) { s.fullMode=true; s.complete.start(at(s.query,1),"all"); }
         else if (s.complete.snapshot().failed()) s.complete.start(at(s.query,1),"all");
     }
     public synchronized void filter(String keyword) {

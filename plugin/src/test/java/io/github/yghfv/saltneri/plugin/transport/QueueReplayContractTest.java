@@ -107,6 +107,16 @@ public final class QueueReplayContractTest {
                 });
                 check(open(adapter,qualityTrack.mediaItem()).equals(321) && qualityResolves.get()==0);
                 quality.incrementAndGet(); check(open(adapter,qualityTrack.mediaItem()).equals(321) && qualityResolves.get()==1);
+                // A transient first artwork failure must not permanently force a non-file queue path.
+                var missing=audio(key,"account-A",clock,null);
+                var recovered=session.prepare(key,missing.metadata(),missing.lease(),null,r->audio(key,"account-A",clock,png));
+                Path recoveredPath=Path.of(recovered.path());
+                check(recoveredPath.isAbsolute() && !Files.exists(recoveredPath));
+                String[] recoveredFields=profile.mediaFactory().read(recovered.mediaItem());
+                clock.advance(61);
+                check(open(adapter,recovered.mediaItem()).equals(321) && Files.size(recoveredPath)>42);
+                check(Arrays.equals(recoveredFields,profile.mediaFactory().read(recovered.mediaItem())));
+                recovered.close(); check(!Files.exists(recoveredPath));
                 AtomicInteger concurrent=new AtomicInteger(); CountDownLatch started=new CountDownLatch(1),release=new CountDownLatch(1);
                 var next=audio(key,"account-A",clock,null);
                 var parallel=session.prepare(key,next.metadata(),next.lease(),null,r->{concurrent.incrementAndGet();started.countDown();release.await(3,TimeUnit.SECONDS);r.check();return audio(key,"account-A",clock,null);});

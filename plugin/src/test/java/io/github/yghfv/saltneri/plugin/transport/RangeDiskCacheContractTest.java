@@ -41,6 +41,7 @@ public final class RangeDiskCacheContractTest {
             check(cache.usedBytes()<=32);
         }
         check(!Files.exists(directory));
+        indexedRanges();
         var count=new AtomicInteger(); Clock clock=Clock.fixed(Instant.parse("2026-11-07T00:00:00Z"),ZoneOffset.UTC);
         try(var server=new LoopbackRangeServer(clock,uri->{count.incrementAndGet();return new TransportContractTest.FakeConnection(uri,100);})) {
             server.cacheLimit(20);
@@ -58,5 +59,29 @@ public final class RangeDiskCacheContractTest {
             server.revoke(local); check(TransportContractTest.call(local,"GET","Range: bytes=0-9\r\n","").code()==404 && count.get()==3);
         }
         System.out.println("PASS: "+checks+" disk quota/LRU/clear/concurrency/lease isolation and real loopback cache-hit checks; no external traffic");
+    }
+    private static void indexedRanges() {
+        // Equal values still represent different live leases; never share or revoke their bytes.
+        Object owner=new String("lease"),other=new String("lease");
+        try(var cache=new RangeDiskCache()) {
+            cache.limit(32);
+            cache.put(owner,new ByteRange(0,7),new byte[]{1,2,3,4,5,6,7,8},cache.revision(),()->true);
+            check(cache.get(other,new ByteRange(0,7))==null);
+            cache.put(other,new ByteRange(0,3),new byte[]{9,9,9,9},cache.revision(),()->true);
+            cache.put(owner,new ByteRange(4,5),new byte[]{5,6},cache.revision(),()->true);
+            check(Arrays.equals(cache.get(owner,new ByteRange(4,7)),new byte[]{5,6,7,8}));
+            cache.put(owner,new ByteRange(0,1),new byte[]{1,2},cache.revision(),()->true);
+            check(Arrays.equals(cache.get(owner,new ByteRange(1,6)),new byte[]{2,3,4,5,6,7}));
+            cache.revoke(owner);
+            check(cache.usedBytes()==4 && cache.get(owner,new ByteRange(1,2))==null);
+            check(Arrays.equals(cache.get(other,new ByteRange(0,3)),new byte[]{9,9,9,9}));
+            cache.clear();
+            check(cache.get(other,new ByteRange(1,2))==null && cache.usedBytes()==0);
+            cache.put(owner,new ByteRange(100,103),new byte[]{1,2,3,4},cache.revision(),()->true);
+            cache.put(other,new ByteRange(200,203),new byte[]{9,9,9,9},cache.revision(),()->true);
+            check(cache.get(owner,new ByteRange(101,102))!=null);
+            cache.limit(4);
+            check(cache.get(other,new ByteRange(201,202))==null && cache.get(owner,new ByteRange(101,102))!=null);
+        }
     }
 }
