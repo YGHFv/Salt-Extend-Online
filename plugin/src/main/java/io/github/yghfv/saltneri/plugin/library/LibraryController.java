@@ -22,12 +22,14 @@ public final class LibraryController implements AutoCloseable {
     private final CoverLookup coverLookup;
     private final Consumer<OnlinePlaybackController.Target> prepare;
     private final Runnable navigation;
+    private final BooleanSupplier authorized;
     private final Map<AccountPlatform, State> states = new EnumMap<>(AccountPlatform.class);
     private AccountPlatform platform = AccountPlatform.NETEASE;
     private static final class State {
         final AccountPlatform platform;
         PlatformResolutionController<Query, String, Page> loader;
         PlatformResolutionController<Query, String, Contents> complete;
+        CatalogPageCache cache;
         Query query;
         Page visible;
         Contents contents;
@@ -50,13 +52,17 @@ public final class LibraryController implements AutoCloseable {
     }
     public LibraryController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, Consumer<OnlinePlaybackController.Target> prepare,
                              Runnable navigation, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> testLoader, CoverLookup coverLookup) {
-        this.accounts = accounts; this.coverLookup = coverLookup; this.prepare = prepare; this.navigation = navigation;
+        this.accounts = accounts; this.coverLookup = coverLookup; this.prepare = prepare; this.navigation = navigation; this.authorized = authorized;
         Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> factory = account ->
                 testLoader == null ? (q,k,scope,r) -> new CatalogClient(account).load(q,r) : testLoader.apply(account);
         for (AccountPlatform p : AccountPlatform.values()) {
             State s = new State(p); states.put(p,s);
+            s.cache = new CatalogPageCache(clock);
             // Catalog metadata has no signed audio URL; retain it until explicit refresh/account revocation.
-            s.loader = new PlatformResolutionController<>("Catalog", factory, () -> accounts.apply(p), authorized, clock,
+            s.loader = new PlatformResolutionController<>("Catalog", account -> {
+                var resolver = factory.apply(account);
+                return (q,k,scope,r) -> s.cache.load(account,q,k,scope,r,resolver);
+            }, () -> accounts.apply(p), authorized, clock,
                     page -> Instant.MAX, page -> "", CatalogFailure::diagnostic);
             s.complete = new PlatformResolutionController<>("Playlist", account -> (q,k,scope,r) -> {
                 var resolver = factory.apply(account); List<Item> all = new ArrayList<>(); Set<String> ids = new HashSet<>(); String title = "";
@@ -87,6 +93,7 @@ public final class LibraryController implements AutoCloseable {
     /** Explicit refresh preserves location/order but never resumes a previous play intent. */
     public synchronized void reload() {
         State s = current(); if (s.query == null) throw new IllegalStateException("No current catalog");
+        s.cache.clear();
         s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.rows.clear();
         s.playPending = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
         if (s.fullMode) {
@@ -117,6 +124,9 @@ public final class LibraryController implements AutoCloseable {
         } else prepare.accept(new OnlinePlaybackController.Target(platform,item.target()));
     }
     private PlatformResolutionController.Snapshot<?> refresh(State s) {
+        if (!permitted() || s.account != accounts.apply(s.platform) || s.account != null && !s.account.isActive()) {
+            invalidate(s); s.account = accounts.apply(s.platform);
+        }
         var raw = s.loader.snapshot();
         if (s.fullMode) {
             var all = s.complete.snapshot();
@@ -141,6 +151,7 @@ public final class LibraryController implements AutoCloseable {
         }
         return raw;
     }
+    private boolean permitted() { try { return authorized.getAsBoolean(); } catch (RuntimeException error) { return false; } }
     private void publish(State s, List<Item> items) {
         s.rows.clear(); for (Item item : items) if (item.enabled()) s.rows.put(UUID.randomUUID().toString(),item);
     }
@@ -226,7 +237,7 @@ public final class LibraryController implements AutoCloseable {
         play.accept(new OnlinePlaybackController.Target(s.platform, item.target()));
     }
     public synchronized boolean currentRow(String token) { State s = stateFor(token); if (s == null) return false; refresh(s); return s.rows.containsKey(token); }
-    private void invalidate(State s) { reset(s); s.rows.clear(); s.visible=null; s.query=null; s.loader.invalidate(""); }
+    private void invalidate(State s) { s.cache.clear(); reset(s); s.rows.clear(); s.visible=null; s.query=null; s.loader.invalidate(""); }
     public synchronized void accountChanged(AccountPlatform changed) { invalidate(states.get(changed)); if(platform==changed) navigation.run(); }
     public synchronized void invalidate() { states.values().forEach(this::invalidate); navigation.run(); }
     @Override public synchronized void close() { invalidate(); for(State s:states.values()) { s.loader.close(); s.complete.close(); } }

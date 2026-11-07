@@ -19,6 +19,7 @@ public final class CoverLoader implements AutoCloseable {
     @FunctionalInterface public interface Opener { HttpURLConnection open(URI uri) throws IOException; }
     @FunctionalInterface public interface Source { URI resolve(RequestScope request) throws IOException; }
     public static final int LIST_EDGE = 168;
+    static final int PARALLEL_LOADS = 3;
     private static final int MAX_BYTES = 1048576, MAX_ENTRIES = 20;
     private final Opener opener;
     private final ThreadPoolExecutor worker;
@@ -37,7 +38,7 @@ public final class CoverLoader implements AutoCloseable {
     public CoverLoader() { this(PinnedHttpsConnection::new); }
     public CoverLoader(Opener opener) {
         this.opener = opener;
-        worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(20), r -> {
+        worker = new ThreadPoolExecutor(PARALLEL_LOADS, PARALLEL_LOADS, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(20), r -> {
             Thread thread = new Thread(r, "salt-neri-cover"); thread.setDaemon(true); return thread;
         });
     }

@@ -76,6 +76,7 @@ listOf(
     "neteaseClientContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest",
     "neteaseResolutionContractTest" to "io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest",
     "catalogContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogContractTest",
+    "catalogCacheContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest",
     "libraryWorkflowContractTest" to "io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest",
     "nativeDeskPlaybackContractTest" to "io.github.yghfv.saltneri.plugin.ui.NativeDeskPlaybackContractTest",
     "authProtocolContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest",
@@ -115,7 +116,7 @@ tasks.processResources {
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
     PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.8-cover-mime" else project.version.toString()
+    PluginVersion = if (experimentalAdapter) "0.8.9-loading-cache" else project.version.toString()
     PluginProvider = "YGHFv"
     PluginName = "Salt Extend Online"
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."

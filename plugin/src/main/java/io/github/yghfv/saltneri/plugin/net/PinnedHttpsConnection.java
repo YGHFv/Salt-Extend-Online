@@ -223,22 +223,31 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
         parameters.setServerNames(List.of(new SNIHostName(host)));
         return parameters;
     }
-    private static Sockets tlsSockets() throws IOException {
+    private static SSLContext sharedTls;
+    static synchronized SSLContext tlsContext() throws IOException {
+        if (sharedTls != null) return sharedTls;
         try {
             SSLContext context = SSLContext.getInstance("TLS");
             context.init(null, null, null);
-            return new Sockets() {
-                @Override public Socket create() { return new Socket(Proxy.NO_PROXY); }
-                @Override public Socket secure(Socket socket, String host) throws IOException {
-                    // Layering supplies the certificate's DNS peer name without another DNS lookup.
-                    SSLSocket tls = (SSLSocket)context.getSocketFactory().createSocket(socket, host, 443, true);
-                    tls.setSoTimeout(socket.getSoTimeout());
-                    tls.setSSLParameters(parameters(host));
-                    tls.startHandshake();
-                    return tls;
-                }
-            };
+            // Plugin-local trust/session cache, not JVM global HTTP state. Each request still pins DNS and verifies its host.
+            context.getClientSessionContext().setSessionCacheSize(64);
+            context.getClientSessionContext().setSessionTimeout(300);
+            sharedTls = context; return context;
         } catch (GeneralSecurityException failure) { throw new IOException("Verified TLS unavailable"); }
+    }
+    private static Sockets tlsSockets() throws IOException {
+        SSLContext context = tlsContext();
+        return new Sockets() {
+            @Override public Socket create() { return new Socket(Proxy.NO_PROXY); }
+            @Override public Socket secure(Socket socket, String host) throws IOException {
+                // Layering supplies the certificate's DNS peer name without another DNS lookup.
+                SSLSocket tls = (SSLSocket)context.getSocketFactory().createSocket(socket, host, 443, true);
+                tls.setSoTimeout(socket.getSoTimeout());
+                tls.setSSLParameters(parameters(host));
+                tls.startHandshake();
+                return tls;
+            }
+        };
     }
     private static long positiveLength(String text) throws IOException {
         if (!text.matches("[0-9]{1,19}")) throw new IOException("Invalid HTTPS length");

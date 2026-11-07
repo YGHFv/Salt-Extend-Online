@@ -172,7 +172,7 @@ public final class HeaderSearchRenderTest {
                             check(queried.get().platform()==AccountPlatform.NETEASE && queried.get().keyword().equals("netease music"));
                             click(scene,"\u641c\u7d22\u7f51\u6613\u4e91"); check(find(scene,null,setText)==null);
                             check(find(scene,"1/2",null)!=null && find(scene,"Search hit",null)!=null);
-                            click(scene,"\u4e0b\u4e00\u9875"); check(queried.get().page()==2 && find(scene,"2/2",null)!=null);
+                            click(scene,"\u4e0b\u4e00\u9875"); check(library.snapshot().get("page").equals(2) && find(scene,"2/2",null)!=null);
                             failCatalog.set(true); click(scene,"\u5237\u65b0\u5f53\u524d\u5217\u8868");
                             check(find(scene,"NET_SEARCH/HTTP=429",null)!=null && find(scene,"Search hit",null)==null);
                             check(find(scene,"\u91cd\u8bd5\u5f53\u524d\u5217\u8868",SemanticsActions.INSTANCE.getOnClick())!=null);

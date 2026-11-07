@@ -56,17 +56,30 @@ public final class CatalogClient {
             return page("\u641c\u7d22\uff1a" + query.keyword(), items, query.page() < 500 && query.page() * 20L < total, total);
         }
         if (query.view() == View.FOLDER) {
-            Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", "0", "s", "0")), request), 200, http.stage());
+            Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
             Map<String, Object> list = object(root.get("playlist")); if (id(list.get("id")) != query.folder()) throw invalid();
             List<Object> ids = array(list.get("trackIds")); if (ids.size() > 10000) throw invalid();
             Set<Long> all = new HashSet<>(); List<Long> selected = new ArrayList<>(); int offset = (query.page() - 1) * 20;
             for (int i = 0; i < ids.size(); i++) { long song = id(object(ids.get(i)).get("id")); if (!all.add(song)) throw invalid(); if (i >= offset && i < offset + 20) selected.add(song); }
             List<Item> items = new ArrayList<>();
             if (!selected.isEmpty()) {
-                String joined = selected.stream().map(Object::toString).collect(java.util.stream.Collectors.joining(",", "[", "]"));
-                var details = success(http.json(URI.create("https://music.163.com/api/song/detail?ids=" + encode(joined)), null, request), 200, http.stage());
-                Map<Long, Map<String, Object>> songs = new HashMap<>(); List<Object> rows = array(details.get("songs")); if (rows.size() > selected.size()) throw invalid();
-                for (Object row : rows) { var song = object(row); long songId = id(song.get("id")); if (!selected.contains(songId) || songs.put(songId, song) != null) throw invalid(); }
+                Map<Long, Map<String, Object>> songs = new HashMap<>(); Set<Long> seen = new HashSet<>();
+                // First-page playlist responses can already contain the same song metadata. Fetch only gaps.
+                for (Object row : bounded(arrayOrEmpty(list.get("tracks")), 20)) {
+                    var song = object(row); long songId = id(song.get("id"));
+                    if (!all.contains(songId) || !seen.add(songId)) throw invalid();
+                    if (selected.contains(songId) && song.get("name") instanceof String && song.get("fee") != null
+                            && alias(song,"ar","artists") instanceof List<?>
+                            && alias(song,"dt","duration") != null && alias(song,"al","album") instanceof Map<?,?> album
+                            && album.get("picUrl") instanceof String) songs.put(songId,song);
+                }
+                List<Long> missing = selected.stream().filter(songId -> !songs.containsKey(songId)).toList();
+                if (!missing.isEmpty()) {
+                    String joined = missing.stream().map(Object::toString).collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                    var details = success(http.json(URI.create("https://music.163.com/api/song/detail?ids=" + encode(joined)), null, request), 200, http.stage());
+                    List<Object> rows = array(details.get("songs")); if (rows.size() > missing.size()) throw invalid();
+                    for (Object row : rows) { var song = object(row); long songId = id(song.get("id")); if (!missing.contains(songId) || songs.put(songId, song) != null) throw invalid(); }
+                }
                 for (long songId : selected) {
                     var song = songs.get(songId);
                     if (song == null) { items.add(new Item(Kind.TRACK, Long.toString(songId), "Unavailable #" + songId, "Missing/deleted track", 0, false)); continue; }

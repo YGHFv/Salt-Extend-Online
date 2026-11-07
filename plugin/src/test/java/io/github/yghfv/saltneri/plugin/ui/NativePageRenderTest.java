@@ -223,6 +223,7 @@ public final class NativePageRenderTest {
                 check(requests.get() == 1 && queues.get() == 1 && actions.get() == 1);
                 for (int width : new int[]{740, 420}) for (int count : new int[]{0, 2, 20, 21}) {
                     catalogSize.set(count);
+                    library.invalidate();
                     library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
                     long ready = System.nanoTime() + 3_000_000_000L;
                     while (!library.snapshot().get("title").equals("Synthetic playlist") && System.nanoTime() < ready) Thread.sleep(10);
@@ -240,6 +241,7 @@ public final class NativePageRenderTest {
                     }
                 }
                 invalidItems.set(true); catalogSize.set(21);
+                library.invalidate();
                 library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
                 long hiddenReady = System.nanoTime()+3_000_000_000L;
                 while (!Boolean.TRUE.equals(library.snapshot().get("loaded")) && System.nanoTime()<hiddenReady) Thread.sleep(10);

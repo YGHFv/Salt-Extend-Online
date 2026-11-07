@@ -50,7 +50,7 @@ public final class CatalogContractTest {
                 + "{\"id\":2,\"name\":\"Paid\",\"fee\":1,\"duration\":180000,\"artists\":[{\"name\":\"Legacy artist\"}],\"album\":{\"picUrl\":\"https://p2.music.126.net/legacy.jpg\"}},"
                 + "{\"id\":3,\"name\":\"Deleted\",\"fee\":0,\"dt\":120000,\"st\":-1},{\"id\":0,\"name\":\"Invalid\"},"
                 + "{\"id\":1,\"name\":\"Duplicate\"},{\"id\":4,\"name\":\" \"}]}}";
-        byte[] searchForm;
+        byte[] searchForm, playlistForm;
         String created = "{\"code\":0,\"data\":{\"count\":30,\"list\":[{\"id\":20,\"mid\":42,\"title\":\"Favorites\",\"media_count\":5},{\"season_id\":30,\"name\":\"Collection\",\"type\":21}]}}";
         String resources = "{\"code\":0,\"data\":{\"info\":{\"id\":20,\"title\":\"Favorites\"},\"has_more\":true,\"medias\":[{\"id\":1,\"type\":2,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60},{\"id\":2,\"type\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
         String collection = "{\"code\":0,\"data\":{\"meta\":{\"season_id\":30,\"mid\":99,\"name\":\"Collection\",\"total\":21},\"page\":{\"total\":21},\"archives\":[{\"aid\":1,\"bvid\":\"BV17x411w7KC\",\"title\":\"Video\",\"duration\":60,\"pic\":\"//i0.hdslb.com/fixture.jpg\"},{\"aid\":2,\"title\":\"Deleted\",\"duration\":0}]}}";
@@ -64,6 +64,7 @@ public final class CatalogContractTest {
         String failPath = "", statusPath = "", htmlPath = ""; int status = 200; IOException failure;
         final List<Response> requests = new ArrayList<>();
         public HttpURLConnection open(URI uri, byte[] form) throws IOException {
+            if (uri.getPath().equals("/api/v6/playlist/detail")) playlistForm=form.clone();
             if (uri.getPath().equals(failPath)) throw failure;
             String json = switch (uri.getPath()) {
                 case "/" -> "<html></html>"; case "/weapi/w/nuser/account/get" -> "{\"code\":200,\"account\":{\"id\":" + identity + "},\"profile\":{\"userId\":" + identity + "}}";
@@ -262,6 +263,7 @@ public final class CatalogContractTest {
             safeFailure(() -> verifyDenied.load(new Query(AccountPlatform.BILIBILI, View.MINE, 0, 1), bili), Stage.BILI_VERIFY, Reason.AUTH, null);
         } finally { bili.retire(); }
         neteaseSearch();
+        inlineTracks();
         Fixture wrongFolder = new Fixture(); wrongFolder.detail = wrongFolder.detail.replace("\"id\":10", "\"id\":99"); fails(() -> wrongFolder.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
         Fixture duplicates = new Fixture(); duplicates.detail = duplicates.detail.replace("\"id\":2", "\"id\":1"); fails(() -> duplicates.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
         Fixture foreign = new Fixture(); foreign.songs = foreign.songs.replace("\"id\":2", "\"id\":99"); fails(() -> foreign.load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null));
@@ -374,5 +376,34 @@ public final class CatalogContractTest {
             fails(()->http.json(URI.create("https://evil.example/weapi/cloudsearch/get/web"),new byte[]{42},request));
             fails(()->http.json(URI.create("http://music.163.com/weapi/cloudsearch/get/web"),new byte[]{42},request));
         }
+    }
+    private static void inlineTracks() throws Exception {
+        Fixture fixture=new Fixture();
+        String track="{\"id\":1,\"name\":\"Inline\",\"fee\":0,\"dt\":120000,\"ar\":[{\"name\":\"Author\"}],\"al\":{\"picUrl\":\"https://p2.music.126.net/fixture.jpg\"}}";
+        fixture.detail="{\"code\":200,\"playlist\":{\"id\":10,\"name\":\"Playlist\",\"trackIds\":[{\"id\":1}],\"tracks\":["+track+"]}}";
+        Query first=new Query(AccountPlatform.NETEASE,View.FOLDER,10,1);
+        Page page=fixture.load(first,null);
+        check(fixture.requests.size()==1 && page.items().getFirst().title().equals("Inline") && page.items().getFirst().enabled());
+        check(page.items().getFirst().subtitle().equals("Author") && page.items().getFirst().cover()!=null);
+        check(new String(fixture.playlistForm,StandardCharsets.US_ASCII).contains("n=20"));
+        Fixture partial=new Fixture();
+        partial.detail=fixture.detail.replace("\"trackIds\":[{\"id\":1}]","\"trackIds\":[{\"id\":1},{\"id\":2}]");
+        partial.songs="{\"code\":200,\"songs\":[{\"id\":2,\"name\":\"Fetched\",\"fee\":0,\"duration\":90000}]}";
+        var two=partial.load(first,null); check(two.items().size()==2 && two.items().get(1).title().equals("Fetched"));
+        check(partial.requests.size()==2 && partial.requests.getLast().getURL().getQuery().equals("ids=%5B2%5D"));
+        Fixture missingCover=new Fixture(); missingCover.detail=fixture.detail.replace("\"picUrl\":\"https://p2.music.126.net/fixture.jpg\"", "");
+        missingCover.songs="{\"code\":200,\"songs\":["+track+"]}";
+        check(missingCover.load(first,null).items().getFirst().cover()!=null && missingCover.requests.size()==2);
+        Fixture missingArtist=new Fixture(); missingArtist.detail=fixture.detail.replace("\"ar\":[{\"name\":\"Author\"}],", "");
+        missingArtist.songs="{\"code\":200,\"songs\":["+track+"]}";
+        check(missingArtist.load(first,null).items().getFirst().subtitle().equals("Author") && missingArtist.requests.size()==2);
+        for(String rows:List.of(track+","+track,track.replace("\"id\":1","\"id\":99"),String.join(",",Collections.nCopies(21,track)))) {
+            Fixture invalid=new Fixture(); invalid.detail=fixture.detail.replace("\"tracks\":["+track+"]","\"tracks\":["+rows+"]");
+            safeFailure(()->invalid.load(first,null),Stage.NET_CONTENTS,Reason.RESPONSE,null);
+        }
+        Fixture order=new Fixture(); order.detail=partial.detail.replace("\"tracks\":["+track+"]","\"tracks\":["+track.replace("\"id\":1","\"id\":2")+","+track+"]");
+        check(order.load(first,null).items().stream().map(Item::target).toList().equals(List.of("1","2")) && order.requests.size()==1);
+        fixture.load(new Query(AccountPlatform.NETEASE,View.FOLDER,10,2),null);
+        check(new String(fixture.playlistForm,StandardCharsets.US_ASCII).contains("n=0"));
     }
 }

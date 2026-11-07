@@ -55,6 +55,10 @@ public final class PinnedHttpsContractTest {
     }
     private static PinnedHttpsConnection fixture(String response) throws IOException { return fixture(new FixtureSocket(response)); }
     public static void main(String[] args) throws Exception {
+        var context=PinnedHttpsConnection.tlsContext();
+        check(context==PinnedHttpsConnection.tlsContext());
+        check(context.getClientSessionContext().getSessionCacheSize()==64);
+        check(context.getClientSessionContext().getSessionTimeout()==300);
         for (String address : List.of("0.0.0.0", "127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1",
                 "169.254.169.254", "100.64.1.1", "100.127.0.1", "198.18.1.1", "192.0.2.1", "198.51.100.1",
                 "203.0.113.1", "192.0.0.8", "192.88.99.1", "224.0.0.1", "255.255.255.255", "::1", "::",

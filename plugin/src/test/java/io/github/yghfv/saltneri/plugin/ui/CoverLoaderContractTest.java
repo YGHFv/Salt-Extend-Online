@@ -191,6 +191,40 @@ public final class CoverLoaderContractTest {
             loader.clear(); release.countDown(); loader.close();
             check(loader.request("stale", SOURCE, () -> true) == null && cancelledOpens.get() == 1);
         } finally { release.countDown(); }
+        parallelCovers(fixture);
         System.out.println("PASS: " + checks + " cover source/HTTPS/bounds/decoder/cache/revocation checks (fake image HTTP)");
+    }
+    private static void parallelCovers(byte[] fixture) throws Exception {
+        var started=new CountDownLatch(CoverLoader.PARALLEL_LOADS); var release=new CountDownLatch(1);
+        var running=new AtomicInteger(); var peak=new AtomicInteger(); var opens=new AtomicInteger();
+        try(CoverLoader loader=new CoverLoader(uri->{
+            opens.incrementAndGet(); int count=running.incrementAndGet(); peak.accumulateAndGet(count,Math::max); started.countDown();
+            try { release.await(); } catch(InterruptedException error) { Thread.currentThread().interrupt(); }
+            finally { running.decrementAndGet(); }
+            return new Response(uri,fixture);
+        })) {
+            for(int i=0;i<20;i++) loader.request("parallel-"+i,SOURCE,()->true);
+            check(started.await(2,TimeUnit.SECONDS)); check(peak.get()==3 && opens.get()==3);
+            release.countDown(); long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+            boolean complete;
+            do {
+                complete=true;
+                for(int i=0;i<20;i++) complete &= loader.request("parallel-"+i,SOURCE,()->true)!=null;
+                if(!complete) Thread.sleep(5);
+            } while(!complete && System.nanoTime()<end);
+            check(complete && opens.get()==20 && peak.get()<=3);
+        } finally { release.countDown(); }
+        var slowStarted=new CountDownLatch(1); var unblock=new CountDownLatch(1);
+        URI fast=URI.create("https://i1.hdslb.com/fast.png");
+        try(CoverLoader loader=new CoverLoader(uri->{
+            if(uri.equals(SOURCE)) { slowStarted.countDown(); try { unblock.await(); } catch(InterruptedException error) { Thread.currentThread().interrupt(); } }
+            return new Response(uri,fixture);
+        })) {
+            loader.request("slow",SOURCE,()->true); check(slowStarted.await(2,TimeUnit.SECONDS));
+            long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(2); byte[] result;
+            do { result=loader.request("fast",fast,()->true); if(result==null) Thread.sleep(5); } while(result==null && System.nanoTime()<end);
+            check(result!=null && loader.request("slow",SOURCE,()->true)==null);
+            loader.clear(); unblock.countDown();
+        } finally { unblock.countDown(); }
     }
 }

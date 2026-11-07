@@ -81,6 +81,7 @@ public final class LibraryWorkflowContractTest {
             check(Boolean.TRUE.equals(library.snapshot().get("more")));
             CatalogContractTest.fails(() -> library.choose(collectionToken));
             fixture.created = fixture.created.replace("\"name\":\"Saved collection\"", "\"name\":\"Saved collection\",\"cover\":\"https://i0.hdslb.com/old.jpg\"");
+            library.invalidate(); // Changed upstream fixture; ordinary navigation may reuse recent metadata.
             library.browse(AccountPlatform.BILIBILI, View.SAVED); waitFor(() -> rows(library).size()==1);
             String covered = (String)rows(library).getFirst().get("token");
             int beforeCover = fixture.requests.size();

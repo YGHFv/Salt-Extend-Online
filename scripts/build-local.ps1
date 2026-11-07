@@ -67,6 +67,7 @@ foreach ($test in @(
     'io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest',
     'io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest',
     'io.github.yghfv.saltneri.plugin.library.CatalogContractTest',
+    'io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest',
     'io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest',
     'io.github.yghfv.saltneri.plugin.library.PlaylistWorkflowContractTest',
     'io.github.yghfv.saltneri.plugin.library.BiliDiscoveryContractTest',
@@ -108,7 +109,7 @@ foreach ($test in @('io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTe
     & $java '--limit-modules=java.base' "-Djava.io.tmpdir=$temporaryFiles" -classpath "$tests;$classes" $test
     if ($LASTEXITCODE -ne 0) { throw "Login requires modules outside java.base: $test" }
 }
-foreach ($test in @('io.github.yghfv.saltneri.plugin.library.CatalogContractTest','io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest')) {
+foreach ($test in @('io.github.yghfv.saltneri.plugin.library.CatalogContractTest','io.github.yghfv.saltneri.plugin.library.CatalogCacheContractTest','io.github.yghfv.saltneri.plugin.library.LibraryWorkflowContractTest')) {
     & $java '--limit-modules=java.base' -classpath "$tests;$classes" $test
     if ($LASTEXITCODE -ne 0) { throw "Library requires modules outside java.base: $test" }
 }
@@ -118,7 +119,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outs
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.8.8-cover-mime' } else { '0.1.0-hostprobe' }
+$pluginVersion = if ($Experimental) { '0.8.9-loading-cache' } else { '0.1.0-hostprobe' }
 $pluginName = 'Salt Extend Online'
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }
