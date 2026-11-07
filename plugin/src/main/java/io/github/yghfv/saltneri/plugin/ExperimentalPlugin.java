@@ -158,6 +158,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if (stopped || !granted()) throw new SecurityException("Experimental permission required");
         switch (operation) {
             case LOGIN -> login(platform).start(configManager.getConfig().get("auth.remember", true));
+            case WEB_LOGIN -> login(platform).startWebLogin(configManager.getConfig().get("auth.remember", true));
             case RESTORE -> restoreLogin(platform);
             case LOGOUT -> logout(platform);
             case CANCEL_LOGIN -> login(platform).cancelLogin();

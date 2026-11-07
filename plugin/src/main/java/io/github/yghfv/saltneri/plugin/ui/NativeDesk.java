@@ -8,7 +8,7 @@ import java.util.function.*;
 
 /** Native presentation boundary. No URLs, cookies or credentials in catalog/playback state. */
 public final class NativeDesk {
-    public enum Action { LOGIN, RESTORE, LOGOUT, SWITCH_ACCOUNT, CANCEL_LOGIN, ARM, STOP }
+    public enum Action { LOGIN, WEB_LOGIN, RESTORE, LOGOUT, SWITCH_ACCOUNT, CANCEL_LOGIN, ARM, STOP }
     public record State(Map<String, Object> catalog, Map<String, Object> playback,
                         AccountLoginController.Snapshot login) {
         @Override public String toString() { return "NativeDeskState[private QR redacted]"; }

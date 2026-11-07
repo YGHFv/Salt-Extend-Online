@@ -55,6 +55,9 @@ public final class NeteaseQrClient implements QrAuthClient {
         try { return verifiedJar(request); }
         catch (IOException error) { throw AuthFailure.wrap(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.RESPONSE, error); }
     }
+    public AccountCredentials verifyWebCookies(java.util.List<ScopedCookies.Entry> entries, RequestScope request) throws IOException {
+        request.check(); cookies.restore(entries); return verifyJar(request);
+    }
     private AccountCredentials verifiedJar(RequestScope request) throws IOException {
         URI uri = URI.create(BASE + "/weapi/w/nuser/account/get");
         if (cookies.value(uri, "MUSIC_U").isEmpty()) throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.CREDENTIAL);

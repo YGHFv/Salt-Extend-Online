@@ -68,6 +68,8 @@ public final class HeaderSearchRenderTest {
                     })) {
             NativeDesk desk=new NativeDesk(library,player,p->login.get(),(p,action)->{
                 lastAction.set(action);
+                if(action==NativeDesk.Action.WEB_LOGIN) login.set(new AccountLoginController.Snapshot(AccountLoginController.Phase.WEB_LOGIN,"Official web login fixture",null,""));
+                if(action==NativeDesk.Action.CANCEL_LOGIN) login.set(new AccountLoginController.Snapshot(AccountLoginController.Phase.IDLE,"",null,""));
                 if(action==NativeDesk.Action.ARM) armed.set(true);
                 if(action==NativeDesk.Action.LOGOUT || action==NativeDesk.Action.SWITCH_ACCOUNT) {
                     login.set(new AccountLoginController.Snapshot(action==NativeDesk.Action.LOGOUT ? AccountLoginController.Phase.IDLE : AccountLoginController.Phase.WAITING_SCAN,
@@ -134,6 +136,26 @@ public final class HeaderSearchRenderTest {
                     });
                 }
                 check(queues.get()==2);
+                Object netRoute=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID+"/native/NETEASE");
+                for(int width:new int[]{740,420}) {
+                    login.set(new AccountLoginController.Snapshot(AccountLoginController.Phase.VERIFICATION_REQUIRED,
+                        AuthFailure.diagnostic(AuthFailure.code(AuthFailure.Stage.NET_POLL,AuthFailure.Reason.API,8821)),null,""));
+                    lastAction.set(null);
+                    SwingUtilities.invokeAndWait(()->{
+                        var scene=new ImageComposeScene(width,820,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),
+                            (composer,flags)->{cached.invoke(netRoute,composer,flags);return Unit.INSTANCE;});
+                        try {
+                            render(scene); check(find(scene,"NET_POLL/API=8821",null)!=null);
+                            check(find(scene,"\u5b98\u65b9\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())!=null);
+                            check(find(scene,"\u5b98\u65b9 App \u767b\u5f55\u4e8c\u7ef4\u7801",null)==null && lastAction.get()==null);
+                            click(scene,"\u5b98\u65b9\u7f51\u9875\u767b\u5f55"); check(lastAction.get()==NativeDesk.Action.WEB_LOGIN);
+                            check(find(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())!=null);
+                            check(find(scene,"\u5b98\u65b9\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
+                            click(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55"); check(lastAction.get()==NativeDesk.Action.CANCEL_LOGIN);
+                            check(find(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
+                        } catch(Exception error){throw new AssertionError(error);} finally {scene.close();}
+                    });
+                }
             }
         }
         System.out.println("PASS: "+checks+" real Compose avatar/menu/account replacement/search input/IME/double-click checks; synthetic account/API/queue");

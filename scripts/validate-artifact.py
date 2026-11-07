@@ -36,7 +36,7 @@ def validate(path, experimental):
         if attributes["Plugin-Name"] != "Salt Extend Online":
             raise ValueError("Unexpected mod display name")
         if experimental:
-            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.5-netease-auth":
+            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.6-web-verification":
                 raise ValueError("Experimental permission/version missing")
         elif "Plugin-Permissions" in attributes:
             raise ValueError("Passive artifact requests permissions")
@@ -69,6 +69,8 @@ def validate(path, experimental):
             raise ValueError("Missing native UI fingerprints")
         if "classes/io/github/yghfv/saltneri/plugin/ui/SaltNativeContent.class" not in names:
             raise ValueError("Missing compiled native Compose content")
+        if "classes/auth/netease-web-login.ps1" not in names:
+            raise ValueError("Missing official NetEase web-login helper")
         if any("LibraryPage" in name or "LoginQrPage" in name for name in names):
             raise ValueError("Obsolete browser server bundled")
         for license_name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "QR-Code-generator-MIT.txt", "Kotlin-Compose-Apache-2.0.txt", "Simple-Icons-CC0.txt"):

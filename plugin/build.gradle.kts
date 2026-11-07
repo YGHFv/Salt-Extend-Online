@@ -80,6 +80,7 @@ listOf(
     "nativeDeskPlaybackContractTest" to "io.github.yghfv.saltneri.plugin.ui.NativeDeskPlaybackContractTest",
     "authProtocolContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest",
     "authLifecycleContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest",
+    "webLoginContractTest" to "io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest",
     "windowsDpapiContractTest" to "io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest"
 ).forEach { (taskName, testClass) ->
     tasks.register<JavaExec>(taskName) {
@@ -114,7 +115,7 @@ tasks.processResources {
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
     PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.5-netease-auth" else project.version.toString()
+    PluginVersion = if (experimentalAdapter) "0.8.6-web-verification" else project.version.toString()
     PluginProvider = "YGHFv"
     PluginName = "Salt Extend Online"
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."

@@ -41,6 +41,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Local plugin compilation failed.' }
 $configName = if ($Experimental) { 'preference_config_experimental.json' } else { 'preference_config.json' }
 Copy-Item -LiteralPath (Join-Path $root "plugin/src/main/resources/$configName") -Destination (Join-Path $classes 'preference_config.json')
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/host-profiles') -Destination $classes -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/auth') -Destination $classes -Recurse
 $licenseDirectory = Join-Path $classes 'META-INF/licenses'
 New-Item -ItemType Directory -Path $licenseDirectory -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD_PARTY_NOTICES.md') -Destination $licenseDirectory
@@ -57,6 +58,7 @@ New-Item -ItemType Directory -Path $temporaryFiles -Force | Out-Null
 foreach ($test in @(
     'io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest',
     'io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest',
+    'io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest',
     'io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest',
     'io.github.yghfv.saltneri.plugin.net.PinnedHttpsContractTest',
     'io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest',
@@ -102,7 +104,7 @@ foreach ($test in @('io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest
     & $java '--limit-modules=java.base' -classpath "$tests;$classes" $test
     if ($LASTEXITCODE -ne 0) { throw "Platform resolver requires modules outside java.base: $test" }
 }
-foreach ($test in @('io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest','io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest')) {
+foreach ($test in @('io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest','io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest','io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest')) {
     & $java '--limit-modules=java.base' "-Djava.io.tmpdir=$temporaryFiles" -classpath "$tests;$classes" $test
     if ($LASTEXITCODE -ne 0) { throw "Login requires modules outside java.base: $test" }
 }
@@ -116,7 +118,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outs
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.8.5-netease-auth' } else { '0.1.0-hostprobe' }
+$pluginVersion = if ($Experimental) { '0.8.6-web-verification' } else { '0.1.0-hostprobe' }
 $pluginName = 'Salt Extend Online'
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }

@@ -54,9 +54,15 @@ uses Windows CurrentUser DPAPI, never a plaintext fallback; restoration is expli
 The current Bilibili `account.bilibili.com/h5/account-h5/auth/scan-web` QR payload route was observed
 in a 2026-11-06 public creation-only probe, in addition to the pinned upstream legacy passport route.
 
+The explicit NetEase web-login fallback follows the desktop official-homepage choice and
+user-completed login flow in upstream `NeteaseWebLoginUrl.kt` / `NeteaseWebLoginActivity.kt`.
+The Windows Edge/PowerShell bridge is plugin-specific, uses a fresh isolated profile, and
+does not redistribute Microsoft Edge, its runtime, or a captcha/device-fingerprint solver.
+
 The NetEase resolver ports exact song detail GET and EAPI audio URL parameters, not Android playback,
-full account-session preheating, retry/fallback policies or membership features. It rejects preview,
-paid/unknown-fee resources, missing/mismatched durations and CDN size mismatches. API account cookies
+full account-session preheating or automatic retry/fallback policies. It rejects preview,
+anonymous paid/unknown-fee resources, missing/mismatched durations and CDN size mismatches.
+Logged-in paid tracks still require a server-authorized full-track response. API account cookies
 retain their original host/domain/path scope and are never sent to a media CDN. Tests use synthetic
 fixtures; the fixed EAPI framing vector was independently computed with Windows .NET cryptography.
 No live NetEase song resolution or actual Salt/BASS playback has been verified. See `docs/NETEASE_PROGRESS.md`.
