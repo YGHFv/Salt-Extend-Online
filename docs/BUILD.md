@@ -59,7 +59,7 @@ gradle :core:check :plugin:check -PsaltHostPackage='D:\path\to\Salt\app\host-arc
 
 ### 启用自动打包
 
-1. 准备专用 Windows x64 runner，安装合法 Salt 1.19.3、JDK 25、Python 3 和 PowerShell 7；不要使用保存日常账号的个人桌面作为公共 PR runner。
+1. 准备支持 Node.js 24 Actions 的新版专用 Windows x64 runner，安装合法 Salt 1.19.3、JDK 25、Python 3 和 PowerShell 7；不要使用保存日常账号的个人桌面作为公共 PR runner。
 2. 在本仓库注册 self-hosted runner，增加标签 `salt-1.19.3`；不要把 Salt 安装在 runner checkout 工作目录中。
 3. 在 GitHub Settings → Environments 创建 `salt-build`，部署分支限制为 main；按需要添加人工审批。
 4. 在此环境 Variables 中配置 `SALT_HOME`（Salt 安装目录）和 `SALT_JDK_HOME`（JDK 25 目录）。路径直接传参，不拼成待执行命令。
