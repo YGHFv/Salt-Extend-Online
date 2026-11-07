@@ -162,6 +162,28 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if (entry.lease != null && entry.lease.accountScope().equals(accountScope)) revoke(token, entry);
         });
     }
+    /** Warm only a small verified prefix through the same private range/cache path, never the audio device. */
+    public void prefetch(URI uri,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws IOException {
+        if(cache.limitBytes()==0) return;
+        if(!"http".equals(uri.getScheme()) || !"127.0.0.1".equals(uri.getHost()) || uri.getPort()!=listener.getLocalPort()
+                || uri.getRawUserInfo()!=null || uri.getRawQuery()!=null || uri.getRawFragment()!=null
+                || uri.getRawPath()==null || !uri.getRawPath().matches("/media/[0-9a-f]{64}")) throw new IOException("Foreign prefetch");
+        Entry entry=leases.get(uri.getRawPath().substring(7)); if(entry==null) return;
+        // Salt 1.19.3 reads aligned 512 KiB chunks; a shorter prefix would miss its very first read.
+        ensureValid(entry); request.check(); long count=Math.min(entry.length(),512*1024);
+        HttpURLConnection connection=(HttpURLConnection)uri.toURL().openConnection(java.net.Proxy.NO_PROXY);
+        request.attach(connection);
+        try {
+            connection.setConnectTimeout(2000); connection.setReadTimeout(2000); connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("Range","bytes=0-"+(count-1)); connection.setUseCaches(false);
+            if(connection.getResponseCode()!=206 || connection.getContentLengthLong()!=count) throw new IOException("Invalid prefetch range");
+            try(InputStream input=connection.getInputStream()) {
+                byte[] buffer=new byte[16384]; long remaining=count;
+                while(remaining>0) { request.check(); int n=input.read(buffer,0,(int)Math.min(remaining,buffer.length)); if(n<0) throw new IOException("Incomplete prefetch"); remaining-=n; }
+            }
+            request.check();
+        } finally { request.release(connection); }
+    }
 
     public synchronized void revoke(URI localUri) {
         if (!"http".equals(localUri.getScheme()) || !"127.0.0.1".equals(localUri.getHost())

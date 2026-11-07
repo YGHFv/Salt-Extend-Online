@@ -41,6 +41,28 @@ public final class CatalogClient {
             } catch (IOException error) { throw CatalogFailure.wrap(http.stage(), Reason.RESPONSE, error); }
         } catch (IOException error) { throw CatalogFailure.wrap(Stage.SESSION, Reason.RESPONSE, error); }
     }
+    /** Explicit play/filter/sort only: one verified session, one NetEase ID list, bounded detail batches. */
+    public record CollectionContents(String title,List<Item> items,long totalCount) {
+        public CollectionContents { items=List.copyOf(items); if(items.size()>10000) throw new IllegalArgumentException("Collection too large"); }
+    }
+    public CollectionContents loadAll(Query query, RequestScope request) throws IOException {
+        if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
+        if(account!=null && account.platform()!=query.platform() || query.platform()==AccountPlatform.BILIBILI && account==null)
+            throw CatalogFailure.of(Stage.SESSION,Reason.LOGIN_REQUIRED);
+        try(CatalogHttp http=new CatalogHttp(query.platform(),account,clock,opener)) {
+            if(account!=null) http.verify(request);
+            if(query.platform()==AccountPlatform.NETEASE) return neteaseFolder(query,http,request,true);
+            List<Item> items=new ArrayList<>(); Set<String> ids=new HashSet<>(); String title="";
+            for(int page=1;page<=500;page++) {
+                request.check(); Page result=bili(new Query(query.platform(),query.view(),query.folder(),page,query.owner()),http,request);
+                if(result.totalCount()>10000 || page==500 && result.totalCount()<0 && result.items().size()==20) throw invalid();
+                title=result.title();
+                for(Item item:result.items()) if(item.enabled() && ids.add(item.target())) items.add(item);
+                if(!result.hasMore()) return new CollectionContents(title,items,items.size());
+            }
+            throw invalid();
+        }
+    }
     private Page netease(Query query, CatalogHttp http, RequestScope request) throws IOException {
         if (query.view() == View.SEARCH) {
             String csrf = http.csrf(request);
@@ -60,37 +82,8 @@ public final class CatalogClient {
             return page("\u641c\u7d22\uff1a" + query.keyword(), items, query.page() < 500 && query.page() * 20L < total, total);
         }
         if (query.view() == View.FOLDER) {
-            Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
-            Map<String, Object> list = object(root.get("playlist")); if (id(list.get("id")) != query.folder()) throw invalid();
-            List<Object> ids = array(list.get("trackIds")); if (ids.size() > 10000) throw invalid();
-            Set<Long> all = new HashSet<>(); List<Long> selected = new ArrayList<>(); int offset = (query.page() - 1) * 20;
-            for (int i = 0; i < ids.size(); i++) { long song = id(object(ids.get(i)).get("id")); if (!all.add(song)) throw invalid(); if (i >= offset && i < offset + 20) selected.add(song); }
-            List<Item> items = new ArrayList<>();
-            if (!selected.isEmpty()) {
-                Map<Long, Map<String, Object>> songs = new HashMap<>(); Set<Long> seen = new HashSet<>();
-                // First-page playlist responses can already contain the same song metadata. Fetch only gaps.
-                for (Object row : bounded(arrayOrEmpty(list.get("tracks")), 20)) {
-                    var song = object(row); long songId = id(song.get("id"));
-                    if (!all.contains(songId) || !seen.add(songId)) throw invalid();
-                    if (selected.contains(songId) && song.get("name") instanceof String && song.get("fee") != null
-                            && alias(song,"ar","artists") instanceof List<?>
-                            && alias(song,"dt","duration") != null && alias(song,"al","album") instanceof Map<?,?> album
-                            && album.get("picUrl") instanceof String) songs.put(songId,song);
-                }
-                List<Long> missing = selected.stream().filter(songId -> !songs.containsKey(songId)).toList();
-                if (!missing.isEmpty()) {
-                    String joined = missing.stream().map(Object::toString).collect(java.util.stream.Collectors.joining(",", "[", "]"));
-                    var details = success(http.json(URI.create("https://music.163.com/api/song/detail?ids=" + encode(joined)), null, request), 200, http.stage());
-                    List<Object> rows = array(details.get("songs")); if (rows.size() > missing.size()) throw invalid();
-                    for (Object row : rows) { var song = object(row); long songId = id(song.get("id")); if (!missing.contains(songId) || songs.put(songId, song) != null) throw invalid(); }
-                }
-                for (long songId : selected) {
-                    var song = songs.get(songId);
-                    if (song == null) { items.add(new Item(Kind.TRACK, Long.toString(songId), "Unavailable #" + songId, "Missing/deleted track", 0, false)); continue; }
-                    items.add(neteaseSong(song));
-                }
-            }
-            return page(text(list.get("name")), items, offset + 20 < ids.size(), ids.size());
+            var contents=neteaseFolder(query,http,request,false);
+            return page(contents.title(),contents.items(),query.page()*20L<contents.totalCount(),contents.totalCount());
         }
         String path = query.view() == View.DISCOVER ? "/weapi/personalized/playlist" : "/weapi/user/playlist";
         Map<String, Object> parameters = new LinkedHashMap<>(); parameters.put("limit", "20");
@@ -108,6 +101,40 @@ public final class CatalogClient {
         }
         return page(viewTitle(query), items, query.view() != View.DISCOVER && Boolean.TRUE.equals(root.get("more")),
                 query.view() == View.DISCOVER ? items.size() : number(root.get("count"), -1));
+    }
+    private CollectionContents neteaseFolder(Query query,CatalogHttp http,RequestScope request,boolean full) throws IOException {
+            Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
+            Map<String, Object> list = object(root.get("playlist")); if (id(list.get("id")) != query.folder()) throw invalid();
+            List<Object> ids = array(list.get("trackIds")); if (ids.size() > 10000) throw invalid();
+            Set<Long> all = new HashSet<>(); List<Long> selected = new ArrayList<>(); int offset = (query.page() - 1) * 20;
+            for (int i = 0; i < ids.size(); i++) { long song = id(object(ids.get(i)).get("id")); if (!all.add(song)) throw invalid(); if (full || i >= offset && i < offset + 20) selected.add(song); }
+            List<Item> items = new ArrayList<>();
+            if (!selected.isEmpty()) {
+                Map<Long, Map<String, Object>> songs = new HashMap<>(); Set<Long> seen = new HashSet<>();
+                // First-page playlist responses can already contain the same song metadata. Fetch only gaps.
+                for (Object row : bounded(arrayOrEmpty(list.get("tracks")), 20)) {
+                    var song = object(row); long songId = id(song.get("id"));
+                    if (!all.contains(songId) || !seen.add(songId)) throw invalid();
+                    if (selected.contains(songId) && song.get("name") instanceof String && song.get("fee") != null
+                            && alias(song,"ar","artists") instanceof List<?>
+                            && alias(song,"dt","duration") != null && alias(song,"al","album") instanceof Map<?,?> album
+                            && album.get("picUrl") instanceof String) songs.put(songId,song);
+                }
+                List<Long> missing = selected.stream().filter(songId -> !songs.containsKey(songId)).toList();
+                for(int from=0;from<missing.size();from+=100) {
+                    request.check(); List<Long> batch=missing.subList(from,Math.min(from+100,missing.size()));
+                    String joined = batch.stream().map(Object::toString).collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                    var details = success(http.json(URI.create("https://music.163.com/api/song/detail?ids=" + encode(joined)), null, request), 200, http.stage());
+                    List<Object> rows = array(details.get("songs")); if (rows.size() > batch.size()) throw invalid();
+                    for (Object row : rows) { var song = object(row); long songId = id(song.get("id")); if (!batch.contains(songId) || songs.put(songId, song) != null) throw invalid(); }
+                }
+                for (long songId : selected) {
+                    var song = songs.get(songId);
+                    if (song == null) { items.add(new Item(Kind.TRACK, Long.toString(songId), "Unavailable #" + songId, "Missing/deleted track", 0, false)); continue; }
+                    items.add(neteaseSong(song));
+                }
+            }
+            return new CollectionContents(text(list.get("name")),items,ids.size());
     }
     private Item neteaseSong(Map<String, Object> song) throws IOException {
         long fee = number(song.get("fee"), -1), duration = number(alias(song, "dt", "duration"), 0);

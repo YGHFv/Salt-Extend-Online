@@ -75,6 +75,10 @@ foreach ($test in @(
     'io.github.yghfv.saltneri.plugin.library.PlaylistWorkflowContractTest',
     'io.github.yghfv.saltneri.plugin.library.BiliDiscoveryContractTest',
     'io.github.yghfv.saltneri.plugin.host.LazyPlaylistContractTest',
+    'io.github.yghfv.saltneri.plugin.host.LazyPlaylistCoverContractTest',
+    'io.github.yghfv.saltneri.plugin.host.NativePlaylistOrderContractTest',
+    'io.github.yghfv.saltneri.plugin.transport.PlaylistPrefetchContractTest',
+    'io.github.yghfv.saltneri.plugin.library.CatalogBulkContractTest',
     'io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest',
     'io.github.yghfv.saltneri.plugin.host.WindowsAppShortcutContractTest',
     'io.github.yghfv.saltneri.plugin.ui.NativeUiContractTest',
@@ -130,7 +134,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outs
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.8.11-queue-settings' } else { '0.1.0-hostprobe' }
+$pluginVersion = if ($Experimental) { '0.8.12-playlist-preload' } else { '0.1.0-hostprobe' }
 $pluginName = 'Salt Extend Online'
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }

@@ -75,7 +75,7 @@ public final class Salt1193Probe {
                 classes.put(name, Class.forName(name, false, hostLoader));
                 verified++;
             }
-            if (verified != 17) throw new IOException("Incomplete host profile");
+            if (verified != 20) throw new IOException("Incomplete host profile");
             Class<?> item = classes.get(ITEM);
             Constructor<?> constructor = item.getConstructor(String.class, String.class, String.class,
                     String.class, String.class, String.class);
@@ -114,7 +114,7 @@ public final class Salt1193Probe {
             method(classes.get(TAGS), "readImageToByteArray", byte[].class, classes.get("com.xuncorp.spc.v.Vri"));
             method(classes.get(TAGS), "readImageToByteArrayOrThrow$Voxzen_composeApp", byte[].class,
                     classes.get("com.xuncorp.spc.v.Vri"));
-            return new Result(true, "Steam 1.19.3: 17 class fingerprints and native entry signatures match; "
+            return new Result(true, "Steam 1.19.3: 20 class fingerprints and native entry signatures match; "
                     + "online playback is not connected", new MediaFactory(constructor, getters));
         } catch (ReflectiveOperationException | IOException | LinkageError | IllegalArgumentException | SecurityException
                  | NoSuchAlgorithmException failure) {

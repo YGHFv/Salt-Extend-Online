@@ -28,6 +28,9 @@ CLASSES = (
     "com.xuncorp.spc.v.Vri",
     "com.xuncorp.spw.workshop.api.WorkshopApi",
     "com.xuncorp.spw.workshop.api.hook.HookRegistrar",
+    "com.xuncorp.spc.core.queue.PlaybackQueueState",
+    "com.xuncorp.spc.core.queue.PlaybackQueue$Mode",
+    "com.xuncorp.spc.core.queue.\u037f",
 )
 
 

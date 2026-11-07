@@ -158,13 +158,13 @@ public final class QueueReplayContractTest {
             session.play(); Object first=queue.getFirst(); String[] original=profile.mediaFactory().read(first);
             for(int i=0;i<10;i++) check(open(adapter,queue.get(i)).equals(321));
             for(Object item:queue) covers.add(Path.of(profile.mediaFactory().read(item)[5]));
-            check(calls.get()==10 && binding.paths.size()==20 && Files.size(covers.getFirst())==42);
+            check(calls.get()==10 && binding.paths.size()==10 && Files.size(covers.getFirst())==42);
             check(open(adapter,first).equals(321) && calls.get()==11 && Files.size(covers.getFirst())>42);
             check(Arrays.equals(original,profile.mediaFactory().read(queue.getFirst())));
             check(OnlineLyrics.load(original[0],original[5]).contains("Song 1"));
             quality.incrementAndGet(); check(open(adapter,first).equals(321) && calls.get()==12);
             for(int i=0;i<12;i++) { clock.advance(61); check(open(adapter,first).equals(321)); }
-            check(binding.paths.size()==20 && queue.size()==10);
+            check(binding.paths.size()==10 && queue.size()==10);
             check(Arrays.equals(original,profile.mediaFactory().read(queue.getFirst())) && covers.stream().allMatch(Files::isRegularFile));
             active.set(false); int before=calls.get(); rejected(adapter,first); check(calls.get()==before);
         }

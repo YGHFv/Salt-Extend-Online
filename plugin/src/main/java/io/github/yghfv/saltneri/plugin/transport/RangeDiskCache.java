@@ -26,10 +26,17 @@ public final class RangeDiskCache implements AutoCloseable {
     }
     synchronized byte[] get(Object owner,ByteRange range) {
         if(closed || limit==0 || !safeDirectory()) return null;
-        Key key=new Key(owner,range); FileEntry entry=files.get(key); if(entry==null) return null;
+        Key key=new Key(owner,range); FileEntry entry=files.get(key);
+        if(entry==null) {
+            // A prefetched prefix can satisfy the smaller ranges Salt reads from that same lease.
+            for(Key candidate:files.keySet()) if(candidate.owner()==owner && candidate.range().first()<=range.first()
+                    && candidate.range().last()>=range.last()) { key=candidate; break; }
+            entry=files.get(key); if(entry==null) return null;
+        }
         try(var input=Files.newInputStream(entry.path(),LinkOption.NOFOLLOW_LINKS)) {
             byte[] bytes=input.readNBytes(entry.bytes()+1);
-            if(bytes.length==entry.bytes()) return bytes;
+            if(bytes.length==entry.bytes()) return key.range().equals(range)?bytes:
+                    Arrays.copyOfRange(bytes,(int)(range.first()-key.range().first()),(int)(range.last()-key.range().first()+1));
         } catch(IOException ignored) { }
         remove(key,entry); return null;
     }

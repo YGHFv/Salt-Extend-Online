@@ -65,6 +65,10 @@ public final class LibraryController implements AutoCloseable {
             }, () -> accounts.apply(p), authorized, clock,
                     page -> Instant.MAX, page -> "", CatalogFailure::diagnostic);
             s.complete = new PlatformResolutionController<>("Playlist", account -> (q,k,scope,r) -> {
+                if(testLoader==null) {
+                    var result=new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery).loadAll(q,r);
+                    return new Contents(result.title(),result.items().stream().filter(i->i.enabled() && i.kind()==Kind.TRACK).toList());
+                }
                 var resolver = factory.apply(account); List<Item> all = new ArrayList<>(); Set<String> ids = new HashSet<>(); String title = "";
                 for (int page = 1; page <= 500; page++) {
                     r.check(); Page result = resolver.resolve(new Query(q.platform(),q.view(),q.folder(),page,q.owner()),k,scope,r);
@@ -116,6 +120,7 @@ public final class LibraryController implements AutoCloseable {
     private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword()); }
     public synchronized void turn(int direction) {
         State s = current(); refresh(s);
+        if(s.fullMode && s.contents==null) return;
         if (s.visible == null || direction != -1 && direction != 1) throw new IllegalStateException("No current page");
         if (direction == 1 && !s.visible.hasMore() || direction == -1 && s.query.page() == 1) throw new IllegalArgumentException("No more pages");
         Query next = at(s.query,s.query.page()+direction);
@@ -184,8 +189,9 @@ public final class LibraryController implements AutoCloseable {
     private void requireFolder(State s) {
         refresh(s); if (s.query == null || s.query.view()!=View.FOLDER && s.query.view()!=View.COLLECTION) throw new IllegalStateException("Open a playlist first");
     }
-    private void complete(State s) {
-        if (!s.fullMode) { s.fullMode=true; s.rows.clear(); s.visible=null; s.complete.start(at(s.query,1),"all"); }
+    private void complete(State s) { complete(s,false); }
+    private void complete(State s,boolean preserveVisible) {
+        if (!s.fullMode) { s.fullMode=true; if(!preserveVisible) { s.rows.clear(); s.visible=null; } s.complete.start(at(s.query,1),"all"); }
         else if (s.complete.snapshot().failed()) s.complete.start(at(s.query,1),"all");
     }
     public synchronized void filter(String keyword) {
@@ -194,7 +200,7 @@ public final class LibraryController implements AutoCloseable {
         s.filter=value; s.query=at(s.query,1); complete(s); if(s.contents!=null) rebuild(s);
     }
     public synchronized void sort(Sort order) { State s=current(); requireFolder(s); s.sort=Objects.requireNonNull(order); s.query=at(s.query,1); complete(s); if(s.contents!=null) rebuild(s); }
-    public synchronized void requestPlaylist() { State s=current(); requireFolder(s); s.playPending=true; s.error=""; complete(s); }
+    public synchronized void requestPlaylist() { State s=current(); requireFolder(s); s.playPending=true; s.error=""; complete(s,true); }
     public synchronized void cancelPendingPlayback() { for(State s:states.values()) s.playPending=false; }
     public synchronized Playlist takePlaylist() {
         State s=current(); refresh(s); if(!s.playPending || s.contents==null) return null; s.playPending=false;

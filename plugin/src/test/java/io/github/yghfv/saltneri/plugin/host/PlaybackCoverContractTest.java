@@ -20,6 +20,18 @@ public final class PlaybackCoverContractTest {
     }
     public static void main(String[] args) throws Exception {
         byte[] png = png(); Path path;
+        String reserved;
+        try(PlaybackCoverFile cover=PlaybackCoverFile.reserve()) {
+            reserved=cover.path(); Path future=Path.of(reserved);
+            check(PlaybackCoverFile.isPath(reserved) && !Files.exists(future.getParent()));
+            cover.clear(); check(!Files.exists(future.getParent()));
+            cover.replace(png); check(Files.isRegularFile(future) && cover.path().equals(reserved));
+            cover.clear(); check(Files.size(future)==42);
+            cover.replace(png); check(Files.size(future)>42);
+        }
+        check(!PlaybackCoverFile.isPath(reserved));
+        try(PlaybackCoverFile cover=PlaybackCoverFile.reserve()) { reserved=cover.path(); }
+        check(!PlaybackCoverFile.isPath(reserved) && !Files.exists(Path.of(reserved).getParent()));
         try (PlaybackCoverFile cover = PlaybackCoverFile.create(png)) {
             path = Path.of(cover.path()); check(PlaybackCoverFile.isPath(cover.path()));
             byte[] flac = Files.readAllBytes(path); check(flac.length < 132000 && new String(flac,0,4,java.nio.charset.StandardCharsets.US_ASCII).equals("fLaC"));

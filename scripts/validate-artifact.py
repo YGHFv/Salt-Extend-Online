@@ -36,7 +36,7 @@ def validate(path, experimental):
         if attributes["Plugin-Name"] != "Salt Extend Online":
             raise ValueError("Unexpected mod display name")
         if experimental:
-            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.11-queue-settings":
+            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.12-playlist-preload":
                 raise ValueError("Experimental permission/version missing")
         elif "Plugin-Permissions" in attributes:
             raise ValueError("Passive artifact requests permissions")
@@ -58,7 +58,7 @@ def validate(path, experimental):
             if prefs["cache.limitMiB"]["entry_values"] != ["0", "512", "1024", "2048", "4096", "8192"] or prefs["cache.limitMiB"]["default_value"] != "2048":
                 raise ValueError("Wrong audio cache limits/default")
         profile = archive.read("classes/host-profiles/windows-steam-1.19.3.properties").decode("ascii")
-        if sum(line.startswith("class.") for line in profile.splitlines()) != 17:
+        if sum(line.startswith("class.") for line in profile.splitlines()) != 20:
             raise ValueError("Missing extended engine fingerprints")
         if "classes/preference_config_experimental.json" in names:
             raise ValueError("Alternate configuration bundled")

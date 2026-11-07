@@ -19,6 +19,8 @@ public final class RangeDiskCacheContractTest {
             cache.put(owner,a,bytes,cache.revision(),()->true); directory=(Path)field.get(cache);
             check(cache.usedBytes()==4 && Arrays.equals(cache.get(owner,a),bytes));
             check(cache.get(other,a)==null && cache.get(owner,b)==null);
+            check(Arrays.equals(cache.get(owner,new ByteRange(1,2)),new byte[]{2,3}));
+            check(cache.get(other,new ByteRange(1,2))==null && cache.get(owner,new ByteRange(1,4))==null);
             cache.put(owner,b,bytes,cache.revision(),()->true); cache.get(owner,a);
             cache.put(owner,c,bytes,cache.revision(),()->true);
             check(cache.usedBytes()==8 && cache.get(owner,b)==null && cache.get(owner,a)!=null);

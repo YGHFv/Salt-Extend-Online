@@ -21,6 +21,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Real loopback sockets, but no external requests, accounts or platform data. */
 public final class TransportContractTest {
+    public static LoopbackRangeServer offlineServer(Clock clock,java.util.function.BooleanSupplier active) throws IOException {
+        return new LoopbackRangeServer(clock,uri->{throw new AssertionError("Unexpected network");},active);
+    }
     private static int checks;
     private static final URI TARGET = URI.create("https://test.bilivideo.com/audio?signature=secret");
     private static final Instant NOW = Instant.parse("2026-11-06T00:00:00Z");

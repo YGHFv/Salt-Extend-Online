@@ -56,6 +56,10 @@ listOf(
     "coverLoaderContractTest" to "io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest",
     "nativeQueueContractTest" to "io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest",
     "playbackCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest",
+    "lazyPlaylistCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.LazyPlaylistCoverContractTest",
+    "nativePlaylistOrderContractTest" to "io.github.yghfv.saltneri.plugin.host.NativePlaylistOrderContractTest",
+    "playlistPrefetchContractTest" to "io.github.yghfv.saltneri.plugin.transport.PlaylistPrefetchContractTest",
+    "catalogBulkContractTest" to "io.github.yghfv.saltneri.plugin.library.CatalogBulkContractTest",
     "onlineLyricsContractTest" to "io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest",
     "queueReplayContractTest" to "io.github.yghfv.saltneri.plugin.transport.QueueReplayContractTest",
     "windowsMediaIdentityContractTest" to "io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest",
@@ -127,7 +131,7 @@ tasks.processResources {
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
     PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.11-queue-settings" else project.version.toString()
+    PluginVersion = if (experimentalAdapter) "0.8.12-playlist-preload" else project.version.toString()
     PluginProvider = "YGHFv"
     PluginName = "Salt Extend Online"
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."

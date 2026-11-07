@@ -456,10 +456,10 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 val next = catalog?.get("more") == true
                 if (previous || next) item(key = "pagination") {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog?.get("loaded") == true,
+                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
                             click = { action { ui.desk().page(-1) } }) }
                         NativeText(ui, "$page/${if (total > 0) total.toString() else "?"}", modifier = Modifier.padding(horizontal = 16.dp))
-                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog?.get("loaded") == true,
+                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
                             click = { action { ui.desk().page(1) } }) }
                     }
                 }

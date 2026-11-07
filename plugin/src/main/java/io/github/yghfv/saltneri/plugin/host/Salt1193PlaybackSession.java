@@ -38,6 +38,12 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         /** Call on the host's appropriate execution context, only after an explicit user action. */
         void addToPlay(Object mediaItem) throws ReflectiveOperationException;
         default void replace(java.util.List<Object> items) throws ReflectiveOperationException { throw new UnsupportedOperationException("Queue replacement unavailable"); }
+        default int firstIndex(int size) throws ReflectiveOperationException { return 0; }
+        default void replace(java.util.List<Object> items,int index) throws ReflectiveOperationException {
+            if(index!=0) throw new UnsupportedOperationException("Indexed queue replacement unavailable");
+            replace(items);
+        }
+        default NativePlaylistOrder.Plan upcoming() throws ReflectiveOperationException { return NativePlaylistOrder.Plan.EMPTY; }
         default void update(Object item) throws ReflectiveOperationException { }
     }
     @FunctionalInterface public interface Renewer {
@@ -264,11 +270,22 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
           public void replace(java.util.List<Object> items) throws ReflectiveOperationException {
             replaceAndPlay(controller(),items,authorized);
           }
+          private Object queueState() throws ReflectiveOperationException {
+            Object instance=controller(); Object flow=instance.getClass().getMethod("getPlaybackQueueState").invoke(instance);
+            return ((kotlinx.coroutines.flow.StateFlow<?>)flow).getValue();
+          }
+          public int firstIndex(int size) throws ReflectiveOperationException {
+            return NativePlaylistOrder.firstIndex(NativePlaylistOrder.mode(queueState()),size,
+                    bound->java.util.concurrent.ThreadLocalRandom.current().nextInt(bound));
+          }
+          public NativePlaylistOrder.Plan upcoming() throws ReflectiveOperationException { return NativePlaylistOrder.read(queueState()); }
+          public void replace(java.util.List<Object> items,int index) throws ReflectiveOperationException { replaceAndPlay(controller(),items,index,authorized); }
           public void update(Object item) throws ReflectiveOperationException {
             Object instance=controller(); Class<?> media=Class.forName("com.xuncorp.pisces.PiscesMediaItem",false,loader);
             Object array=java.lang.reflect.Array.newInstance(media,1); java.lang.reflect.Array.set(array,0,item);
             instance.getClass().getMethod("updateMediaItems",array.getClass()).invoke(instance,array);
-            instance.getClass().getMethod("refreshCurrentCover").invoke(instance);
+            // This command is asynchronous. Refreshing here can still read the previous track;
+            // Salt's onLoaded reads the stable artwork path once the stream actually opens.
           }
           public void addToPlay(Object item) throws ReflectiveOperationException {
             if (!authorized.getAsBoolean()) throw new SecurityException("CLASS_TRANSFORM not granted");
@@ -282,10 +299,14 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
     }
 
     static void replaceAndPlay(Object controller, java.util.List<Object> items, BooleanSupplier authorized) throws ReflectiveOperationException {
+        replaceAndPlay(controller,items,0,authorized);
+    }
+    static void replaceAndPlay(Object controller, java.util.List<Object> items,int index, BooleanSupplier authorized) throws ReflectiveOperationException {
         if (items.isEmpty() || items.size()>10000) throw new IllegalArgumentException("Invalid queue size");
+        Objects.checkIndex(index,items.size());
         if (!authorized.getAsBoolean()) throw new SecurityException("Queue permission revoked");
         try {
-            controller.getClass().getMethod("setPlaybackQueue",java.util.List.class,int.class).invoke(controller,java.util.List.copyOf(items),0);
+            controller.getClass().getMethod("setPlaybackQueue",java.util.List.class,int.class).invoke(controller,java.util.List.copyOf(items),index);
             if (!authorized.getAsBoolean()) throw new SecurityException("Queue permission revoked");
             controller.getClass().getMethod("play").invoke(controller);
         } catch (InvocationTargetException failure) { throw new ReflectiveOperationException("Native queue replacement failed"); }

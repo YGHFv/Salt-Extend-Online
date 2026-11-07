@@ -3,22 +3,29 @@ package io.github.yghfv.saltneri.plugin.host;
 import java.io.*;
 import java.nio.file.*;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** A metadata-only FLAC for Salt's existing artwork reader. Audio always comes from the stream map. */
 public final class PlaybackCoverFile implements AutoCloseable {
     public static final int MAX_PNG_BYTES = 5 * 1024 * 1024;
+    private static final ConcurrentHashMap<String,PlaybackCoverFile> reserved = new ConcurrentHashMap<>();
     private final Path directory, file;
-    private boolean closed;
+    private boolean closed, materialized;
     private PlaybackCoverFile(Path directory, Path file) { this.directory = directory; this.file = file; }
     public String path() { return file.toString(); }
-    public static PlaybackCoverFile create(byte[] png) throws IOException {
-        byte[] picture = picture(png);
+    /** Reserve stable queue identity without downloading artwork or creating one file/directory per row. */
+    public static PlaybackCoverFile reserve() throws IOException {
         Path parent = Path.of(System.getProperty("java.io.tmpdir")).toRealPath();
-        Path directory = Files.createDirectory(parent.resolve("saltneri-cover-" + UUID.randomUUID()));
-        Path file = directory.resolve(UUID.randomUUID() + ".flac");
-        try { write(file,picture); }
-        catch (IOException failure) { Files.deleteIfExists(file); Files.deleteIfExists(directory); throw failure; }
-        return new PlaybackCoverFile(directory, file);
+        Path directory = parent.resolve("saltneri-cover-" + UUID.randomUUID());
+        PlaybackCoverFile cover = new PlaybackCoverFile(directory, directory.resolve(UUID.randomUUID() + ".flac"));
+        if(reserved.putIfAbsent(cover.path(),cover)!=null) throw new IOException("Artwork reservation collision");
+        return cover;
+    }
+    public static PlaybackCoverFile create(byte[] png) throws IOException {
+        picture(png);
+        PlaybackCoverFile cover=reserve();
+        try { cover.replace(png); return cover; }
+        catch(IOException | RuntimeException failure) { cover.close(); throw failure; }
     }
     private static byte[] picture(byte[] png) throws IOException {
         if (png == null || png.length < 24 || png.length > MAX_PNG_BYTES
@@ -43,18 +50,27 @@ public final class PlaybackCoverFile implements AutoCloseable {
     }
     /** Evict image bytes, not the native queue's path. Replace atomically so readers see a complete file. */
     public synchronized void replace(byte[] png) throws IOException {
-        if(closed || !directory.toRealPath().equals(directory) || !file.toRealPath().equals(file)) throw new IOException("Artwork retired");
+        if(closed) throw new IOException("Artwork retired");
         byte[] picture=png==null?null:picture(png);
+        if(!materialized) {
+            if(!directory.getParent().toRealPath().equals(directory.getParent())) throw new IOException("Artwork parent changed");
+            Files.createDirectory(directory);
+            materialized=true;
+        }
+        if(!directory.toRealPath().equals(directory) || Files.exists(file,LinkOption.NOFOLLOW_LINKS)
+                && (!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().equals(file))) throw new IOException("Artwork retired");
         Path next=directory.resolve(UUID.randomUUID()+".tmp");
         try {
             write(next,picture);
             Files.move(next,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
         } finally { Files.deleteIfExists(next); }
     }
-    public void clear() {
-        try { replace(null); } catch(IOException ignored) { /* A host file handle may defer image eviction. */ }
+    public synchronized void clear() {
+        if(materialized && !closed) try { replace(null); } catch(IOException ignored) { /* A host file handle may defer image eviction. */ }
     }
     static boolean isPath(String value) {
+        PlaybackCoverFile reservation=reserved.get(value);
+        if(reservation!=null) synchronized(reservation) { if(!reservation.closed && !reservation.materialized) return true; }
         try {
             Path path = Path.of(value);
             return path.isAbsolute() && path.equals(path.normalize()) && path.getFileName().toString().matches("[0-9a-f-]{36}\\.flac")
@@ -65,6 +81,8 @@ public final class PlaybackCoverFile implements AutoCloseable {
     }
     @Override public synchronized void close() {
         closed=true;
+        reserved.remove(path(),this);
+        if(!materialized) return;
         try {
             // Only these exact owned paths are removed; never recurse or follow a replaced directory.
             if (!directory.toRealPath().equals(directory)) return;

@@ -23,10 +23,14 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private final Resolver resolver;
     private final String scope;
     private final List<Entry> entries = new ArrayList<>();
+    private final Map<String,Entry> byId = new HashMap<>();
     private final Set<RequestScope> requests = ConcurrentHashMap.newKeySet();
-    private final Set<String> aliases = ConcurrentHashMap.newKeySet();
     private final LinkedHashMap<Entry, Cached> cache = new LinkedHashMap<>(16,0.75f,true);
     private volatile boolean closed, submitted;
+    private java.util.concurrent.ScheduledExecutorService preloader;
+    private volatile Entry opened;
+    private final java.util.concurrent.atomic.AtomicLong openRevision=new java.util.concurrent.atomic.AtomicLong();
+    private Object lastWarmPlan;
     private record Cached(URI uri, Instant expiry, Entry entry, Object revision) { }
     private static final class Entry {
         final Catalog.Item row;
@@ -35,7 +39,11 @@ public final class LazyPlaylistSession implements AutoCloseable {
         OnlineLyrics.Binding lyrics;
         PlaybackCoverFile cover;
         io.github.yghfv.saltneri.core.TrackKey key;
-        Entry(Catalog.Item row) { this.row=row; String nonce=UUID.randomUUID().toString(); id="saltneri:queue:"+nonce; path="saltneri://queue/"+nonce; }
+        Entry(Catalog.Item row) {
+            this.row=row; String nonce=UUID.randomUUID().toString(); id="saltneri:queue:"+nonce;
+            try { cover=PlaybackCoverFile.reserve(); } catch(java.io.IOException ignored) { }
+            path=cover==null?"saltneri://queue/"+nonce:cover.path();
+        }
     }
     public LazyPlaylistSession(Salt1193Probe.Result profile, StreamBinding adapter, LoopbackRangeServer transport,
                                Salt1193PlaybackSession.QueueSink queue, List<Catalog.Item> items, String scope,
@@ -52,25 +60,33 @@ public final class LazyPlaylistSession implements AutoCloseable {
         try {
             for (Catalog.Item row:items) {
                 if(!row.enabled() || row.kind()!=Catalog.Kind.TRACK) throw new IllegalArgumentException("Unplayable queue item");
-                check(); Entry entry=new Entry(row); entries.add(entry);
+                check(); Entry entry=new Entry(row); entries.add(entry); byId.put(entry.id,entry);
                 entry.media=media.create(entry.id,row.title(),row.subtitle(),"","",entry.path);
                 var source=lyrics.apply(row);
                 if(source!=null) entry.lyrics=OnlineLyrics.bind(entry.id,entry.path,()->!closed && active.getAsBoolean(),source);
-                adapter.registerDeferred(entry.path,()->resolve(entry));
+                adapter.registerDeferred(entry.path,()->{ opened=entry; openRevision.incrementAndGet(); return resolve(entry,()->true); });
             }
         } catch (ReflectiveOperationException | RuntimeException failure) { close(); throw failure; }
     }
     private void check() { if(closed || !active.getAsBoolean()) throw new java.util.concurrent.CancellationException("Playlist retired"); }
     public void play() throws Exception {
         // A failed first track must not destroy the user's existing playback queue.
-        resolve(entries.getFirst()); check();
-        queue.replace(entries.stream().map(e->e.media).toList()); submitted=true;
-    }
-    private URI resolve(Entry entry) throws Exception {
-        synchronized(entry) {
+        int first=Objects.checkIndex(queue.firstIndex(entries.size()),entries.size());
+        resolve(entries.get(first),()->true); check();
+        queue.replace(entries.stream().map(e->e.media).toList(),first); submitted=true;
+        synchronized(cache) {
             check();
+            preloader=java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r->{
+                Thread t=new Thread(r,"salt-online-playlist-prefetch"); t.setDaemon(true); return t;
+            });
+            preloader.scheduleWithFixedDelay(this::preload,250,250,java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+    }
+    private URI resolve(Entry entry,BooleanSupplier valid) throws Exception {
+        synchronized(entry) {
+            check(); if(!valid.getAsBoolean()) throw new java.util.concurrent.CancellationException("Prefetch superseded");
             synchronized(cache) { Cached old=cache.get(entry); if(old!=null && Objects.equals(old.revision(),resolver.revision()) && transport.now().plusSeconds(10).isBefore(old.expiry())) return old.uri(); }
-            try(RequestScope request=new RequestScope(()->!closed && active.getAsBoolean())) {
+            try(RequestScope request=new RequestScope(()->!closed && active.getAsBoolean() && valid.getAsBoolean())) {
                 Object revision=resolver.revision();
                 requests.add(request); request.check(); var audio=resolver.resolve(entry.row,scope,request); request.check(); check();
                 if(!audio.lease().belongsTo(scope) || !audio.key().platform().name().equals(audio.lease().platform().name())
@@ -83,23 +99,21 @@ public final class LazyPlaylistSession implements AutoCloseable {
                         check();
                         Cached previous=cache.remove(entry);
                         if(previous!=null) retire(previous);
-                        if(audio.metadata().coverPng()!=null) {
-                            if(entry.cover==null) {
-                                PlaybackCoverFile created=null;
-                                try {
-                                    created=PlaybackCoverFile.create(audio.metadata().coverPng());
-                                    adapter.registerDeferred(created.path(),()->resolve(entry)); aliases.add(created.path()); entry.cover=created;
-                                } catch(java.io.IOException | RuntimeException error) { if(created!=null) created.close(); }
-                            } else try { entry.cover.replace(audio.metadata().coverPng()); } catch(java.io.IOException ignored) { }
-                        }
-                        item=media.create(entry.id,audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),entry.cover==null?entry.path:entry.cover.path());
+                        if(entry.cover!=null && audio.metadata().coverPng()!=null)
+                            try { entry.cover.replace(audio.metadata().coverPng()); } catch(java.io.IOException ignored) { }
+                        // Salt's onLoaded callback can retain the original object, before async queue.update runs.
+                        // Its path must already name this same file, now populated before the stream opens.
+                        item=media.create(entry.id,audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),entry.path);
                         Instant expiry=audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt();
                         cache.put(entry,new Cached(local,expiry,entry,revision)); entry.key=audio.key();
                         entry.media=item;
-                        if(entry.lyrics!=null) entry.lyrics.path(entry.cover==null?entry.path:entry.cover.path());
-                        while(cache.size()>8) { Entry first=cache.keySet().iterator().next(); retire(cache.remove(first)); }
+                        // Speculative next-track work must never revoke the currently playing stream.
+                        while(cache.size()>8) {
+                            Entry first=cache.keySet().stream().filter(candidate->candidate!=opened).findFirst().orElseThrow();
+                            retire(cache.remove(first));
+                        }
                     }
-                    if(submitted) { check(); queue.update(item); }
+                    if(submitted) { check(); request.check(); queue.update(item); }
                     return local;
                 } catch(Exception failure) {
                     synchronized(cache) { Cached current=cache.get(entry); if(current!=null && current.uri().equals(local)) { cache.remove(entry); retire(current); } }
@@ -108,14 +122,37 @@ public final class LazyPlaylistSession implements AutoCloseable {
             } finally { requests.removeIf(r->{ try{r.check();return false;}catch(RuntimeException done){return true;} }); }
         }
     }
+    private NativePlaylistOrder.Plan plan() {
+        try { return queue.upcoming(); } catch(ReflectiveOperationException | RuntimeException ignored) { return NativePlaylistOrder.Plan.EMPTY; }
+    }
+    private void preload() {
+        try {
+            check(); NativePlaylistOrder.Plan plan=plan(); Entry current=opened;
+            if(current==null || !current.id.equals(plan.current())) return;
+            long revision=openRevision.get(); Object quality=resolver.revision(); Object key=List.of(plan,quality==null?"":quality,revision);
+            if(key.equals(lastWarmPlan)) return; lastWarmPlan=key;
+            BooleanSupplier valid=()->!closed && active.getAsBoolean() && opened==current && revision==openRevision.get()
+                    && Objects.equals(quality,resolver.revision()) && plan.equals(plan());
+            for(String id:plan.next()) {
+                Entry next=byId.get(id); if(next==null || next==current || !valid.getAsBoolean()) continue;
+                try {
+                    URI local=resolve(next,valid);
+                    try(RequestScope request=new RequestScope(valid,5000)) {
+                        requests.add(request);
+                        try { transport.prefetch(local,request); } finally { requests.remove(request); }
+                    }
+                } catch(Exception ignored) { /* One speculative attempt per plan; real playback can retry normally. */ }
+            }
+        } catch(RuntimeException ignored) { }
+    }
     private void retire(Cached cached) { transport.revoke(cached.uri()); if(cached.entry().cover!=null) cached.entry().cover.clear(); }
     @Override public void close() {
         closed=true; requests.forEach(RequestScope::close); requests.clear();
         for(Entry entry:entries) { if(entry.lyrics!=null) entry.lyrics.close(); adapter.unregister(entry.path); }
         synchronized(cache) {
+            if(preloader!=null) preloader.shutdownNow();
             cache.values().forEach(c->transport.revoke(c.uri())); cache.clear();
             entries.forEach(e->{if(e.cover!=null) e.cover.close();});
         }
-        aliases.forEach(adapter::unregister); aliases.clear();
     }
 }
