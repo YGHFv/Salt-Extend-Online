@@ -52,8 +52,10 @@ def validate(path, experimental):
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(prefs) != {"bili.quality", "netease.quality", "auth.remember", "cache.limitMiB"} or sum(len(c["preferences"]) for c in configs["configs"]) != 8:
+            if set(prefs) != {"bili.quality", "netease.quality", "auth.remember", "cache.limitMiB", "cover.mode"} or sum(len(c["preferences"]) for c in configs["configs"]) != 9:
                 raise ValueError("Unexpected expanded settings menu")
+            if prefs["cover.mode"]["entry_values"] != ["fit", "center", "left", "right"] or prefs["cover.mode"]["default_value"] != "fit":
+                raise ValueError("Wrong cover presentation options/default")
             if prefs["bili.quality"]["entry_values"] != ["dolby", "hires", "lossless", "high", "medium", "low"]:
                 raise ValueError("Wrong Bilibili quality order")
             if prefs["auth.remember"]["type"] != "switch" or prefs["auth.remember"]["default_value"] is not True:

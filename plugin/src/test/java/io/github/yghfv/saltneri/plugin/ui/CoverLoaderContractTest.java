@@ -56,6 +56,16 @@ public final class CoverLoaderContractTest {
             check(CoverSource.parse(AccountPlatform.NETEASE, input) == null);
         }
         byte[] fixture = png(); Response response = new Response(SOURCE, fixture);
+        for(CoverMode mode:CoverMode.values()) {
+            try(var loader=new CoverLoader(uri->new Response(uri,fixture)); var scope=new RequestScope(()->true)) {
+                var image=ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE,scope,mode)));
+                check(image.getWidth()==(mode==CoverMode.FIT?240:120) && image.getHeight()==120);
+                if(mode==CoverMode.LEFT) check((image.getRGB(119,60)&0xffffff)==0xdd5500);
+                if(mode==CoverMode.RIGHT) check((image.getRGB(0,60)&0xffffff)==0x008866);
+                if(mode==CoverMode.CENTER) check((image.getRGB(0,60)&0xffffff)==0xdd5500 && (image.getRGB(119,60)&0xffffff)==0x008866);
+            }
+        }
+        check(CoverMode.parse(null)==CoverMode.FIT && CoverMode.parse("invalid")==CoverMode.FIT);
         check(SOURCE.equals(CoverSource.original(URI.create(SOURCE + "@96w_96h_1c.webp"))));
         check(CoverSource.original(URI.create("https://p1.music.126.net/fixture.jpg?param=96y96")).toString().equals("https://p1.music.126.net/fixture.jpg"));
         check(CoverSource.original(URI.create("https://i0.hdslb.com/fixture.jpg?token=SECRET")) == null);
@@ -76,7 +86,7 @@ public final class CoverLoaderContractTest {
             check(uri.equals(SOURCE)); Response result = new Response(uri, webp); result.type = "image/webp"; return result;
         }); RequestScope scope = new RequestScope(() -> true)) {
             var image = ImageIO.read(new ByteArrayInputStream(loader.load(URI.create(SOURCE + "@100w_100h.webp"),scope)));
-            check(image.getWidth() == 168 && image.getHeight() == 84);
+            check(image.getWidth() == 240 && image.getHeight() == 120);
             check((image.getRGB(0,0) >>> 24) == 255);
         }
         var hd = new BufferedImage(1200, 1200, BufferedImage.TYPE_INT_RGB);
@@ -89,7 +99,7 @@ public final class CoverLoaderContractTest {
             int transitions = 0, previous = 0;
             for (int x = 0; x < 1024; x++) { int pixel = (image.getRGB(x, 512) & 255) > 128 ? 1 : 0; if (pixel != previous) transitions++; previous = pixel; }
             check(transitions >= 190);
-            check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == 168);
+            check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == CoverLoader.LIST_EDGE);
         }
         try (CoverLoader loader = new CoverLoader(uri -> new Response(uri, fixture)); RequestScope scope = new RequestScope(() -> true)) {
             check(ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE, scope))).getWidth() == 240);
@@ -100,7 +110,7 @@ public final class CoverLoaderContractTest {
         }
         try (CoverLoader loader = new CoverLoader(uri -> response); RequestScope scope = new RequestScope(() -> true)) {
             byte[] bytes = loader.load(SOURCE, scope); var image = ImageIO.read(new ByteArrayInputStream(bytes));
-            check(image.getWidth() == 168 && image.getHeight() == 84 && bytes.length < 65536);
+            check(image.getWidth() == 240 && image.getHeight() == 120 && bytes.length < 65536);
             check((image.getRGB(10, 40) & 0xffffff) == 0xdd5500 && (image.getRGB(155, 40) & 0xffffff) == 0x008866);
             check(response.closed && !response.getInstanceFollowRedirects() && response.getRequestProperty("Cookie") == null && response.getRequestProperty("Authorization") == null);
             rejects(() -> loader.load(URI.create("https://evil.example/a"), scope));
@@ -125,7 +135,7 @@ public final class CoverLoaderContractTest {
             Response jpg = new Response(netease, jpeg()); jpg.type = type;
             try (CoverLoader loader = new CoverLoader(uri -> jpg); RequestScope scope = new RequestScope(() -> true)) {
                 var list = ImageIO.read(new ByteArrayInputStream(loader.load(netease,scope)));
-                check(list.getWidth() == 168 && list.getHeight() == 84);
+                check(list.getWidth() == 240 && list.getHeight() == 120);
                 var playback = ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(netease,scope)));
                 check(playback.getWidth() == 240 && playback.getHeight() == 120);
                 check(jpg.closed && jpg.getRequestProperty("Cookie") == null && jpg.getRequestProperty("Authorization") == null);

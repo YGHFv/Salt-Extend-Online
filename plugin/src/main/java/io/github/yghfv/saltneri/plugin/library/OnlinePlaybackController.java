@@ -68,10 +68,10 @@ public final class OnlinePlaybackController implements AutoCloseable {
             Audio audio;
             if (target.platform() == AccountPlatform.BILIBILI) {
                 var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
-                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request);
+                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
             } else {
                 var resolved = new NeteaseClient(account).resolve(NeteaseTarget.parse(target.id()), settings.netease(), scope, request);
-                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request);
+                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
             }
             return new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),target);
     }
@@ -92,11 +92,11 @@ public final class OnlinePlaybackController implements AutoCloseable {
             }
         });
     }
-    private static Audio withCover(Audio audio, java.net.URI source, io.github.yghfv.saltneri.plugin.net.RequestScope request) {
+    private static Audio withCover(Audio audio, java.net.URI source, io.github.yghfv.saltneri.plugin.net.RequestScope request, io.github.yghfv.saltneri.plugin.ui.CoverMode mode) {
         if (source == null) return audio;
         try (var images = new io.github.yghfv.saltneri.plugin.ui.CoverLoader();
              var coverRequest = new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> { request.check(); return true; }, 3000)) {
-            byte[] png = images.loadPlayback(source, coverRequest);
+            byte[] png = images.loadPlayback(source, coverRequest,mode);
             Metadata old = audio.metadata();
             return new Audio(audio.key(), new Metadata(old.title(), old.artist(), old.album(), old.albumArtist(), png), audio.lease(), audio.expiresAt());
         } catch (java.io.IOException | RuntimeException ignored) { request.check(); return audio; }

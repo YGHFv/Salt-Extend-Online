@@ -46,7 +46,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile String mediaIdentityStatus="not registered";
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
     private void applySettings(ConfigHelper config) {
-        settings=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"));
+        settings=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
     }
 
@@ -97,6 +97,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             catch (RuntimeException failure) { throw failure; }
             catch (Exception failure) { throw new IllegalStateException("Native action failed", failure); }
         }, () -> generation == started && granted());
+        desk.coverMode(()->settings.coverMode());
         desk.playlistPlayer(list -> startedOnline.playPlaylist(list, () -> {
             try { arm(); } catch(Exception failure) { throw new IllegalStateException("Adapter unavailable"); }
         }, (playlist,valid) -> {

@@ -88,7 +88,7 @@ public final class PlaylistRenderTest {
             var library=new LibraryController(p->null,()->true,t->{},()->{},Clock.systemUTC(),a->(q,k,s,r)->{
                 requests.incrementAndGet(); List<Catalog.Item> rows=new ArrayList<>();
                 if(q.view()!=Catalog.View.FOLDER) rows.add(new Catalog.Item(Catalog.Kind.FOLDER,"10","My collection","Uploader",21,true));
-                else for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,String.format("Song %02d",i),"Uploader",1000,true,null,0,i==20?9000000000L:i));
+                else for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,String.format("Song %02d",i),"Uploader",1000,true,null,99,i==20?9000000000L:i));
                 return new Catalog.Page(q.view()==Catalog.View.FOLDER?"My collection":"Catalog",rows,q.view()==Catalog.View.FOLDER && q.page()==1,Instant.now().plusSeconds(300),q.view()==Catalog.View.FOLDER?2:1,q.view()==Catalog.View.FOLDER?21:1);
             })) {
             var desk=new NativeDesk(library,player,p->new AccountLoginController.Snapshot(AccountLoginController.Phase.LOGGED_IN,"",null,"42"),(p,a)->{},()->true);
@@ -111,6 +111,18 @@ public final class PlaylistRenderTest {
                         try {
                             render(scene); check(find(scene,"My collection (21)",null)!=null && find(scene,"Uploader",null)!=null);
                             click(scene,"My collection (21)");
+                            int beforeLayout=requests.get();
+                            for(String layout:List.of("\u53cc\u5217\u5217\u8868","\u5361\u7247\u5217\u8868","\u5355\u5217\u5217\u8868")) {
+                                click(scene,"\u5207\u6362\u5217\u8868");click(scene,layout);render(scene);
+                                var a=find(scene,"Song 01",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                var b=find(scene,"Song 02",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
+                                boolean multiple=layout.equals("\u5361\u7247\u5217\u8868") || layout.equals("\u53cc\u5217\u5217\u8868") && logicalWidth>=600;
+                                check(multiple?Math.abs(a.getTop()-b.getTop())<=2 && b.getLeft()>a.getLeft():b.getTop()>a.getTop());
+                                check(requests.get()==beforeLayout);
+                            }
+                            check(find(scene,"00:01",null)!=null);
+                            click(scene,"\u4f5c\u8005\u4e3b\u9875");check(library.snapshot().get("view").equals("AUTHOR_VIDEOS") && submitted.get()==null);
+                            click(scene,"\u8fd4\u56de\u5217\u8868");check(library.snapshot().get("view").equals("FOLDER"));
                             visibleButtons(scene,density);
                             var play=find(scene,"\u5168\u90e8\u64ad\u653e",SemanticsActions.INSTANCE.getOnClick());
                             var search=find(scene,"\u641c\u7d22\u5408\u96c6",null); var sort=find(scene,"\u6392\u5e8f",SemanticsActions.INSTANCE.getOnClick());
@@ -134,15 +146,24 @@ public final class PlaylistRenderTest {
                             click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle && library.snapshot().get("filter").equals("Song 21"));
                             visibleButtons(scene,density);
                             click(scene,"\u6392\u5e8f");
+                            check(find(scene,"\u5df2\u9009\u62e9\u9ed8\u8ba4\u987a\u5e8f",null)!=null);
                             HeaderSearchRenderTest.menuIcons(scene,List.of("\u9ed8\u8ba4\u987a\u5e8f","\u5012\u5e8f","\u6807\u9898","\u4f5c\u8005","\u65f6\u957f","\u64ad\u653e\u91cf"),density);
                             click(scene,"\u5012\u5e8f");
                             check(library.snapshot().get("sort").equals("REVERSE"));
+                            click(scene,"\u6392\u5e8f"); check(find(scene,"\u5df2\u9009\u62e9\u5012\u5e8f",null)!=null); click(scene,"\u5012\u5e8f");
                             click(scene,"\u5168\u90e8\u64ad\u653e"); render(scene);
                             check(submitted.get()!=null && submitted.get().items().size()==21 && submitted.get().items().getFirst().target().equals("21"));
                             click(scene,"\u6392\u5e8f"); click(scene,"\u64ad\u653e\u91cf");
                             check(library.snapshot().get("sort").equals("PLAY_COUNT") && find(scene,"Song 21",null)!=null);
                             click(scene,"\u5168\u90e8\u64ad\u653e"); render(scene);
                             check(submitted.get()!=null && submitted.get().items().size()==21 && submitted.get().items().getFirst().target().equals("20"));
+                            int layoutRequests=requests.get();
+                            var layoutButton=find(scene,"\u5207\u6362\u5217\u8868",SemanticsActions.INSTANCE.getOnClick());
+                            check(layoutButton!=null && layoutButton.getBoundsInRoot().getRight()<=find(scene,"\u6392\u5e8f",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getLeft());
+                            for(String layout:List.of("\u53cc\u5217\u5217\u8868","\u5361\u7247\u5217\u8868","\u5355\u5217\u5217\u8868")) {
+                                click(scene,"\u5207\u6362\u5217\u8868"); click(scene,layout); render(scene);
+                                check(find(scene,"Song 21",null)!=null && find(scene,"00:01",null)!=null && requests.get()==layoutRequests);
+                            }
                             int before=requests.get(); scene.close();
                             scene=new ImageComposeScene(width,height,DensityKt.Density(density,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{body.invoke(route,c,f);return Unit.INSTANCE;});
                             render(scene); check(find(scene,"Song 21",null)!=null && library.snapshot().get("filter").equals("Song 21") && requests.get()==before);

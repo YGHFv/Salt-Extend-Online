@@ -62,8 +62,12 @@ public final class HeaderSearchRenderTest {
             for(String label:labels) {
                 SemanticsNode icon=null,text=null;
                 for(var owner:scene.getSemanticsOwners()) {
-                    if(icon==null) icon=find(owner.getUnmergedRootSemanticsNode(),label+"\u56fe\u6807",null);
-                    if(text==null) text=find(owner.getUnmergedRootSemanticsNode(),label,SemanticsActions.INSTANCE.getGetTextLayoutResult());
+                    var candidate=find(owner.getUnmergedRootSemanticsNode(),label+"\u56fe\u6807",null);
+                    if(candidate!=null) {
+                        icon=candidate;
+                        text=find(owner.getUnmergedRootSemanticsNode(),label,SemanticsActions.INSTANCE.getGetTextLayoutResult());
+                        break;
+                    }
                 }
                 check(icon!=null); check(text!=null);
                 var bounds=icon.getBoundsInRoot(); var title=text.getBoundsInRoot();

@@ -69,6 +69,25 @@
           "default_value": "standard"
         },
         {
+          "key": "cover.mode",
+          "type": "list",
+          "title": "封面裁切",
+          "summary": "默认保持原比例。列表即时生效；播放封面在下次打开曲目时生效，不改源图片。",
+          "entries": [
+            "保持比例（默认）",
+            "居中裁切",
+            "靠左裁切",
+            "靠右裁切"
+          ],
+          "entry_values": [
+            "fit",
+            "center",
+            "left",
+            "right"
+          ],
+          "default_value": "fit"
+        },
+        {
           "key": "cache.limitMiB",
           "type": "list",
           "title": "音频缓存上限",

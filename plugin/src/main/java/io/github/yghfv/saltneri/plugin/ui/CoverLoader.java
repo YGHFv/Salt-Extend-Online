@@ -18,7 +18,7 @@ import javax.imageio.stream.MemoryCacheImageInputStream;
 public final class CoverLoader implements AutoCloseable {
     @FunctionalInterface public interface Opener { HttpURLConnection open(URI uri) throws IOException; }
     @FunctionalInterface public interface Source { URI resolve(RequestScope request) throws IOException; }
-    public static final int LIST_EDGE = 168;
+    public static final int LIST_EDGE = 480;
     static final int PARALLEL_LOADS = 3;
     private static final int MAX_BYTES = 1048576, MAX_ENTRIES = 20;
     private final Opener opener;
@@ -81,6 +81,14 @@ public final class CoverLoader implements AutoCloseable {
         URI original = CoverSource.original(source);
         if (original == null) throw invalid();
         return load(original, scope, 1024, 8 * MAX_BYTES);
+    }
+    public byte[] loadPlayback(URI source,RequestScope scope,CoverMode mode) throws IOException {
+        byte[] png=loadPlayback(source,scope);
+        if(mode==CoverMode.FIT) return png;
+        BufferedImage image=ImageIO.read(new ByteArrayInputStream(png));
+        int edge=Math.min(image.getWidth(),image.getHeight());
+        var crop=image.getSubimage(mode.left(image.getWidth(),image.getHeight()),(image.getHeight()-edge)/2,edge,edge);
+        var bytes=new ByteArrayOutputStream(); ImageIO.write(crop,"png",bytes); scope.check(); return bytes.toByteArray();
     }
     private byte[] load(URI source, RequestScope scope, int edge, int maxBytes) throws IOException {
         source = CoverSource.original(source);

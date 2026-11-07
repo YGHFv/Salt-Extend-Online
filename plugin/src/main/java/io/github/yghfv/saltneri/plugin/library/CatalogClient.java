@@ -46,22 +46,58 @@ public final class CatalogClient {
         public CollectionContents { items=List.copyOf(items); if(items.size()>10000) throw new IllegalArgumentException("Collection too large"); }
     }
     public CollectionContents loadAll(Query query, RequestScope request) throws IOException {
+        return loadAll(query,request,null,(done,total)->{});
+    }
+    CollectionContents loadAll(Query query, RequestScope request, CatalogPageCache cache,
+                               java.util.function.BiConsumer<Integer,Integer> progress) throws IOException {
         if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
         if(account!=null && account.platform()!=query.platform() || query.platform()==AccountPlatform.BILIBILI && account==null)
             throw CatalogFailure.of(Stage.SESSION,Reason.LOGIN_REQUIRED);
         try(CatalogHttp http=new CatalogHttp(query.platform(),account,clock,opener)) {
             if(account!=null) http.verify(request);
             if(query.platform()==AccountPlatform.NETEASE) return neteaseFolder(query,http,request,true);
-            List<Item> items=new ArrayList<>(); Set<String> ids=new HashSet<>(); String title="";
-            for(int page=1;page<=500;page++) {
-                request.check(); Page result=bili(new Query(query.platform(),query.view(),query.folder(),page,query.owner()),http,request);
-                if(result.totalCount()>10000 || page==500 && result.totalCount()<0 && result.items().size()==20) throw invalid();
-                title=result.title();
-                for(Item item:result.items()) if(item.enabled() && ids.add(item.target())) items.add(item);
-                if(!result.hasMore()) return new CollectionContents(title,items,items.size());
-            }
-            throw invalid();
+            var worker=java.util.concurrent.Executors.newFixedThreadPool(3,r->{var t=new Thread(r,"salt-bili-catalog-batch");t.setDaemon(true);return t;});
+            var pending=new ArrayList<java.util.concurrent.Future<Page>>();
+            try {
+                Page first=bulkPage(query,1,http,request,cache); int pages=first.totalPages();
+                if(first.totalCount()>10000) throw invalid();
+                List<Page> results=new ArrayList<>(); results.add(first); progress.accept(1,pages);
+                // Unknown totals retain the conservative sequential end-of-list protocol.
+                if(pages==0) {
+                    for(int page=2;results.getLast().hasMore();page++) {
+                        if(page>500) throw invalid();
+                        results.add(bulkPage(query,page,http,request,cache)); progress.accept(page,0);
+                    }
+                } else for(int from=2;from<=pages;from+=3) {
+                    request.check(); pending.clear();
+                    for(int page=from;page<=Math.min(from+2,pages);page++) {
+                        int index=page;
+                        pending.add(worker.submit(()->{try(var child=http.fork(request)) {return bulkPage(query,index,child,request,cache);}}));
+                    }
+                    for(var future:pending) {
+                        Page result;
+                        try { result=future.get(); }
+                        catch(InterruptedException error) { Thread.currentThread().interrupt(); request.check(); throw new IOException("Catalog interrupted"); }
+                        catch(java.util.concurrent.ExecutionException error) {
+                            if(error.getCause() instanceof IOException io) throw io;
+                            if(error.getCause() instanceof RuntimeException runtime) throw runtime;
+                            throw new IOException("Catalog worker failed");
+                        }
+                        request.check(); if(result.totalCount()!=first.totalCount()) throw new IOException("Catalog changed; refresh before sorting");
+                        results.add(result); progress.accept(results.size(),pages);
+                    }
+                }
+                List<Item> items=new ArrayList<>(); Set<String> ids=new HashSet<>();
+                for(Page result:results) for(Item item:result.items()) if(item.enabled() && ids.add(item.target())) items.add(item);
+                request.check(); return new CollectionContents(first.title(),items,first.totalCount());
+            } finally { pending.forEach(f->f.cancel(true)); worker.shutdownNow(); }
         }
+    }
+    private Page bulkPage(Query query,int page,CatalogHttp http,RequestScope request,CatalogPageCache cache) throws IOException {
+        Query next=new Query(query.platform(),query.view(),query.folder(),page,query.owner());
+        try { return cache==null ? bili(next,http,request) : cache.load(account,next,"read","",request,(q,k,s,r)->bili(q,http,r)); }
+        catch(IOException | RuntimeException error) { throw error; }
+        catch(Exception error) { throw new IOException("Catalog batch failed"); }
     }
     private Page netease(Query query, CatalogHttp http, RequestScope request) throws IOException {
         if (query.view() == View.SEARCH) {
@@ -154,6 +190,39 @@ public final class CatalogClient {
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
         if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return discovery.load(query,http,request);
         String base = "https://api.bilibili.com";
+        if(query.view()==View.AUTHOR_VIDEOS) {
+            URI uri=BiliWbi.sign(base+"/x/space/wbi/arc/search",Map.of("mid",Long.toString(query.owner()),"pn",Integer.toString(query.page()),
+                    "ps","20","order","pubdate","platform","web","web_location","1550101"),wbi(http,request),clock.instant().getEpochSecond());
+            var data=object(success(http.json(uri,null,request),0,http.stage()).get("data"));
+            var paging=object(data.get("page"));
+            if(number(paging.get("pn"),query.page())!=query.page()) throw invalid();
+            List<Item> items=new ArrayList<>();
+            for(Object row:bounded(arrayOrEmpty(object(data.get("list")).get("vlist")),20)) {
+                var video=object(row); String bvid=optional(video.get("bvid")); long duration=searchDuration(video.get("length"));
+                if(!bvid.matches("BV[0-9A-Za-z]{10}") || duration<=0) continue;
+                items.add(new Item(Kind.TRACK,bvid,text(video.get("title")),optional(video.get("author")),duration,true,
+                        cover(AccountPlatform.BILIBILI,video.get("pic")),query.owner()));
+            }
+            long total=number(paging.get("count"),-1);
+            return page("\u89c6\u9891",items,total<0?items.size()==20:query.page()*20L<total,total);
+        }
+        if(query.view()==View.AUTHOR_COLLECTIONS) {
+            URI uri=BiliWbi.sign(base+"/x/polymer/web-space/seasons_series_list",Map.of("mid",Long.toString(query.owner()),
+                    "page_num",Integer.toString(query.page()),"page_size","20","web_location","333.999"),wbi(http,request),clock.instant().getEpochSecond());
+            var data=object(success(http.json(uri,null,request),0,http.stage()).get("data"));
+            var lists=object(data.get("items_lists")); var paging=object(lists.get("page"));
+            if(number(paging.get("page_num"),query.page())!=query.page()) throw invalid();
+            List<Item> items=new ArrayList<>();
+            for(Object row:bounded(arrayOrEmpty(lists.get("seasons_list")),20)) {
+                var meta=object(object(row).get("meta"));
+                if(number(meta.get("mid"),query.owner())!=query.owner()) throw invalid();
+                items.add(new Item(Kind.COLLECTION,Long.toString(id(meta.get("season_id"))),text(meta.get("name")),author(meta),
+                        number(meta.get("total"),-1),true,firstCover(AccountPlatform.BILIBILI,meta,"cover","pic"),query.owner()));
+            }
+            // Upstream paging also counts series; only playable season collections are exposed here.
+            long total=number(paging.get("total"),-1);
+            return page("\u5408\u96c6",items,total<0?items.size()==20:query.page()*20L<total,total);
+        }
         if (query.view() == View.SEARCH) {
             URI uri = BiliWbi.sign(base + "/x/web-interface/wbi/search/type", Map.of(
                     "search_type", "video", "keyword", query.keyword(), "page", Integer.toString(query.page()),
@@ -171,7 +240,7 @@ public final class CatalogClient {
                 long duration = searchDuration(video.get("duration"));
                 if (!bvid.matches("BV[0-9A-Za-z]{10}") || duration <= 0 || !unique.add(bvid)) continue;
                 items.add(new Item(Kind.TRACK, bvid, searchTitle(text(video.get("title"))), optional(video.get("author")), duration, true,
-                        cover(AccountPlatform.BILIBILI, video.get("pic"))));
+                        cover(AccountPlatform.BILIBILI, video.get("pic")), number(video.get("mid"),0)));
             }
             return new Page("\u641c\u7d22\uff1a" + query.keyword(), items, query.page() < pages, clock.instant().plusSeconds(300), pages);
         }
@@ -186,13 +255,13 @@ public final class CatalogClient {
                 String target = enabled ? bvid : "unsupported:" + id(video.get("aid"));
                 if (!unique.add(target)) throw invalid();
                 items.add(new Item(Kind.TRACK, target, text(video.get("title")), author(video), duration * 1000, enabled,
-                        cover(AccountPlatform.BILIBILI, video.get("pic")), 0, playCount(video, "stat", "view")));
+                        cover(AccountPlatform.BILIBILI, video.get("pic")), authorId(video,query.owner()), playCount(video, "stat", "view")));
             }
             Map<String, Object> paging = data.get("page") == null ? Map.of() : object(data.get("page"));
             long total = number(paging.get("total"), number(meta.get("total"), -1));
             Boolean more = more(data, query.page(), total);
             if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(collectionData(
-                    new Query(query.platform(), query.view(), query.folder(), query.page() + 1, query.owner()), 20, http, request).get("archives")).isEmpty();
+                    new Query(query.platform(), query.view(), query.folder(), query.page() + 1, query.owner(),"",query.reverse()), 20, http, request).get("archives")).isEmpty();
             return page(text(meta.get("name")), items, more && query.page() < 500, total);
         }
         if (query.view() == View.FOLDER) {
@@ -204,8 +273,8 @@ public final class CatalogClient {
                 boolean enabled = number(video.get("type"), 0) == 2 && bvid.matches("BV[0-9A-Za-z]{10}") && number(video.get("duration"), 0) > 0;
                 String target = enabled ? bvid : "unsupported:" + id(video.get("id")); if (!unique.add(target)) throw invalid();
                 String owner = video.get("upper") == null ? "" : optional(object(video.get("upper")).get("name"));
-                items.add(new Item(Kind.TRACK, target, text(video.get("title")), owner + (enabled ? " / P1" : " / unavailable or unsupported"), number(video.get("duration"), 0) * 1000, enabled,
-                        cover(AccountPlatform.BILIBILI, video.get("cover")), 0, playCount(video, "cnt_info", "play")));
+                items.add(new Item(Kind.TRACK, target, text(video.get("title")), owner, number(video.get("duration"), 0) * 1000, enabled,
+                        cover(AccountPlatform.BILIBILI, video.get("cover")), authorId(video,0), playCount(video, "cnt_info", "play")));
             }
             Boolean more = more(data, query.page(), number(info.get("media_count"), -1));
             if (more == null) more = items.size() == 20 && query.page() < 500 && !arrayOrEmpty(biliData(http, request,
@@ -258,7 +327,7 @@ public final class CatalogClient {
     private Map<String, Object> collectionData(Query query, int size, CatalogHttp http, RequestScope request) throws IOException {
         URI uri = BiliWbi.sign("https://api.bilibili.com/x/polymer/web-space/seasons_archives_list", Map.of(
                 "mid", Long.toString(query.owner()), "season_id", Long.toString(query.folder()),
-                "page_num", Integer.toString(query.page()), "page_size", Integer.toString(size), "sort_reverse", "false", "web_location", "333.999"),
+                "page_num", Integer.toString(query.page()), "page_size", Integer.toString(size), "sort_reverse", Boolean.toString(query.reverse()), "web_location", "333.999"),
                 wbi(http, request), clock.instant().getEpochSecond());
         var data = object(success(http.json(uri, null, request), 0, http.stage()).get("data"));
         var meta = object(data.get("meta"));
@@ -298,6 +367,8 @@ public final class CatalogClient {
             case MUSIC_ORIGINAL -> "\u97f3\u4e50\u539f\u521b\u699c";
             case MINE -> query.platform() == AccountPlatform.BILIBILI ? "\u6536\u85cf" : "\u6211\u7684\u6b4c\u5355";
             case SAVED -> "\u8ba2\u9605";
+            case AUTHOR_VIDEOS -> "Videos";
+            case AUTHOR_COLLECTIONS -> "Collections";
             case FOLDER, COLLECTION -> throw new IllegalArgumentException("Folder title comes from its contents");
             case SEARCH -> "\u641c\u7d22";
         };
@@ -318,6 +389,12 @@ public final class CatalogClient {
             }
         }
         return optional(alias(row, "uname", "author_name"));
+    }
+    private static long authorId(Map<String,Object> row,long fallback) throws IOException {
+        for(String field:List.of("upper","owner")) if(row.get(field) instanceof Map<?,?> person) {
+            long mid=number(person.get("mid"),0); if(mid>0) return mid;
+        }
+        return fallback;
     }
     private static long searchDuration(Object value) {
         if (!(value instanceof String text) || !text.matches("[0-9]{1,6}:[0-9]{2}(:[0-9]{2})?")) return 0;

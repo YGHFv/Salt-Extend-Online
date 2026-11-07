@@ -13,8 +13,8 @@ public final class PlaylistWorkflowContractTest {
     private static void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Playlist workflow "+checks); }
     private static void ready(LibraryController library) throws Exception {
         long until=System.nanoTime()+3_000_000_000L;
-        while(!library.snapshot().get("loaded").equals(true) && System.nanoTime()<until) Thread.sleep(10);
-        check(library.snapshot().get("loaded").equals(true));
+        while((!library.snapshot().get("loaded").equals(true) || library.snapshot().get("loadingAll").equals(true)) && System.nanoTime()<until) Thread.sleep(10);
+        check(library.snapshot().get("loaded").equals(true) && !library.snapshot().get("loadingAll").equals(true));
     }
     @SuppressWarnings("unchecked") private static List<Map<String,Object>> rows(LibraryController library) { return (List<Map<String,Object>>)library.snapshot().get("items"); }
     public static void main(String[] args) throws Exception {
@@ -99,7 +99,7 @@ public final class PlaylistWorkflowContractTest {
             check(started.await(3,java.util.concurrent.TimeUnit.SECONDS));
             check(rows(library).size()==1 && library.snapshot().get("page").equals(2));
             library.sort(Sort.REVERSE);
-            check(rows(library).isEmpty() && library.snapshot().get("page").equals(1));
+            check(rows(library).size()==1 && library.snapshot().get("page").equals(2));
             resume.countDown(); ready(library);
             check(rows(library).getFirst().get("title").equals("Track 21") && library.snapshot().get("error").equals(""));
         } finally { resume.countDown(); }

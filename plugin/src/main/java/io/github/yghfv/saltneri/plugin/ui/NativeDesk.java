@@ -20,6 +20,9 @@ public final class NativeDesk {
     private final BooleanSupplier permitted;
     private Consumer<LibraryController.Playlist> playlistPlayer = list -> { throw new IllegalStateException("Playlist playback not configured"); };
     public void playlistPlayer(Consumer<LibraryController.Playlist> player) { playlistPlayer=Objects.requireNonNull(player); }
+    private Supplier<CoverMode> coverMode=()->CoverMode.FIT;
+    public void coverMode(Supplier<CoverMode> value) { coverMode=Objects.requireNonNull(value); }
+    public CoverMode coverMode() { return coverMode.get(); }
     public NativeDesk(LibraryController library, OnlinePlaybackController player,
                       Function<AccountPlatform, AccountLoginController.Snapshot> accounts,
                       BiConsumer<AccountPlatform, Action> actions, BooleanSupplier permitted) {
@@ -42,6 +45,9 @@ public final class NativeDesk {
     public AccountLoginController.Snapshot account(AccountPlatform platform) { check(); return accounts.apply(platform); }
     public void page(int direction) { check(); library.turn(direction); }
     public void choose(String token) { check(); library.choose(token); }
+    public void author(String token) { check(); library.author(token); }
+    public void authorTab(boolean collections) { check(); library.authorTab(collections); }
+    public void back() { check(); library.back(); }
     public void playRow(String token) {
         check(); library.playRow(token, target -> player.playSelected(target, () -> {
             check(); actions.accept(target.platform(), Action.ARM);

@@ -14,11 +14,32 @@ final class CatalogPageCache {
     private record Cached(Page page, Instant until) { }
     private final Clock clock;
     private final LinkedHashMap<Query, Cached> pages = new LinkedHashMap<>(16, 0.75f, true);
+    private record Full(CatalogClient.CollectionContents contents,Instant until) { }
+    private final LinkedHashMap<Query,Full> complete=new LinkedHashMap<>(4,0.75f,true);
     private AccountCredentials account;
     private long revision;
     final BiliDiscovery.Cache discovery;
     CatalogPageCache(Clock clock) { this.clock = clock; discovery = new BiliDiscovery.Cache(clock); }
-    synchronized void clear() { revision++; pages.clear(); account = null; discovery.clear(); }
+    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); }
+    @FunctionalInterface interface FullLoader { CatalogClient.CollectionContents load() throws Exception; }
+    CatalogClient.CollectionContents all(AccountCredentials owner,Query query,RequestScope request,FullLoader loader) throws Exception {
+        long captured;
+        synchronized(this) {
+            if(account!=owner) {clear();account=owner;} captured=revision; request.check();
+            complete.entrySet().removeIf(e->!clock.instant().isBefore(e.getValue().until()));
+            Full hit=complete.get(query); if(hit!=null) return hit.contents();
+        }
+        var result=loader.load(); request.check();
+        synchronized(this) {
+            request.check();
+            if(captured==revision && account==owner) {
+                complete.put(query,new Full(result,clock.instant().plusSeconds(120)));
+                while(complete.size()>2 || complete.values().stream().mapToInt(e->e.contents().items().size()).sum()>10000)
+                    complete.remove(complete.keySet().iterator().next());
+            }
+        }
+        return result;
+    }
     Page load(AccountCredentials owner, Query query, String quality, String scope, RequestScope request,
               PlatformResolutionController.Resolver<Query,String,Page> upstream) throws Exception {
         request.check(); long captured;

@@ -66,7 +66,7 @@ final class BiliDiscovery {
             for(Object value:rows) {
                 var row=BoundedJson.object(value); String id=target(null,row.get("param")); long duration=number(row.get("duration"));
                 if(id.isEmpty() || duration<=0 || duration>604800 || !unique.add(id)) continue;
-                items.add(new Item(Kind.TRACK,id,text(row.get("title")),text(row.get("name")),duration*1000,true,CoverSource.parse(AccountPlatform.BILIBILI,text(row.get("cover")))));
+                items.add(new Item(Kind.TRACK,id,text(row.get("title")),text(row.get("name")),duration*1000,true,CoverSource.parse(AccountPlatform.BILIBILI,text(row.get("cover"))),number(row.get("mid"))));
             }
         } else {
             int type=query.view()==View.MUSIC_HOT?1:2;
