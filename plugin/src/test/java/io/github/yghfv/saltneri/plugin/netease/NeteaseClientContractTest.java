@@ -149,7 +149,19 @@ public final class NeteaseClientContractTest {
         check(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(NeteaseEapi.form(vector)))
                 .equals("d83ae39ae8219294cc783610f65d4e811e6ad80b8bd0f971684e9e6e12f3165a"));
         fails(() -> NeteaseEapi.form(Map.of("large", "a".repeat(8193))));
-        check(NeteaseClient.Quality.fromKey("standard") == NeteaseClient.Quality.STANDARD); fails(() -> NeteaseClient.Quality.fromKey("hires"));
+        check(NeteaseClient.Quality.fromKey("standard") == NeteaseClient.Quality.STANDARD); fails(() -> NeteaseClient.Quality.fromKey("unknown"));
+        for(var requested:NeteaseClient.Quality.values()) {
+            check(NeteaseClient.Quality.fromKey(requested.key())==requested);
+            for(var actual:NeteaseClient.Quality.values()) {
+                Fixture tier=new Fixture(); tier.audio=AUDIO.replace("\"level\":\"standard\"","\"level\":\""+actual.key()+"\"");
+                try(var request=new RequestScope(()->true)) {
+                    if(actual.ordinal()<=requested.ordinal()) {
+                        check(tier.client(null).resolve(TARGET,requested,"fixture-anonymous",request).level().equals(actual.key()));
+                        check(decryptEapi(tier.forms.get(1)).contains("\"level\":\""+requested.key()+"\""));
+                    } else fails(()->tier.client(null).resolve(TARGET,requested,"fixture-anonymous",request));
+                }
+            }
+        }
         for (String detail : List.of(DETAIL.replace("\"id\":123", "\"id\":124"), DETAIL.replace("\"fee\":0", "\"fee\":1"), DETAIL.replace("\"fee\":0", "\"fee\":4"),
                 DETAIL.replace("\"code\":200", "\"code\":301"), DETAIL.replace("\"duration\":120000", "\"duration\":0"), DETAIL.replace("\"fee\":0", "\"fee\":0,\"status\":-1"),
                 DETAIL.replace("\"name\":\"Fixture song\"", "\"name\":\"\""), DETAIL.replace("\"songs\":[", "\"songs\":[] , \"other\":["))) rejectDetail(detail);

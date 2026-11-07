@@ -56,7 +56,10 @@ listOf(
     "coverLoaderContractTest" to "io.github.yghfv.saltneri.plugin.ui.CoverLoaderContractTest",
     "nativeQueueContractTest" to "io.github.yghfv.saltneri.plugin.host.NativeQueueContractTest",
     "playbackCoverContractTest" to "io.github.yghfv.saltneri.plugin.host.PlaybackCoverContractTest",
-    "onlineLyricsContractTest" to "io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest"
+    "onlineLyricsContractTest" to "io.github.yghfv.saltneri.plugin.host.OnlineLyricsContractTest",
+    "queueReplayContractTest" to "io.github.yghfv.saltneri.plugin.transport.QueueReplayContractTest",
+    "windowsMediaIdentityContractTest" to "io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest",
+    "windowsAppShortcutContractTest" to "io.github.yghfv.saltneri.plugin.host.WindowsAppShortcutContractTest"
 ).forEach { (taskName, testClass) ->
     tasks.register<JavaExec>(taskName) {
         dependsOn(tasks.testClasses)
@@ -84,7 +87,9 @@ listOf(
     "authProtocolContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest",
     "authLifecycleContractTest" to "io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest",
     "webLoginContractTest" to "io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest",
-    "windowsDpapiContractTest" to "io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest"
+    "windowsDpapiContractTest" to "io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest",
+    "rangeDiskCacheContractTest" to "io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest",
+    "playbackSettingsContractTest" to "io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest"
 ).forEach { (taskName, testClass) ->
     tasks.register<JavaExec>(taskName) {
         dependsOn(tasks.testClasses)
@@ -122,7 +127,7 @@ tasks.processResources {
 spmod {
     PluginClass = "io.github.yghfv.saltneri.plugin." + if (experimentalAdapter) "ExperimentalPlugin" else "MainPlugin"
     PluginId = "io.github.yghfv.saltneri.online"
-    PluginVersion = if (experimentalAdapter) "0.8.10-bili-discovery" else project.version.toString()
+    PluginVersion = if (experimentalAdapter) "0.8.11-queue-settings" else project.version.toString()
     PluginProvider = "YGHFv"
     PluginName = "Salt Extend Online"
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."

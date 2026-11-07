@@ -13,6 +13,7 @@ import java.util.function.BooleanSupplier;
 public final class LazyPlaylistSession implements AutoCloseable {
     @FunctionalInterface public interface Resolver {
         OnlinePlaybackController.Audio resolve(Catalog.Item item, String scope, RequestScope request) throws Exception;
+        default Object revision() { return null; }
     }
     private final Salt1193Probe.MediaFactory media;
     private final StreamBinding adapter;
@@ -26,12 +27,14 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private final Set<String> aliases = ConcurrentHashMap.newKeySet();
     private final LinkedHashMap<Entry, Cached> cache = new LinkedHashMap<>(16,0.75f,true);
     private volatile boolean closed, submitted;
-    private record Cached(URI uri, Instant expiry, PlaybackCoverFile cover) { }
+    private record Cached(URI uri, Instant expiry, Entry entry, Object revision) { }
     private static final class Entry {
         final Catalog.Item row;
         final String id, path;
         volatile Object media;
         OnlineLyrics.Binding lyrics;
+        PlaybackCoverFile cover;
+        io.github.yghfv.saltneri.core.TrackKey key;
         Entry(Catalog.Item row) { this.row=row; String nonce=UUID.randomUUID().toString(); id="saltneri:queue:"+nonce; path="saltneri://queue/"+nonce; }
     }
     public LazyPlaylistSession(Salt1193Probe.Result profile, StreamBinding adapter, LoopbackRangeServer transport,
@@ -66,39 +69,53 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private URI resolve(Entry entry) throws Exception {
         synchronized(entry) {
             check();
-            synchronized(cache) { Cached old=cache.get(entry); if(old!=null && Instant.now().plusSeconds(10).isBefore(old.expiry())) return old.uri(); }
+            synchronized(cache) { Cached old=cache.get(entry); if(old!=null && Objects.equals(old.revision(),resolver.revision()) && transport.now().plusSeconds(10).isBefore(old.expiry())) return old.uri(); }
             try(RequestScope request=new RequestScope(()->!closed && active.getAsBoolean())) {
+                Object revision=resolver.revision();
                 requests.add(request); request.check(); var audio=resolver.resolve(entry.row,scope,request); request.check(); check();
-                if(!audio.lease().belongsTo(scope)) throw new SecurityException("Playlist audio scope mismatch");
-                URI local=transport.register(audio.lease()); PlaybackCoverFile cover=null;
+                if(!audio.lease().belongsTo(scope) || !audio.key().platform().name().equals(audio.lease().platform().name())
+                        || entry.key!=null && !entry.key.equals(audio.key())) throw new SecurityException("Playlist audio identity mismatch");
+                if(!transport.now().isBefore(audio.expiresAt())) throw new IllegalStateException("Playlist audio already expired");
+                URI local=transport.register(audio.lease());
                 try {
-                    if(audio.metadata().coverPng()!=null) {
-                        try { cover=PlaybackCoverFile.create(audio.metadata().coverPng()); } catch(java.io.IOException ignored) { }
-                    }
-                    Object item=media.create(entry.id,audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),cover==null?entry.path:cover.path());
+                    Object item;
                     synchronized(cache) {
                         check();
-                        if(cover!=null) { adapter.registerDeferred(cover.path(),()->resolve(entry)); aliases.add(cover.path()); }
-                        Cached previous=cache.put(entry,new Cached(local,audio.expiresAt(),cover));
+                        Cached previous=cache.remove(entry);
                         if(previous!=null) retire(previous);
+                        if(audio.metadata().coverPng()!=null) {
+                            if(entry.cover==null) {
+                                PlaybackCoverFile created=null;
+                                try {
+                                    created=PlaybackCoverFile.create(audio.metadata().coverPng());
+                                    adapter.registerDeferred(created.path(),()->resolve(entry)); aliases.add(created.path()); entry.cover=created;
+                                } catch(java.io.IOException | RuntimeException error) { if(created!=null) created.close(); }
+                            } else try { entry.cover.replace(audio.metadata().coverPng()); } catch(java.io.IOException ignored) { }
+                        }
+                        item=media.create(entry.id,audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),entry.cover==null?entry.path:entry.cover.path());
+                        Instant expiry=audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt();
+                        cache.put(entry,new Cached(local,expiry,entry,revision)); entry.key=audio.key();
                         entry.media=item;
-                        if(entry.lyrics!=null) entry.lyrics.path(cover==null?entry.path:cover.path());
+                        if(entry.lyrics!=null) entry.lyrics.path(entry.cover==null?entry.path:entry.cover.path());
                         while(cache.size()>8) { Entry first=cache.keySet().iterator().next(); retire(cache.remove(first)); }
                     }
                     if(submitted) { check(); queue.update(item); }
                     return local;
                 } catch(Exception failure) {
-                    synchronized(cache) { Cached current=cache.get(entry); if(current!=null && current.uri().equals(local)) cache.remove(entry); }
-                    transport.revoke(local); if(cover!=null) { adapter.unregister(cover.path()); cover.close(); } throw failure;
+                    synchronized(cache) { Cached current=cache.get(entry); if(current!=null && current.uri().equals(local)) { cache.remove(entry); retire(current); } }
+                    transport.revoke(local); throw failure;
                 }
             } finally { requests.removeIf(r->{ try{r.check();return false;}catch(RuntimeException done){return true;} }); }
         }
     }
-    private void retire(Cached cached) { transport.revoke(cached.uri()); if(cached.cover()!=null) cached.cover().close(); }
+    private void retire(Cached cached) { transport.revoke(cached.uri()); if(cached.entry().cover!=null) cached.entry().cover.clear(); }
     @Override public void close() {
         closed=true; requests.forEach(RequestScope::close); requests.clear();
         for(Entry entry:entries) { if(entry.lyrics!=null) entry.lyrics.close(); adapter.unregister(entry.path); }
-        synchronized(cache) { cache.values().forEach(this::retire); cache.clear(); }
+        synchronized(cache) {
+            cache.values().forEach(c->transport.revoke(c.uri())); cache.clear();
+            entries.forEach(e->{if(e.cover!=null) e.cover.close();});
+        }
         aliases.forEach(adapter::unregister); aliases.clear();
     }
 }

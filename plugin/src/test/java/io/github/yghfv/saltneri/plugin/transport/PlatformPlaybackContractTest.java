@@ -39,7 +39,8 @@ public final class PlatformPlaybackContractTest {
         var metadata=new Salt1193PlaybackSession.Metadata("Fixture title","Artist","Album","Artist");
         AtomicBoolean netActive=new AtomicBoolean(true); var expiry=clock.instant().plusSeconds(300);
         var net=new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/audio"),Map.of(),"netease-A",expiry,100);
-        var bili=new MediaLease(MediaLease.Platform.BILIBILI,URI.create("https://upos-fixture.bilivideo.com/audio"),Map.of(),"bili-A",expiry,100);
+        // Anonymous resolution reuses one controller scope across both platforms.
+        var bili=new MediaLease(MediaLease.Platform.BILIBILI,URI.create("https://upos-fixture.bilivideo.com/audio"),Map.of(),"netease-A",expiry,100);
         try(Salt1193DiagnosticRuntime runtime=new Salt1193DiagnosticRuntime(profile,binding,server,new EngineLinkContractTest.FakeHost(),hooks,queue::add,()->true)) {
             check(queue.isEmpty()); runtime.playTrack(TrackKey.netease("123"),metadata,net,netActive::get); runtime.playTrack(TrackKey.bilibili("BV17x411w7KC",279786),metadata,bili,()->true);
             check(queue.size()==2); Object netItem=queue.get(0),biliItem=queue.get(1); check(create(adapter,netItem).equals(321));check(create(adapter,biliItem).equals(321));

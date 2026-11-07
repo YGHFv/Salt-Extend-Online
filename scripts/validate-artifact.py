@@ -36,27 +36,27 @@ def validate(path, experimental):
         if attributes["Plugin-Name"] != "Salt Extend Online":
             raise ValueError("Unexpected mod display name")
         if experimental:
-            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.10-bili-discovery":
+            if attributes.get("Plugin-Permissions") != "class-transform" or attributes["Plugin-Version"] != "0.8.11-queue-settings":
                 raise ValueError("Experimental permission/version missing")
         elif "Plugin-Permissions" in attributes:
             raise ValueError("Passive artifact requests permissions")
         configs = json.loads(archive.read("classes/preference_config.json"))
         buttons = [pref["on_click"] for config in configs["configs"] for pref in config["preferences"] if pref["type"] == "button"]
-        expected = ["showStatus", "installNativeUi", "openLibrary", "loginBilibili", "loginNetease", "restoreBilibili", "restoreNetease", "cancelLogins", "logoutBilibili", "logoutNetease", "resolveBilibili", "resolveNetease", "prepareBilibili", "prepareNetease", "armAdapter", "playPrepared", "playTestTone", "stopAdapter"] if experimental else ["showStatus"]
+        expected = ["openLibrary", "clearCache", "installNativeUi", "showStatus"] if experimental else ["showStatus"]
         if buttons != ["io.github.yghfv.saltneri.plugin." + entry_class + "." + method for method in expected]:
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if prefs["bili.target"]["type"] != "edittext" or prefs["bili.target"]["default_value"] != "":
-                raise ValueError("Resolver must have an empty explicit target")
+            if set(prefs) != {"bili.quality", "netease.quality", "auth.remember", "cache.limitMiB"} or sum(len(c["preferences"]) for c in configs["configs"]) != 8:
+                raise ValueError("Unexpected expanded settings menu")
             if prefs["bili.quality"]["entry_values"] != ["dolby", "hires", "lossless", "high", "medium", "low"]:
                 raise ValueError("Wrong Bilibili quality order")
             if prefs["auth.remember"]["type"] != "switch" or prefs["auth.remember"]["default_value"] is not True:
                 raise ValueError("Remembered login must default on")
-            if prefs["netease.target"]["type"] != "edittext" or prefs["netease.target"]["default_value"] != "":
-                raise ValueError("NetEase resolver must have an empty explicit target")
-            if prefs["netease.quality"]["entry_values"] != ["standard", "exhigh"] or prefs["netease.quality"]["default_value"] != "standard":
-                raise ValueError("Wrong free-track NetEase quality options")
+            if prefs["netease.quality"]["entry_values"] != ["standard", "higher", "exhigh", "lossless", "hires", "jyeffect", "sky", "jymaster"] or prefs["netease.quality"]["default_value"] != "standard":
+                raise ValueError("Wrong NetEase quality options")
+            if prefs["cache.limitMiB"]["entry_values"] != ["0", "512", "1024", "2048", "4096", "8192"] or prefs["cache.limitMiB"]["default_value"] != "2048":
+                raise ValueError("Wrong audio cache limits/default")
         profile = archive.read("classes/host-profiles/windows-steam-1.19.3.properties").decode("ascii")
         if sum(line.startswith("class.") for line in profile.splitlines()) != 17:
             raise ValueError("Missing extended engine fingerprints")

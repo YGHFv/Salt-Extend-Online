@@ -26,6 +26,11 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     private URI toneUri;
     private String tonePath;
     private volatile boolean closed;
+    private java.util.function.Supplier<io.github.yghfv.saltneri.plugin.PlaybackSettings> settings=()->io.github.yghfv.saltneri.plugin.PlaybackSettings.DEFAULT;
+    public void settings(java.util.function.Supplier<io.github.yghfv.saltneri.plugin.PlaybackSettings> source) { settings=Objects.requireNonNull(source); }
+    public void cacheLimit(long bytes) { transport.cacheLimit(bytes); }
+    public void clearCache() { transport.clearCache(); }
+    public long cacheBytes() { return transport.cacheBytes(); }
     private LazyPlaylistSession playlist;
     private MediaLease.Platform playlistPlatform;
     private final java.util.Map<String, Salt1193PlaybackSession> sessions = new java.util.HashMap<>();
@@ -101,17 +106,22 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     }
     public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive, OnlineLyrics.Source lyrics) throws ReflectiveOperationException {
+        playTrack(key,metadata,lease,accountActive,lyrics,null);
+    }
+    public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+                                       BooleanSupplier accountActive, OnlineLyrics.Source lyrics, Salt1193PlaybackSession.Renewer renewer) throws ReflectiveOperationException {
         if (closed || !permitted()) throw new IllegalStateException("Arm the experimental adapter first");
         if (!accountActive.getAsBoolean()) throw new SecurityException("Account revision revoked");
         engine.ensureAttached();
         sessions.entrySet().removeIf(entry -> { if (entry.getValue().isClosed()) { sessionPlatforms.remove(entry.getKey()); return true; } return false; });
-        Salt1193PlaybackSession session = sessions.get(lease.scope());
+        String sessionId=lease.platform().name()+":"+lease.scope();
+        Salt1193PlaybackSession session = sessions.get(sessionId);
         if (session == null) {
             if (sessions.size() >= 4) throw new IllegalStateException("Too many active account sessions");
             session = new Salt1193PlaybackSession(profile, lease.scope(), () -> permitted() && accountActive.getAsBoolean(), adapter, transport, false);
-            sessions.put(lease.scope(), session); sessionPlatforms.put(lease.scope(), lease.platform());
+            sessions.put(sessionId, session); sessionPlatforms.put(sessionId, lease.platform());
         }
-        Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease, lyrics);
+        Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease, lyrics,renewer);
         try { session.enqueue(track, item -> {
             if (!permitted() || !accountActive.getAsBoolean()) throw new SecurityException("Account/permission revoked before enqueue");
             queue.addToPlay(item);
@@ -129,8 +139,13 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         String scope=list.account()==null ? "anonymous:"+UUID.randomUUID() : list.account().accountScope();
         LazyPlaylistSession next=new LazyPlaylistSession(profile,adapter,transport,queue,list.items(),scope,
                 ()->!isClosed() && permitted() && accountActive.getAsBoolean(),
-                (item,identity,request)->io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.resolveAudio(list.account(),
-                        new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request),
+                new LazyPlaylistSession.Resolver() {
+                    public Object revision() { return settings.get().qualityKey(); }
+                    public io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.library.Catalog.Item item,String identity,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
+                        return io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.resolveAudio(list.account(),
+                            new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request,settings.get());
+                    }
+                },
                 item -> list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE
                         ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(list.account()).load(Long.parseLong(item.target()),request) : null);
         try {

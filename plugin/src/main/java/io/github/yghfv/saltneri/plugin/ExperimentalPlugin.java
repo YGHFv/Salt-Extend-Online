@@ -43,6 +43,12 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile SaltNativeUi nativeUi;
     private NativeDesk desk;
     private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
+    private volatile String mediaIdentityStatus="not registered";
+    private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
+    private void applySettings(ConfigHelper config) {
+        settings=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"));
+        Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
+    }
 
     public ExperimentalPlugin(PluginContext context) { super(context); }
 
@@ -53,6 +59,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         status = "Checking Steam 1.19.3 native UI; no network or queue changes.";
         configManager = WorkshopApi.manager().createConfigManager();
         ConfigHelper initialConfig = configManager.getConfig();
+        applySettings(initialConfig);
         if (!initialConfig.get("auth.rememberPolicyV2", false)) {
             // Migrate the old default-off preference once, as requested; later opt-outs are preserved.
             initialConfig.set("auth.remember", true);
@@ -67,11 +74,21 @@ public final class ExperimentalPlugin extends SpwPlugin {
         online = new OnlinePlaybackController(this::credentials, this::granted, this::adapterArmed, (audio, activeAccount) -> {
             Salt1193DiagnosticRuntime current = runtime;
             if (current == null || current.isClosed()) throw new IllegalStateException("Arm the adapter first");
-            AccountCredentials account=credentials(AccountPlatform.NETEASE);
+            AccountPlatform platform=AccountPlatform.valueOf(audio.key().platform().name());
+            AccountCredentials account=credentials(platform);
+            OnlinePlaybackController.Target target=audio.target();
+            if(target==null) throw new IllegalStateException("Missing replay identity");
+            String scope=audio.lease().scope(), remoteId=audio.key().remoteId();
             current.playTrack(audio.key(), audio.metadata(), audio.lease(), activeAccount,
                     audio.key().platform()==io.github.yghfv.saltneri.core.TrackKey.Platform.NETEASE
-                    ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(account).load(Long.parseLong(audio.key().remoteId()),request) : null);
-        });
+                    ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(account).load(Long.parseLong(remoteId),request) : null,
+                    new io.github.yghfv.saltneri.plugin.host.Salt1193PlaybackSession.Renewer() {
+                        public Object revision() { return settings.qualityKey(); }
+                        public OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
+                            return OnlinePlaybackController.resolveAudio(account,target,scope,request,settings);
+                        }
+                    });
+        },()->settings);
         OnlinePlaybackController startedOnline = online;
         library = new LibraryController(this::credentials, this::granted, startedOnline::prepare,
                 () -> startedOnline.invalidate("\u5217\u8868\u5df2\u5207\u6362\uff0c\u8bf7\u9009\u62e9\u66f2\u76ee\u51c6\u5907\u97f3\u8f68\uff08\u672a\u64ad\u653e\uff09"));
@@ -90,22 +107,27 @@ public final class ExperimentalPlugin extends SpwPlugin {
         BiliResolutionController startedBili = bili;
         NeteaseResolutionController startedNetease = netease;
         configListener = config -> {
+            PlaybackSettings previous=settings; applySettings(config);
             boolean remember = config.get("auth.remember", true);
             AccountLoginController a = biliLogin, b = neteaseLogin;
             if (a != null) a.setRememberEnabled(remember);
             if (b != null) b.setRememberEnabled(remember);
-            startedBili.invalidate("Bilibili config changed; previous result discarded. Resolve again explicitly.");
-            startedNetease.invalidate("NetEase config changed; previous result discarded. Resolve again explicitly.");
-            startedOnline.invalidate("Configuration changed; prepare again explicitly.");
-            LibraryController current = library; if (current != null) current.invalidate();
+            if(!previous.qualityKey().equals(settings.qualityKey())) {
+                startedBili.invalidate("Quality changed; prepare again explicitly.");
+                startedNetease.invalidate("Quality changed; prepare again explicitly.");
+                startedOnline.invalidate("Quality changed; prepare again explicitly.");
+            }
         };
         configManager.addConfigChangeListener(configListener);
         profile = Salt1193Probe.inspect(WorkshopApi.class.getClassLoader(),
                 getPluginContext().getSpwVersion(), getPluginContext().getSpwChannel().name());
         status = profile.detail();
         if (profile.matched() && granted()) {
-            try { mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install(); }
-            catch(RuntimeException | LinkageError failure) { status="Windows media application identity unavailable: "+failure.getClass().getSimpleName(); }
+            try {
+                mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install();
+                mediaIdentityStatus=mediaIdentity==null?"not Windows":"Salt Player for Windows (Start Menu registered; restart for shell refresh)";
+            }
+            catch(RuntimeException | LinkageError failure) { mediaIdentityStatus="registration failed: "+failure.getClass().getSimpleName(); }
             try { ensureNativeUi(); }
             catch (Exception | LinkageError failure) { status = "Native UI unavailable (" + failure.getClass().getSimpleName() + "). No browser fallback."; }
         }
@@ -192,6 +214,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if (runtime == null || runtime.isClosed()) {
             runtime = Salt1193DiagnosticRuntime.open(WorkshopApi.class.getClassLoader(), profile,
                     WorkshopApi.hookRegistrar(), this::granted);
+            runtime.settings(()->settings); runtime.cacheLimit(settings.cacheBytes());
         }
         status = "Experimental adapter armed. No audio enqueued. NetEase lyrics load only for owned playing items.";
     }
@@ -272,7 +295,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
         plugin.status = (ui == null ? "Native UI: not installed" : ui.diagnostics())
                 + "\nBilibili=" + (plugin.biliLogin == null ? "OFF" : plugin.biliLogin.snapshot().phase().name())
                 + ", NetEase=" + (plugin.neteaseLogin == null ? "OFF" : plugin.neteaseLogin.snapshot().phase().name())
-                + ", adapter=" + plugin.adapterArmed();
+                + ", adapter=" + plugin.adapterArmed()
+                + "\nWindows media app: " + plugin.mediaIdentityStatus;
     }); }
     private synchronized void resolveBili() {
         if (stopped || bili == null) throw new IllegalStateException("Plugin disabled");
@@ -313,4 +337,9 @@ public final class ExperimentalPlugin extends SpwPlugin {
     public static void armAdapter() { action(ExperimentalPlugin::arm); }
     public static void playTestTone() { action(ExperimentalPlugin::play); }
     public static void stopAdapter() { action(ExperimentalPlugin::disarm); }
+    public static void clearCache() { action(plugin -> {
+        Salt1193DiagnosticRuntime current=plugin.runtime;
+        if(current!=null) current.clearCache();
+        plugin.status="\u5df2\u6e05\u7406\u672c\u63d2\u4ef6\u97f3\u9891\u7f13\u5b58\uff0c\u4e0d\u6e05\u7a7a\u64ad\u653e\u961f\u5217\u6216\u767b\u5f55\u3002";
+    }); }
 }

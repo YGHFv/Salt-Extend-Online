@@ -76,6 +76,7 @@ foreach ($test in @(
     'io.github.yghfv.saltneri.plugin.library.BiliDiscoveryContractTest',
     'io.github.yghfv.saltneri.plugin.host.LazyPlaylistContractTest',
     'io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentityContractTest',
+    'io.github.yghfv.saltneri.plugin.host.WindowsAppShortcutContractTest',
     'io.github.yghfv.saltneri.plugin.ui.NativeUiContractTest',
     'io.github.yghfv.saltneri.plugin.ui.SaltPageContentBindingContractTest',
     'io.github.yghfv.saltneri.plugin.ui.NativeHookTransformTest',
@@ -92,6 +93,9 @@ foreach ($test in @(
     'io.github.yghfv.saltneri.plugin.transport.BiliResolvedIntegrationTest',
     'io.github.yghfv.saltneri.plugin.transport.NeteaseResolvedIntegrationTest',
     'io.github.yghfv.saltneri.plugin.transport.PlaybackSessionContractTest',
+    'io.github.yghfv.saltneri.plugin.transport.QueueReplayContractTest',
+    'io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest',
+    'io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest',
     'io.github.yghfv.saltneri.plugin.host.EngineLinkContractTest',
     'io.github.yghfv.saltneri.plugin.transport.DiagnosticContractTest',
     'io.github.yghfv.saltneri.plugin.transport.PlatformPlaybackContractTest'
@@ -104,6 +108,10 @@ foreach ($test in @(
 if ($LASTEXITCODE -ne 0) { throw 'Transport requires modules outside java.base.' }
 & $java '--limit-modules=java.base' -classpath "$tests;$classes" io.github.yghfv.saltneri.plugin.net.PinnedHttpsContractTest
 if ($LASTEXITCODE -ne 0) { throw 'Pinned HTTPS requires modules outside java.base.' }
+foreach ($test in @('io.github.yghfv.saltneri.plugin.transport.RangeDiskCacheContractTest', 'io.github.yghfv.saltneri.plugin.PlaybackSettingsContractTest')) {
+    & $java '--limit-modules=java.base' "-Djava.io.tmpdir=$temporaryFiles" -classpath "$tests;$classes" $test
+    if ($LASTEXITCODE -ne 0) { throw "Cache/settings requires modules outside java.base: $test" }
+}
 foreach ($test in @('io.github.yghfv.saltneri.plugin.net.BoundedJsonContractTest', 'io.github.yghfv.saltneri.plugin.bilibili.BiliClientContractTest', 'io.github.yghfv.saltneri.plugin.bilibili.BiliResolutionContractTest', 'io.github.yghfv.saltneri.plugin.netease.NeteaseClientContractTest', 'io.github.yghfv.saltneri.plugin.netease.NeteaseResolutionContractTest', 'io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsContractTest')) {
     & $java '--limit-modules=java.base' -classpath "$tests;$classes" $test
     if ($LASTEXITCODE -ne 0) { throw "Platform resolver requires modules outside java.base: $test" }
@@ -122,7 +130,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native desk confirmation requires modules outs
 $meta = Join-Path $classes 'META-INF'
 New-Item -ItemType Directory -Path $meta -Force | Out-Null
 $pluginClass = if ($Experimental) { 'ExperimentalPlugin' } else { 'MainPlugin' }
-$pluginVersion = if ($Experimental) { '0.8.10-bili-discovery' } else { '0.1.0-hostprobe' }
+$pluginVersion = if ($Experimental) { '0.8.11-queue-settings' } else { '0.1.0-hostprobe' }
 $pluginName = 'Salt Extend Online'
 $pluginDescription = if ($Experimental) { 'Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified.' } else { 'Passive Steam 1.19.3 host inspection; no online playback.' }
 $permissionLine = if ($Experimental) { "Plugin-Permissions: class-transform`n" } else { '' }

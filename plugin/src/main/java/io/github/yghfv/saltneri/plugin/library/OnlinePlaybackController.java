@@ -2,6 +2,7 @@ package io.github.yghfv.saltneri.plugin.library;
 
 import io.github.yghfv.saltneri.core.TrackKey;
 import io.github.yghfv.saltneri.plugin.auth.*;
+import io.github.yghfv.saltneri.plugin.PlaybackSettings;
 import io.github.yghfv.saltneri.plugin.bilibili.*;
 import io.github.yghfv.saltneri.plugin.netease.*;
 import io.github.yghfv.saltneri.plugin.net.PlatformResolutionController;
@@ -16,7 +17,8 @@ import java.util.concurrent.*;
 /** Preparation is inert; an explicit double-click owns a cancellable, one-use resolve-and-play intent. */
 public final class OnlinePlaybackController implements AutoCloseable {
     public record Target(AccountPlatform platform, String id) { }
-    public record Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt) {
+    public record Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target) {
+        public Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt) { this(key,metadata,lease,expiresAt,null); }
         public static Audio from(BiliClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
         public static Audio from(NeteaseClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
         @Override public String toString() { return "PreparedAudio[" + key.stableId() + ", URL redacted]"; }
@@ -38,10 +40,17 @@ public final class OnlinePlaybackController implements AutoCloseable {
     public OnlinePlaybackController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, BooleanSupplier armed, Player player) {
         this(accounts, authorized, armed, player, Clock.systemUTC(), null);
     }
+    public OnlinePlaybackController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, BooleanSupplier armed, Player player, Supplier<PlaybackSettings> settings) {
+        this(accounts,authorized,armed,player,Clock.systemUTC(),null,settings);
+    }
     public OnlinePlaybackController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, BooleanSupplier armed,
                                     Player player, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Target, String, Audio>> testResolver) {
+        this(accounts,authorized,armed,player,clock,testResolver,()->PlaybackSettings.DEFAULT);
+    }
+    private OnlinePlaybackController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, BooleanSupplier armed,
+                                    Player player, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Target, String, Audio>> testResolver, Supplier<PlaybackSettings> settings) {
         this.accounts = accounts; this.authorized = authorized; this.armed = armed; this.player = player;
-        resolver = new PlatformResolutionController<>("Online", account -> testResolver == null ? (target, quality, scope, request) -> resolveAudio(account,target,scope,request)
+        resolver = new PlatformResolutionController<>("Online", account -> testResolver == null ? (target, quality, scope, request) -> resolveAudio(account,target,scope,request,settings.get())
             : testResolver.apply(account), () -> accounts.apply(platform), authorized, clock, Audio::expiresAt,
                 audio -> "\u97f3\u8f68\u5df2\u51c6\u5907\uff0c\u5c1a\u672a\u64ad\u653e\u3002", error -> null);
         playbackWorker = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -53,12 +62,18 @@ public final class OnlinePlaybackController implements AutoCloseable {
         }, 100, 100, TimeUnit.MILLISECONDS);
     }
     public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
+            return resolveAudio(account,target,scope,request,PlaybackSettings.DEFAULT);
+    }
+    public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings) throws Exception {
+            Audio audio;
             if (target.platform() == AccountPlatform.BILIBILI) {
-                var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), BiliAudioSelector.Quality.HIGH, scope, request);
-                return withCover(Audio.from(resolved), resolved.coverCandidate(), request);
+                var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
+                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request);
+            } else {
+                var resolved = new NeteaseClient(account).resolve(NeteaseTarget.parse(target.id()), settings.netease(), scope, request);
+                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request);
             }
-            var resolved = new NeteaseClient(account).resolve(NeteaseTarget.parse(target.id()), NeteaseClient.Quality.STANDARD, scope, request);
-            return withCover(Audio.from(resolved), resolved.coverCandidate(), request);
+            return new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),target);
     }
     @FunctionalInterface public interface PlaylistPlayer { void play(LibraryController.Playlist list, BooleanSupplier active) throws Exception; }
     public synchronized void playPlaylist(LibraryController.Playlist list, Runnable setup, PlaylistPlayer submit) {

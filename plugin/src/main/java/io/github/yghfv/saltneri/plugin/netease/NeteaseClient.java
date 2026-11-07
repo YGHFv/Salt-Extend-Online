@@ -33,7 +33,8 @@ import java.util.concurrent.CancellationException;
 public final class NeteaseClient {
     @FunctionalInterface interface Opener { HttpURLConnection open(URI uri, byte[] form) throws IOException; }
     public enum Quality {
-        STANDARD("standard"), HIGH("exhigh");
+        STANDARD("standard"), HIGHER("higher"), HIGH("exhigh"), LOSSLESS("lossless"), HIRES("hires"),
+        HD_SURROUND("jyeffect"), SURROUND("sky"), MASTER("jymaster");
         private final String key;
         Quality(String key) { this.key = key; }
         public String key() { return key; }
@@ -123,7 +124,10 @@ public final class NeteaseClient {
         long bitrate = positive(alias(data, "br", "bitrate")); if (bitrate > 100000000) throw invalid();
         int kbps = (int)(bitrate >= 10000 ? bitrate / 1000 : bitrate);
         String level = label(data.get("level"), false);
-        if (!(level.equals("standard") || quality == Quality.HIGH && level.equals("exhigh"))) throw new PlatformRejected(-1);
+        Quality actual;
+        try { actual=Quality.fromKey(level); } catch(IllegalArgumentException invalid) { throw new PlatformRejected(-1); }
+        // Accept only the requested tier or a server-authorized lower tier, never a preview.
+        if(actual.ordinal()>quality.ordinal()) throw new PlatformRejected(-1);
         String mime = switch (label(data.get("type"), false).toLowerCase(Locale.ROOT)) {
             case "mp3" -> "audio/mpeg"; case "flac" -> "audio/flac"; case "m4a" -> "audio/mp4"; case "aac" -> "audio/aac";
             default -> throw invalid();

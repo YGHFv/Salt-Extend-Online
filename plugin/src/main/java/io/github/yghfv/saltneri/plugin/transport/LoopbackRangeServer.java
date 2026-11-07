@@ -39,6 +39,10 @@ import io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection;
 /** Private pull-only transport using java.base, available in Salt's trimmed runtime. */
 public final class LoopbackRangeServer implements AutoCloseable {
     public Instant now() { return clock.instant(); }
+    private final RangeDiskCache cache=new RangeDiskCache();
+    public void cacheLimit(long bytes) { cache.limit(bytes); }
+    public long cacheBytes() { return cache.usedBytes(); }
+    public void clearCache() { cache.clear(); }
     @FunctionalInterface
     interface ConnectionOpener { HttpURLConnection open(URI uri) throws IOException; }
 
@@ -97,6 +101,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
 
     public LoopbackRangeServer(BooleanSupplier authorized) throws IOException {
         this(Clock.systemUTC(), LoopbackRangeServer::openHttps, authorized);
+        cache.limit(RangeDiskCache.DEFAULT_LIMIT);
     }
 
     LoopbackRangeServer(Clock clock, ConnectionOpener opener) throws IOException {
@@ -104,6 +109,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
     }
 
     LoopbackRangeServer(Clock clock, ConnectionOpener opener, BooleanSupplier authorized) throws IOException {
+        // Injected transport fixtures opt in explicitly when testing the disk cache.
+        cache.limit(0);
         this.clock = Objects.requireNonNull(clock);
         this.opener = Objects.requireNonNull(opener);
         this.authorized = Objects.requireNonNull(authorized);
@@ -170,6 +177,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         entry.revoked.set(true);
         leases.remove(token, entry);
         requests.forEach(request -> { if (request.entry == entry) request.close(); });
+        cache.revoke(entry);
     }
 
     private void expire() {
@@ -257,6 +265,13 @@ public final class LoopbackRangeServer implements AutoCloseable {
     }
 
     private void fetch(Request request, Entry entry, ByteRange range) throws IOException {
+        long revision=cache.revision();
+        byte[] hit=cache.get(entry,range);
+        if(hit!=null) {
+            ensureValid(entry);
+            reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
+            ensureValid(entry); request.socket.getOutputStream().write(hit); return;
+        }
         URI uri = entry.lease.uri();
         for (int redirect = 0; redirect <= 3; redirect++) {
             ensureValid(entry);
@@ -296,6 +311,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
                     OutputStream output = request.socket.getOutputStream();
                     byte[] buffer = new byte[32 * 1024];
                     long remaining = range.length();
+                    ByteArrayOutputStream cached=range.length()<=cache.limitBytes()?new ByteArrayOutputStream((int)range.length()):null;
                     while (remaining > 0) {
                         ensureValid(entry);
                         int read = body.read(buffer, 0, (int)Math.min(remaining, buffer.length));
@@ -303,9 +319,11 @@ public final class LoopbackRangeServer implements AutoCloseable {
                         if (read == 0) continue;
                         ensureValid(entry);
                         output.write(buffer, 0, read);
+                        if(cached!=null) cached.write(buffer,0,read);
                         remaining -= read;
                     }
                     output.flush();
+                    if(cached!=null) cache.put(entry,range,cached.toByteArray(),revision,()->valid(entry));
                     // Never read past the declared range or buffer an entire track.
                     return;
                 }
@@ -372,5 +390,6 @@ public final class LoopbackRangeServer implements AutoCloseable {
         requests.clear();
         workers.shutdownNow();
         deadlines.shutdownNow();
+        cache.close();
     }
 }

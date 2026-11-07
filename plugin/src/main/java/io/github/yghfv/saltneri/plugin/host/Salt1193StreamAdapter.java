@@ -57,8 +57,9 @@ public final class Salt1193StreamAdapter implements StreamBinding {
             try {
                 if (closed || !authorized.getAsBoolean()) throw new SecurityException("Online stream adapter disabled");
                 URI local = paths.get(path);
-                if (local == null && deferred.containsKey(path)) {
-                    local = deferred.get(path).resolve();
+                Deferred source=deferred.get(path);
+                if (local == null && source!=null) {
+                    local = source.resolve();
                     JobKt.ensureActive(((Continuation<?>)args[5]).getContext());
                 }
                 if (local == null) throw new IllegalStateException("Online stream lease unavailable");

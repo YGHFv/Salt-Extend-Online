@@ -1,104 +1,35 @@
 {
   "configs": [
     {
-      "title": "Salt Extend Online - 合集播放、搜索排序与页面状态保留（0.8.10）",
+      "title": "Salt Extend Online · 设置（0.8.11）",
       "config": "config.json",
       "preferences": [
         {
           "type": "button",
-          "title": "查看实验状态",
-          "summary": "查看0.7.6页面对象是否已绑定（bound）、实际内容调用/平台命中/已组合计数和登录阶段；不显示账号、二维码链接或音轨地址。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.showStatus"
-        },
-        {
-          "type": "button",
-          "title": "重新接入 Salt 原生侧栏",
-          "summary": "授权后重新安装侧栏Hook并可逆更新实际模组页面的Compose内容对象。不再依赖普通导航方法Hook；音乐库下保留Bilibili、网易云。重新接入后先回到音乐库，再点平台行。不联网、不播放，无浏览器回退。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.installNativeUi"
-        },
-        {
-          "type": "button",
-          "title": "打开 Salt 内网易云页面",
-          "summary": "Salt 内原生页面；单击曲目只选中，双击直接解析并开始播放。无需适配或确认按钮，不打开浏览器。",
+          "title": "打开在线音乐",
+          "summary": "从侧栏进入 Bilibili / 网易云；登录、搜索与账号管理都在平台页面。",
           "arrow_type": "none",
           "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openLibrary"
         },
         {
           "key": "auth.remember",
           "type": "switch",
-          "title": "记住并自动恢复本插件登录（Windows DPAPI）",
-          "summary": "默认开启：扫码成功后加密保存，插件启动时自动校验恢复，不再需要点恢复登录。只读取本插件凭据；关闭后移除保存、保留当前内存登录；退出账号后不自动恢复。",
+          "title": "记住登录",
+          "summary": "加密保存并在启动时恢复本插件账号；关闭后删除保存，不退出当前账号。",
           "default_value": true
-        },
-        {
-          "type": "button",
-          "title": "B站二维码登录（Salt 内显示）",
-          "summary": "请求进入 Salt 内B站页，页面真正显示后才申请二维码；用官方App扫码，不读取外部账号、不自动播放。页面未显示时不会在后台启动扫码。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.loginBilibili"
-        },
-        {
-          "type": "button",
-          "title": "网易云二维码登录（Salt 内显示）",
-          "summary": "请求进入 Salt 内网易云页，页面真正显示后才申请二维码；用官方App扫码，后台校验账号，风控时停止。页面未显示时不启动扫码。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.loginNetease"
-        },
-        {
-          "type": "button",
-          "title": "手动重试恢复本插件已保存的B站登录",
-          "summary": "启动时已自动恢复；这里仅在失败后手动重试。只读取本插件DPAPI保存并校验，不导入外部Cookie。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.restoreBilibili"
-        },
-        {
-          "type": "button",
-          "title": "手动重试恢复本插件已保存的网易云登录",
-          "summary": "启动时已自动恢复；这里仅在失败后手动重试。只读取本插件DPAPI保存并校验，不导入外部Cookie。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.restoreNetease"
-        },
-        {
-          "type": "button",
-          "title": "取消待确认二维码登录",
-          "summary": "停止待确认登录轮询并移除原生页面二维码；不退出已经校验的内存账号。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.cancelLogins"
-        },
-        {
-          "type": "button",
-          "title": "退出本插件B站账号并删除保存",
-          "summary": "立即撤销内存账号与旧解析；标记退出并后台删除本插件加密凭据，不退出其他软件或平台服务端会话。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.logoutBilibili"
-        },
-        {
-          "type": "button",
-          "title": "退出本插件网易云账号并删除保存",
-          "summary": "立即撤销内存账号与旧歌曲解析；标记退出并后台删除本插件加密凭据，不影响其他软件。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.logoutNetease"
-        },
-        {
-          "key": "bili.target",
-          "type": "edittext",
-          "title": "B站公开视频 BV/av 或视频链接",
-          "summary": "分P请用完整视频链接的 p 参数；不支持 b23.tv 短链。修改配置会取消旧解析，不自动联网。",
-          "default_value": ""
         },
         {
           "key": "bili.quality",
           "type": "list",
-          "title": "B站音轨偏好（只选择当前账号合法可用轨）",
+          "title": "Bilibili 音质",
+          "summary": "优先所选音质，不可用时降至当前账号合法可用音轨；下一次打开曲目生效。",
           "entries": [
             "杜比",
             "Hi-Res",
             "无损",
-            "高",
-            "中",
-            "低"
+            "高音质",
+            "中音质",
+            "低音质"
           ],
           "entry_values": [
             "dolby",
@@ -111,81 +42,75 @@
           "default_value": "high"
         },
         {
-          "type": "button",
-          "title": "解析/探测B站公开视频（不播放）",
-          "summary": "只解析/单字节探测，不安装Hook、不改变队列。账号Cookie只发API，付费/预览/风控拒绝。要播放请使用听歌桌，或另外准备当前配置音轨并明确确认播放。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.resolveBilibili"
-        },
-        {
-          "key": "netease.target",
-          "type": "edittext",
-          "title": "网易云歌曲 ID 或官方歌曲链接",
-          "summary": "只支持正整数歌曲ID、music.163.com/song?id=…及#/song?id=…；不支持短链、歌单或音频CDN链接。修改配置取消旧结果，不自动联网。",
-          "default_value": ""
-        },
-        {
           "key": "netease.quality",
           "type": "list",
-          "title": "网易云免费完整音轨偏好",
+          "title": "网易云音质",
+          "summary": "参考 NeriPlayer；会员档位需要相应权限，可接受服务端返回的较低音质，不播放试听。下一次打开曲目生效。",
           "entries": [
             "标准",
-            "极高（仅服务端合法返回）"
+            "较高",
+            "极高",
+            "无损",
+            "Hi-Res",
+            "高清环绕声",
+            "沉浸环绕声",
+            "超清母带"
           ],
           "entry_values": [
             "standard",
-            "exhigh"
+            "higher",
+            "exhigh",
+            "lossless",
+            "hires",
+            "jyeffect",
+            "sky",
+            "jymaster"
           ],
           "default_value": "standard"
         },
         {
-          "type": "button",
-          "title": "解析/探测网易云免费完整歌曲（不播放）",
-          "summary": "需实验权限；明确点击才请求详情与EAPI音频地址。默认匿名，登录后重验账号并仅向匹配API域发送Cookie；CDN单字节探测。拒绝会员/单购、试听、不完整时长或长度、风控；不入队、不下载整曲。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.resolveNetease"
+          "key": "cache.limitMiB",
+          "type": "list",
+          "title": "音频缓存上限",
+          "summary": "默认 2 GB，按实际读取的音频分段缓存；超限淘汰最久未用分段，不影响队列。仅限本插件缓存，不修改 Salt 自身的临时播放缓冲。",
+          "entries": [
+            "不缓存",
+            "512 MB",
+            "1 GB",
+            "2 GB（默认）",
+            "4 GB",
+            "8 GB"
+          ],
+          "entry_values": [
+            "0",
+            "512",
+            "1024",
+            "2048",
+            "4096",
+            "8192"
+          ],
+          "default_value": "2048"
         },
         {
           "type": "button",
-          "title": "准备当前配置B站音轨（不播放）",
-          "summary": "按已填写BV/av/分P链接准备高档偏好音轨；不安装Hook、不改变队列。完成后查看状态，再明确确认播放。",
+          "title": "清理音频缓存",
+          "summary": "只清除本插件缓存，后续按需重新获取；不删除账号、队列或本地音乐。",
           "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.prepareBilibili"
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.clearCache"
         },
         {
           "type": "button",
-          "title": "准备当前配置网易云音轨（不播放）",
-          "summary": "按已填写歌曲ID/链接准备标准免费完整音轨；不安装Hook、不改变队列。试听、会员/单购、无权限拒绝。",
+          "title": "修复侧栏入口",
+          "summary": "仅当 Bilibili / 网易云入口未出现时使用。",
           "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.prepareNetease"
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.installNativeUi"
         },
         {
           "type": "button",
-          "title": "启用实验适配（不播放）",
-          "summary": "需授权 class-transform；点击才安装可逆流列表和普通方法 Hook、打开本机随机端口；不修改播放队列。",
+          "title": "查看诊断信息",
+          "summary": "查看模组接入、登录阶段和播放适配状态；不显示凭据或音频地址。",
           "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.armAdapter"
-        },
-        {
-          "type": "button",
-          "title": "确认播放当前已准备音轨（会切换当前播放）",
-          "summary": "需先启用实验适配并准备音轨。此明确动作才构造原生媒体/接通私有流并提交Salt队列；每次准备只允许提交一次。不会恢复原歌曲或清空队列；提交不是已验证发声。请先降低音量。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.playPrepared"
-        },
-        {
-          "type": "button",
-          "title": "播放 2 秒本机测试音（会切换当前播放）",
-          "summary": "仅生成低音量 440 Hz WAV，不访问平台或账号。会向原生队列提交测试项并改变播放；不恢复原歌曲，测试项需手动从队列删除。请先降低系统音量。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.playTestTone"
-        },
-        {
-          "type": "button",
-          "title": "停止实验适配",
-          "summary": "解除本插件 Hook/覆盖层，关闭本机连接；不清空队列。已缓存的测试音可能短暂继续。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.stopAdapter"
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.showStatus"
         }
       ]
     }

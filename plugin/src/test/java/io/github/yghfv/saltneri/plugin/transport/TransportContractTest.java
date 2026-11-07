@@ -290,7 +290,7 @@ public final class TransportContractTest {
         @Override public void connect() { }
     }
 
-    private static Response call(URI local, String method, String headers, String host) throws IOException {
+    static Response call(URI local, String method, String headers, String host) throws IOException {
         try (Socket socket = new Socket(local.getHost(), local.getPort())) {
             socket.setSoTimeout(4000);
             socket.getOutputStream().write(request(local, method, headers, host).getBytes(StandardCharsets.US_ASCII));
@@ -309,7 +309,7 @@ public final class TransportContractTest {
                 + "\r\n" + headers + "\r\n";
     }
 
-    private record Response(int code, String headers, byte[] body) {
+    record Response(int code, String headers, byte[] body) {
         String header(String name) {
             return headers.lines().filter(s -> s.startsWith(name + ": ")).map(s -> s.substring(name.length() + 2))
                     .findFirst().orElse(null);
