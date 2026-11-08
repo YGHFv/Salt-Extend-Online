@@ -1,14 +1,19 @@
 package io.github.yghfv.saltneri.plugin.ui;
 
 import androidx.compose.runtime.Composer;
+import androidx.compose.foundation.layout.PaddingValues;
+import androidx.compose.ui.Modifier;
 import com.xuncorp.spw.workshop.api.hook.*;
 import java.lang.reflect.*;
 import java.util.*;
+import kotlin.jvm.functions.Function2;
+import kotlin.jvm.functions.Function3;
+import kotlin.jvm.functions.Function4;
 
 /** Narrow native render boundaries: no global route mutation or second settings persistence. */
 public final class SaltSidebarSettingsBindings implements AutoCloseable {
     public static final String SCREEN="androidx.compose.ui.\u0b8f", GROUP="androidx.compose.ui.\u042c";
-    private final Method route, group, groupItems, itemKey, collapse, switchWidget;
+    private final Method route, group, groupItems, itemKey, collapse, switchWidget, settingsScreen, settingsCaption, settingsColumn;
     private final Field configPath;
     private final Constructor<?> groupConstructor;
     private final Constructor<?> listConstructor,switchConstructor;
@@ -26,6 +31,13 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
         switchWidget=Arrays.stream(Class.forName("androidx.compose.ui.\u0824",false,host).getMethods())
                 .filter(m->m.getName().equals("\u037f") && m.getParameterCount()==12 && m.getParameterTypes()[0]==boolean.class)
                 .findFirst().orElseThrow(()->new NoSuchMethodException("Native setting switch unavailable"));
+        settingsScreen=Class.forName("androidx.compose.ui.\u0e16",false,host).getMethod("\u037f",
+                Modifier.class,Function2.class,String.class,String.class,Function2.class,Function4.class,
+                Class.forName("androidx.compose.ui.\u093d",false,host),Function4.class,Composer.class,int.class,int.class);
+        settingsCaption=Class.forName("androidx.compose.ui.\u02bd",false,host).getMethod("\u037f",
+                String.class,Modifier.class,Composer.class,int.class,int.class);
+        settingsColumn=Class.forName("androidx.compose.ui.\u02bf",false,host).getMethod("\u037f",
+                Modifier.class,PaddingValues.class,long.class,Function3.class,Composer.class,int.class,int.class);
         listConstructor=Class.forName("androidx.compose.ui.\u077b$\u0529",false,host).getConstructor(
                 String.class,String.class,String.class,String.class,List.class,List.class,String.class,String.class);
         configPath=g.getDeclaredField("\u0529");
@@ -118,6 +130,16 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
     }
     public void switchSetting(boolean value,String label,kotlin.jvm.functions.Function1<Boolean,kotlin.Unit> action,Composer composer) {
         invoke(switchWidget,null,value,action,label,null,false,null,null,null,"",composer,0,248);
+    }
+    public void settingsScreen(String title,Object back,Object content,Composer composer) {
+        // Same BasicScreenBox as ModConfigScreen, including theme material and player insets.
+        invoke(settingsScreen,null,null,back,title,null,null,null,null,content,composer,0,121);
+    }
+    public void settingsCaption(String caption,Composer composer) {
+        invoke(settingsCaption,null,caption,null,composer,0,2);
+    }
+    public void settingsColumn(Object content,Composer composer) {
+        invoke(settingsColumn,null,null,null,0L,content,composer,0,7);
     }
     public void collapse(Object state) {invoke(collapse,state);}
     public float captionHeight() {return captionHeight;}

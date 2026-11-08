@@ -90,6 +90,11 @@ public final class SaltNativeUi implements AutoCloseable {
         catch(NoSuchMethodException failure) {throw new IllegalStateException("Navigation capability missing",failure);}
     }
     public String sidebarLabel(String button) {return sidebarSettings==null?button:sidebarSettings.label(button);}
+    public void sidebarConfigurationScreen(String title,Object back,Object content,Composer composer) {
+        sidebarSettings.settingsScreen(title,back,content,composer);
+    }
+    public void sidebarConfigurationCaption(String caption,Composer composer) {sidebarSettings.settingsCaption(caption,composer);}
+    public void sidebarConfigurationColumn(Object content,Composer composer) {sidebarSettings.settingsColumn(content,composer);}
     public void sidebarSwitch(String button,boolean visible,Composer composer) {
         if(sidebarSettings==null || "Settings".equals(button))return;
         sidebarSettings.switchSetting(visible,sidebarLabel(button),value->{

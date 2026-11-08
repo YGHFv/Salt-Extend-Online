@@ -15,14 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -90,21 +87,21 @@ class SaltSidebarSettingsContent(private val binding: SaltSidebarSettingsBinding
 
 @Composable
 fun SidebarConfigurationPage(ui: SaltNativeUi) {
-    val palette=ui.palette(currentComposer)
-    Column(Modifier.fillMaxSize().background(Color(palette.pageBackground().toULong()))) {
-        val back: @Composable () -> Unit = {ui.secondaryBack({ui.settingsBack()},Modifier,currentComposer)}
-        ui.secondaryHeader("\u4fa7\u680f\u7ba1\u7406","",Modifier.fillMaxWidth(),back,null,currentComposer)
-        LazyColumn(Modifier.fillMaxSize().padding(horizontal=palette.padding().dp)) {
+    val back: @Composable () -> Unit = {ui.secondaryBack({ui.settingsBack()},Modifier,currentComposer)}
+    val content: @Composable BoxScope.(PaddingValues) -> Unit = { insets ->
+        LazyColumn(Modifier.fillMaxSize(),contentPadding=insets) {
             item {
-                ui.text("\u8bbe\u7f6e\u5165\u53e3\u59cb\u7ec8\u4fdd\u7559\uff0c\u5176\u4ed6\u6309\u94ae\u53ef\u81ea\u7531\u663e\u9690\u3002",Modifier.padding(vertical=12.dp),palette.sub(),currentComposer)
+                ui.sidebarConfigurationCaption("\u8bbe\u7f6e\u5165\u53e3\u59cb\u7ec8\u4fdd\u7559\uff0c\u5176\u4ed6\u6309\u94ae\u53ef\u81ea\u7531\u663e\u9690\u3002",currentComposer)
             }
             item {
-                Column(Modifier.fillMaxWidth().background(Color(palette.background().toULong()),palette.shape())) {
+                val switches: @Composable ColumnScope.() -> Unit = {
                     SidebarPolicy.BUTTONS.filter {it!="Settings"}.forEach { button ->
                         key(button) {ui.sidebarSwitch(button,ui.sidebarVisible(button),currentComposer)}
                     }
                 }
+                ui.sidebarConfigurationColumn(switches,currentComposer)
             }
         }
     }
+    ui.sidebarConfigurationScreen("\u4fa7\u680f\u7ba1\u7406",back,content,currentComposer)
 }
