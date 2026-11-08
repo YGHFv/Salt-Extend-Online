@@ -61,7 +61,7 @@ public final class CoverLoaderContractTest {
             byte[] first=loader.load(SOURCE,scope);
             check(Arrays.equals(first,loader.load(URI.create(SOURCE+"@96w.webp"),scope)) && loads.get()==1);
             loader.clear(); loader.load(SOURCE,scope); check(loads.get()==2);
-            for(int i=0;i<97;i++) loader.load(URI.create("https://i0.hdslb.com/"+i+".png"),scope);
+            for(int i=0;i<=CoverLoader.THUMBNAIL_ENTRIES;i++) loader.load(URI.create("https://i0.hdslb.com/"+i+".png"),scope);
             int before=loads.get(); loader.load(SOURCE,scope); check(loads.get()==before+1);
             try(var cancelled=new RequestScope(()->true)) {
                 cancelled.close(); try {loader.load(SOURCE,cancelled);throw new AssertionError("Cancelled thumbnail reused");}
@@ -78,6 +78,13 @@ public final class CoverLoaderContractTest {
             }
         }
         check(CoverMode.parse(null)==CoverMode.FIT && CoverMode.parse("invalid")==CoverMode.FIT);
+        check(CoverSource.thumbnail(SOURCE,480).toString().equals(SOURCE+"@480w.webp"));
+        check(CoverSource.thumbnail(URI.create(SOURCE+"@96w_96h_1c.webp"),480).toString().equals(SOURCE+"@480w.webp"));
+        URI originalNetease=URI.create("https://p1.music.126.net/fixture.jpg");
+        check(CoverSource.thumbnail(URI.create(originalNetease+"?param=96y96"),480).equals(originalNetease));
+        check(CoverSource.thumbnail(URI.create("https://evil.example/fixture.jpg"),480)==null);
+        for(int edge:new int[]{0,1025})try {CoverSource.thumbnail(SOURCE,edge);throw new AssertionError("Unbounded thumbnail");}
+        catch(IllegalArgumentException expected){checks++;}
         check(SOURCE.equals(CoverSource.original(URI.create(SOURCE + "@96w_96h_1c.webp"))));
         check(CoverSource.original(URI.create("https://p1.music.126.net/fixture.jpg?param=96y96")).toString().equals("https://p1.music.126.net/fixture.jpg"));
         check(CoverSource.original(URI.create("https://i0.hdslb.com/fixture.jpg?token=SECRET")) == null);
@@ -95,7 +102,7 @@ public final class CoverLoaderContractTest {
         try (var image = org.jetbrains.skia.Image.Companion.makeFromEncoded(fixture);
              var bytes = image.encodeToData(org.jetbrains.skia.EncodedImageFormat.WEBP,100,0)) { webp = bytes.getBytes(); }
         try (CoverLoader loader = new CoverLoader(uri -> {
-            check(uri.equals(SOURCE)); Response result = new Response(uri, webp); result.type = "image/webp"; return result;
+            check(uri.equals(CoverSource.thumbnail(SOURCE,480))); Response result = new Response(uri, webp); result.type = "image/webp"; return result;
         }); RequestScope scope = new RequestScope(() -> true)) {
             var image = ImageIO.read(new ByteArrayInputStream(loader.load(URI.create(SOURCE + "@100w_100h.webp"),scope)));
             check(image.getWidth() == 240 && image.getHeight() == 120);
@@ -105,13 +112,15 @@ public final class CoverLoaderContractTest {
         // Fine stripes would disappear if playback accidentally reused the 96px list thumbnail.
         for (int y = 0; y < 1200; y++) for (int x = 0; x < 1200; x++) hd.setRGB(x, y, (x / 6) % 2 == 0 ? 0xff000000 : 0xffffffff);
         var hdBytes = new ByteArrayOutputStream(); ImageIO.write(hd, "png", hdBytes); hd.flush();
-        try (CoverLoader loader = new CoverLoader(uri -> { check(uri.equals(SOURCE)); return new Response(uri, hdBytes.toByteArray()); }); RequestScope scope = new RequestScope(() -> true)) {
+        var hdRequests=new ArrayList<URI>();
+        try (CoverLoader loader = new CoverLoader(uri -> { hdRequests.add(uri); return new Response(uri, hdBytes.toByteArray()); }); RequestScope scope = new RequestScope(() -> true)) {
             var image = ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(URI.create(SOURCE + "@96w_96h_1c.webp"), scope)));
             check(image.getWidth() == 1024 && image.getHeight() == 1024);
             int transitions = 0, previous = 0;
             for (int x = 0; x < 1024; x++) { int pixel = (image.getRGB(x, 512) & 255) > 128 ? 1 : 0; if (pixel != previous) transitions++; previous = pixel; }
             check(transitions >= 190);
             check(ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE, scope))).getWidth() == CoverLoader.LIST_EDGE);
+            check(hdRequests.equals(List.of(SOURCE,CoverSource.thumbnail(SOURCE,480))));
         }
         try (CoverLoader loader = new CoverLoader(uri -> new Response(uri, fixture)); RequestScope scope = new RequestScope(() -> true)) {
             check(ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE, scope))).getWidth() == 240);
@@ -193,15 +202,15 @@ public final class CoverLoaderContractTest {
         URI alternate = URI.create("https://i1.hdslb.com/fallback.jpg");
         AtomicInteger fallbackLookups = new AtomicInteger(), fallbackOpens = new AtomicInteger();
         try (CoverLoader loader = new CoverLoader(uri -> {
-            fallbackOpens.incrementAndGet(); var result = new Response(uri,fixture); if (uri.equals(SOURCE)) result.status=404; return result;
+            fallbackOpens.incrementAndGet(); var result = new Response(uri,fixture); if (CoverSource.original(uri).equals(SOURCE)) result.status=404; return result;
         })) {
             CoverLoader.Source lookup = scope -> { fallbackLookups.incrementAndGet(); return alternate; };
             loader.requestSource("broken", scope -> SOURCE, lookup, () -> true);
             long end=System.nanoTime()+3_000_000_000L; byte[] result;
             do { Thread.sleep(10); result=loader.requestSource("broken",scope -> SOURCE,lookup,() -> true); } while(result==null && System.nanoTime()<end);
-            check(result!=null && fallbackLookups.get()==1 && fallbackOpens.get()==2);
+            check(result!=null && fallbackLookups.get()==1 && fallbackOpens.get()==3);
             loader.requestSource("broken",scope -> SOURCE,lookup,() -> true);
-            check(fallbackLookups.get()==1 && fallbackOpens.get()==2);
+            check(fallbackLookups.get()==1 && fallbackOpens.get()==3);
         }
         CountDownLatch started = new CountDownLatch(1), release = new CountDownLatch(1); AtomicInteger cancelledOpens = new AtomicInteger();
         try (CoverLoader loader = new CoverLoader(uri -> {
@@ -214,6 +223,8 @@ public final class CoverLoaderContractTest {
             check(loader.request("stale", SOURCE, () -> true) == null && cancelledOpens.get() == 1);
         } finally { release.countDown(); }
         parallelCovers(fixture);
+        retainedCovers(fixture);
+        sharedCovers(fixture);
         largeOriginal();
         System.out.println("PASS: " + checks + " cover source/HTTPS/bounds/decoder/cache/revocation checks (fake image HTTP)");
     }
@@ -240,7 +251,7 @@ public final class CoverLoaderContractTest {
             return new Response(uri,fixture);
         })) {
             for(int i=0;i<20;i++) loader.request("parallel-"+i,URI.create("https://i0.hdslb.com/parallel-"+i+".png"),()->true);
-            check(started.await(2,TimeUnit.SECONDS)); check(peak.get()==3 && opens.get()==3);
+            check(started.await(2,TimeUnit.SECONDS)); check(peak.get()==CoverLoader.PARALLEL_LOADS && opens.get()==CoverLoader.PARALLEL_LOADS);
             release.countDown(); long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
             boolean complete;
             do {
@@ -248,12 +259,12 @@ public final class CoverLoaderContractTest {
                 for(int i=0;i<20;i++) complete &= loader.request("parallel-"+i,URI.create("https://i0.hdslb.com/parallel-"+i+".png"),()->true)!=null;
                 if(!complete) Thread.sleep(5);
             } while(!complete && System.nanoTime()<end);
-            check(complete && opens.get()==20 && peak.get()<=3);
+            check(complete && opens.get()==20 && peak.get()<=CoverLoader.PARALLEL_LOADS);
         } finally { release.countDown(); }
         var slowStarted=new CountDownLatch(1); var unblock=new CountDownLatch(1);
         URI fast=URI.create("https://i1.hdslb.com/fast.png");
         try(CoverLoader loader=new CoverLoader(uri->{
-            if(uri.equals(SOURCE)) { slowStarted.countDown(); try { unblock.await(); } catch(InterruptedException error) { Thread.currentThread().interrupt(); } }
+            if(CoverSource.original(uri).equals(SOURCE)) { slowStarted.countDown(); try { unblock.await(); } catch(InterruptedException error) { Thread.currentThread().interrupt(); } }
             return new Response(uri,fixture);
         })) {
             loader.request("slow",SOURCE,()->true); check(slowStarted.await(2,TimeUnit.SECONDS));
@@ -262,5 +273,68 @@ public final class CoverLoaderContractTest {
             check(result!=null && loader.request("slow",SOURCE,()->true)==null);
             loader.clear(); unblock.countDown();
         } finally { unblock.countDown(); }
+    }
+    private static void retainedCovers(byte[] fixture) throws Exception {
+        var opens=new AtomicInteger();var started=new CountDownLatch(CoverLoader.PARALLEL_LOADS);var release=new CountDownLatch(1);
+        try(var loader=new CoverLoader(uri->{
+            opens.incrementAndGet();
+            if(!CoverSource.original(uri).equals(SOURCE)) {
+                started.countDown();try{release.await();}catch(InterruptedException error){Thread.currentThread().interrupt();}
+            }
+            return new Response(uri,fixture);
+        });var scope=new RequestScope(()->true)) {
+            byte[] first=loader.load(SOURCE,scope);
+            loader.releaseRequests();
+            check(loader.request("return-new-token",SOURCE,()->true)==first && opens.get()==1);
+            for(int i=0;i<20;i++)loader.request("busy-"+i,URI.create("https://i0.hdslb.com/busy-"+i+".png"),()->true);
+            check(started.await(2,TimeUnit.SECONDS));
+            check(loader.request("warm-full-capacity",SOURCE,()->true)==first && opens.get()==1+CoverLoader.PARALLEL_LOADS);
+            check(loader.requestSource("warm-no-lookup",SOURCE,r->{throw new AssertionError("Cached cover resolved again");},null,()->true)==first);
+            check(loader.request("revoked",SOURCE,()->false)==null);
+            loader.releaseRequests();release.countDown();
+            check(loader.request("return-again",SOURCE,()->true)==first);
+            loader.clear();
+            loader.load(SOURCE,scope);check(opens.get()>=2+CoverLoader.PARALLEL_LOADS);
+        }finally{release.countDown();}
+    }
+    private static void sharedCovers(byte[] fixture) throws Exception {
+        var opens=new AtomicInteger();var started=new CountDownLatch(1);var release=new CountDownLatch(1);
+        try(var loader=new CoverLoader(uri->{
+            opens.incrementAndGet();started.countDown();
+            try{release.await();}catch(InterruptedException error){Thread.currentThread().interrupt();}
+            return new Response(uri,fixture);
+        })) {
+            for(int i=0;i<20;i++)loader.request("shared-"+i,SOURCE,()->true);
+            check(started.await(2,TimeUnit.SECONDS));Thread.sleep(100);check(opens.get()==1);
+            release.countDown();long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(3);byte[] result;
+            do{result=loader.request("shared-19",SOURCE,()->true);if(result==null)Thread.sleep(5);}while(result==null && System.nanoTime()<end);
+            check(result!=null && opens.get()==1);
+        }finally{release.countDown();}
+        var ownerActive=new AtomicBoolean(true);var ownerStarted=new CountDownLatch(1);var ownerRelease=new CountDownLatch(1);
+        var handoverOpens=new AtomicInteger();
+        try(var loader=new CoverLoader(uri->{
+            if(handoverOpens.incrementAndGet()==1){
+                ownerStarted.countDown();try{ownerRelease.await();}catch(InterruptedException error){Thread.currentThread().interrupt();}
+            }
+            return new Response(uri,fixture);
+        });var executor=Executors.newFixedThreadPool(2);var ownerScope=new RequestScope(ownerActive::get);var followerScope=new RequestScope(()->true)) {
+            var owner=executor.submit(()->loader.load(SOURCE,ownerScope));check(ownerStarted.await(2,TimeUnit.SECONDS));
+            var follower=executor.submit(()->loader.load(SOURCE,followerScope));Thread.sleep(100);
+            check(handoverOpens.get()==1);ownerActive.set(false);ownerRelease.countDown();
+            try{owner.get(2,TimeUnit.SECONDS);throw new AssertionError("Retired owner published");}
+            catch(ExecutionException expected){check(expected.getCause() instanceof CancellationException);}
+            check(follower.get(2,TimeUnit.SECONDS)!=null && handoverOpens.get()==2);
+        }finally{ownerRelease.countDown();}
+        var clearStarted=new CountDownLatch(1);var clearRelease=new CountDownLatch(1);var clearOpens=new AtomicInteger();
+        try(var loader=new CoverLoader(uri->{
+            if(clearOpens.incrementAndGet()==1){clearStarted.countDown();try{clearRelease.await();}catch(InterruptedException error){Thread.currentThread().interrupt();}}
+            return new Response(uri,fixture);
+        });var executor=Executors.newSingleThreadExecutor();var scope=new RequestScope(()->true)) {
+            var stale=executor.submit(()->loader.load(SOURCE,scope));check(clearStarted.await(2,TimeUnit.SECONDS));
+            loader.clear();clearRelease.countDown();
+            try{stale.get(2,TimeUnit.SECONDS);throw new AssertionError("Cleared flight published");}
+            catch(ExecutionException expected){check(expected.getCause() instanceof CancellationException);}
+            check(loader.load(SOURCE,scope)!=null && clearOpens.get()==2);
+        }finally{clearRelease.countDown();}
     }
 }

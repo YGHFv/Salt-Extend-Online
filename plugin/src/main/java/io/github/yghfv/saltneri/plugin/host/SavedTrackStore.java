@@ -10,7 +10,21 @@ import java.util.*;
 
 /** Durable logical targets only: never cookies, account identities or expiring media URLs. */
 public final class SavedTrackStore implements AutoCloseable {
-    public record Entry(String id, Target target, String title, String artist, long duration, PlaybackCoverFile cover) {
+    public static final class Entry {
+        private final String id,title;
+        private final Target target;
+        private volatile String artist;
+        private final long duration;
+        private final PlaybackCoverFile cover;
+        public Entry(String id,Target target,String title,String artist,long duration,PlaybackCoverFile cover) {
+            this.id=id;this.target=target;this.title=title;this.artist=artist;this.duration=duration;this.cover=cover;
+        }
+        public String id(){return id;}
+        public Target target(){return target;}
+        public String title(){return title;}
+        public String artist(){return artist;}
+        public long duration(){return duration;}
+        public PlaybackCoverFile cover(){return cover;}
         public String trackId() { return "saltneri:saved:" + id; }
         public String path() { return cover.path(); }
     }
@@ -62,7 +76,11 @@ public final class SavedTrackStore implements AutoCloseable {
                     if(in.read()!=-1 || entries.size()+batch.keySet().stream().filter(id->!entries.containsKey(id)).count()>10000)
                         throw new IOException("Invalid saved batch");
                 } catch(IOException | IllegalArgumentException ignored) { continue; }
-                for(var value:batch.values()) if(!entries.containsKey(value.id())) entries.put(value.id(),entry(value));
+                for(var value:batch.values()) {
+                    Entry existing=entries.get(value.id());
+                    if(existing==null) entries.put(value.id(),entry(value));
+                    else if(existing.artist().isBlank() && !value.artist().isBlank()) existing.artist=value.artist();
+                }
             }
         }
     }
@@ -76,7 +94,12 @@ public final class SavedTrackStore implements AutoCloseable {
         if(closed) throw new IOException("Saved tracks closed");
         if(row.kind()!=Catalog.Kind.TRACK || !row.enabled()) throw new IllegalArgumentException("Unplayable row");
         Target target=canonical(input); String id=id(target);
-        if(entries.containsKey(id)) return entries.get(id);
+        if(entries.containsKey(id)) {
+            Entry existing=entries.get(id);
+            if(existing.artist().isBlank() && !text(row.subtitle()).isBlank())
+                saveAll(target.platform(),List.of(new Catalog.Item(Catalog.Kind.TRACK,target.id(),existing.title(),row.subtitle(),existing.duration(),true)),()->true);
+            return existing;
+        }
         if(entries.size()>=10000) throw new IOException("Saved track limit reached");
         String title=text(row.title()), artist=text(row.subtitle()); long duration=Math.max(0,Math.min(86400000,row.count()));
         Path file=root.resolve(id+".track"), next=root.resolve(UUID.randomUUID()+".tmp");
@@ -100,9 +123,12 @@ public final class SavedTrackStore implements AutoCloseable {
             check(active);
             if(row.kind()!=Catalog.Kind.TRACK || !row.enabled()) throw new IllegalArgumentException("Unplayable row");
             Target target=canonical(new Target(platform,row.target()));String id=id(target);ids.add(id);
-            if(!entries.containsKey(id) && !pending.containsKey(id)) pending.put(id,new Record(id,target,text(row.title()),text(row.subtitle()),Math.max(0,Math.min(86400000,row.count()))));
+            Entry existing=entries.get(id);
+            if(existing==null && !pending.containsKey(id)) pending.put(id,new Record(id,target,text(row.title()),text(row.subtitle()),Math.max(0,Math.min(86400000,row.count()))));
+            else if(existing!=null && existing.artist().isBlank() && !text(row.subtitle()).isBlank())
+                pending.putIfAbsent(id,new Record(id,target,existing.title(),row.subtitle(),existing.duration()));
         }
-        if(entries.size()+pending.size()>10000) throw new IOException("Saved track limit reached");
+        if(entries.size()+pending.keySet().stream().filter(id->!entries.containsKey(id)).count()>10000) throw new IOException("Saved track limit reached");
         if(!pending.isEmpty()) {
             if(!root.toRealPath().equals(root)) throw new IOException("Saved directory changed");
             Path next=root.resolve(UUID.randomUUID()+".tmp"),file=root.resolve(UUID.randomUUID()+".tracks");
@@ -121,11 +147,13 @@ public final class SavedTrackStore implements AutoCloseable {
                         byte[] bytes=buffer.toByteArray();if(bytes.length>32768) throw new IOException("Saved metadata too large");
                         var crc=new java.util.zip.CRC32();crc.update(bytes);
                         out.writeInt(bytes.length);out.write(bytes);out.writeLong(crc.getValue());
-                        added.put(value.id(),entry(value));
+                        if(!entries.containsKey(value.id())) added.put(value.id(),entry(value));
                     }
                 }
                 check(active);Files.move(next,file,StandardCopyOption.ATOMIC_MOVE);
-                entries.putAll(added);committed=true;
+                entries.putAll(added);
+                for(var value:pending.values()) if(entries.get(value.id()).artist().isBlank()) entries.get(value.id()).artist=value.artist();
+                committed=true;
             } finally {
                 if(!committed) added.values().forEach(e->e.cover().close());
                 Files.deleteIfExists(next);

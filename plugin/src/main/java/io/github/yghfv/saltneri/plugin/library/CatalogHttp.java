@@ -15,7 +15,7 @@ import static io.github.yghfv.saltneri.plugin.library.CatalogFailure.*;
 public final class CatalogHttp implements AutoCloseable {
     @FunctionalInterface public interface Opener { HttpURLConnection open(URI uri, byte[] form) throws IOException; }
     private static final Set<String> BILI = Set.of("/x/v3/fav/folder/created/list", "/x/v3/fav/folder/collected/list", "/x/v3/fav/resource/list",
-            "/x/web-interface/nav", "/x/polymer/web-space/seasons_archives_list", "/x/web-interface/wbi/search/type",
+            "/x/web-interface/nav", "/x/web-interface/view", "/x/polymer/web-space/seasons_archives_list", "/x/web-interface/wbi/search/type",
             "/x/space/wbi/arc/search", "/x/polymer/web-space/seasons_series_list",
             "/x/copyright-music-publicity/toplist/all_period", "/x/copyright-music-publicity/toplist/music_list");
     private static final Set<String> NET = Set.of("/weapi/personalized/playlist", "/weapi/user/playlist", "/api/v6/playlist/detail", "/api/song/detail", "/weapi/cloudsearch/get/web");
@@ -132,7 +132,7 @@ public final class CatalogHttp implements AutoCloseable {
             case "/x/v3/fav/folder/collected/list" -> Stage.BILI_SAVED;
             case "/x/v3/fav/resource/list" -> Stage.BILI_CONTENTS;
             case "/x/web-interface/nav" -> Stage.BILI_VERIFY;
-            case "/x/polymer/web-space/seasons_archives_list", "/x/polymer/web-space/seasons_series_list", "/x/space/wbi/arc/search" -> Stage.BILI_COLLECTION;
+            case "/x/web-interface/view", "/x/polymer/web-space/seasons_archives_list", "/x/polymer/web-space/seasons_series_list", "/x/space/wbi/arc/search" -> Stage.BILI_COLLECTION;
             case "/x/web-interface/wbi/search/type" -> Stage.BILI_SEARCH;
             case "/x/v2/rank/region", "/x/copyright-music-publicity/toplist/all_period", "/x/copyright-music-publicity/toplist/music_list" -> Stage.BILI_DISCOVER;
             case "/weapi/personalized/playlist" -> Stage.NET_DISCOVER;

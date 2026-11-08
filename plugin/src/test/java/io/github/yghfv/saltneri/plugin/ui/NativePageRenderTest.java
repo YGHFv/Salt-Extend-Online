@@ -125,7 +125,9 @@ public final class NativePageRenderTest {
             byte[] fixture = CoverLoaderContractTest.jpeg();
             // This suite exercises long single-column scrolling; card/double layouts have their own render suite.
             for(AccountPlatform p:AccountPlatform.values()) desk.layout(p,"SINGLE");
+            var imageRequests=new AtomicInteger();
             try (SaltNativeUi ui = new SaltNativeUi(host, new Hooks(), desk, () -> true, new CoverLoader(uri -> {
+                imageRequests.incrementAndGet();
                 var response = new CoverLoaderContractTest.Response(uri, fixture); response.type = "image/jpg"; return response;
             }))) {
                 SwingUtilities.invokeAndWait(() -> {});
@@ -178,6 +180,7 @@ public final class NativePageRenderTest {
                 String token = (String)((Map<?,?>)((List<?>)library.snapshot().get("items")).getFirst()).get("token");
                 while (ui.cover(token) == null && System.nanoTime() < deadline) Thread.sleep(10);
                 check(ui.cover(token) != null);
+                byte[] warmedCover=ui.cover(token);int warmRequests=imageRequests.get();
                 player.prepare(new OnlinePlaybackController.Target(AccountPlatform.NETEASE, "123"));
                 while (!Boolean.TRUE.equals(player.snapshot().get("ready")) && System.nanoTime() < deadline) Thread.sleep(10);
                 check(Boolean.TRUE.equals(player.snapshot().get("ready")) && !Boolean.TRUE.equals(player.snapshot().get("armed")));
@@ -188,7 +191,7 @@ public final class NativePageRenderTest {
                             (composer, flags) -> { cached.invoke(coverKey, composer, flags); return Unit.INSTANCE; });
                     try {
                         for (int frame = 1; frame <= 4; frame++) try (Image image = scene.render(frame * 16_000_000L)) {
-                            if (frame == 4) try (Data png = image.encodeToData(EncodedImageFormat.PNG, 100, 0)) {
+                            if (frame == 1 || frame == 4) try (Data png = image.encodeToData(EncodedImageFormat.PNG, 100, 0)) {
                                 byte[] bytes = png.getBytes(); var pixels = ImageIO.read(new ByteArrayInputStream(bytes));
                                 int colored = 0;
                                 for (int y = 70; y < 720; y++) for (int x = 20; x < 140; x++) {
@@ -230,6 +233,7 @@ public final class NativePageRenderTest {
                     finally { scene.close(); }
                 });
                 check(requests.get() == 2 && queues.get() == 1 && actions.get() == 1);
+                check(ui.cover(token)==warmedCover && imageRequests.get()==warmRequests);
                 for (int width : new int[]{740, 420}) for (int count : new int[]{0, 2, 20, 21}) {
                     catalogSize.set(count);
                     library.invalidate();
@@ -239,7 +243,7 @@ public final class NativePageRenderTest {
                     check(library.snapshot().get("title").equals("Synthetic playlist"));
                     assertPager(cached, coverKey, width, count > 20, library);
                     if (count > 20) {
-                        // Disposal invalidates the catalog; reopen before exercising the last-page route.
+                        // Return to the first-page route before exercising the last-page route.
                         library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
                         ready = System.nanoTime() + 3_000_000_000L;
                         while (!Boolean.TRUE.equals(library.snapshot().get("more")) && System.nanoTime() < ready) Thread.sleep(10);

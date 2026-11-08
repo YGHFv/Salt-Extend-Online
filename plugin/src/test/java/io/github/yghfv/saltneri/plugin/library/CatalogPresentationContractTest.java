@@ -87,6 +87,7 @@ public final class CatalogPresentationContractTest {
         try(var request=new RequestScope(()->true)) {
             var client=new CatalogClient(account,CatalogContractTest.CLOCK,(uri,form)->{
                 if(uri.getPath().endsWith("nav"))return fixture.open(uri,form);
+                if(uri.getPath().equals("/x/web-interface/view"))return new CatalogContractTest.Response(uri,"{\"code\":0,\"data\":{}}",List.of());
                 var params=new HashMap<String,String>();for(String pair:uri.getQuery().split("&")){var parts=pair.split("=",2);params.put(parts[0],parts[1]);}
                 int page=Integer.parseInt(params.get("page_num")); pages.add(page);
                 int concurrent=active.incrementAndGet();peak.accumulateAndGet(concurrent,Math::max);

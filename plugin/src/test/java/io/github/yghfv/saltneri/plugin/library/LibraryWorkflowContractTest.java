@@ -23,6 +23,7 @@ public final class LibraryWorkflowContractTest {
         return new OnlinePlaybackController.Audio(TrackKey.netease("123"), new Metadata("Fixture", "Artist", "Album", "Artist"), lease, expiry);
     }
     public static void main(String[] args) throws Exception {
+        retainedCoverSources();
         var account = CatalogContractTest.account(AccountPlatform.NETEASE); AtomicReference<AccountCredentials> accounts = new AtomicReference<>(account);
         List<OnlinePlaybackController.Target> selections = new ArrayList<>(); AtomicInteger navigation = new AtomicInteger();
         try (LibraryController library = new LibraryController(p -> accounts.get(), () -> true, selections::add, navigation::incrementAndGet, CatalogContractTest.CLOCK,
@@ -161,5 +162,36 @@ public final class LibraryWorkflowContractTest {
             check(!Boolean.TRUE.equals(cancelled.snapshot().get("ready"))); check(queue.get() == 1);
         } finally { release.countDown(); }
         System.out.println("PASS: " + checks + " library rows/selection/one-use playback/account capture checks (recording queue)");
+    }
+    private static void retainedCoverSources() throws Exception {
+        for(AccountPlatform platform:AccountPlatform.values())for(boolean missing:List.of(true,false)) {
+            URI original=URI.create(platform==AccountPlatform.BILIBILI?"https://i0.hdslb.com/old.jpg":"https://p1.music.126.net/old.jpg");
+            URI alternate=URI.create(platform==AccountPlatform.BILIBILI?"https://i1.hdslb.com/new.jpg":"https://p2.music.126.net/new.jpg");
+            var lookups=new AtomicInteger();
+            try(var library=new LibraryController(p->null,()->true,t->{throw new AssertionError("No playback");},()->{},CatalogContractTest.CLOCK,
+                    a->(q,k,s,r)->new Page("Covers",List.of(new Item(platform==AccountPlatform.BILIBILI?Kind.COLLECTION:Kind.FOLDER,
+                            "30","Collection","Artist",1,true,missing?null:original,99)),false,java.time.Instant.MAX),
+                    (a,q,r)->{lookups.incrementAndGet();return alternate;},(a,i,r)->{lookups.incrementAndGet();return alternate;});
+                var request=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {
+                library.browse(platform,View.SAVED);waitFor(()->!rows(library).isEmpty());
+                String old=(String)rows(library).getFirst().get("token");
+                check(library.resolveCover(old,request,!missing).equals(alternate) && lookups.get()==1);
+                check(library.cover(old).equals(alternate));
+                library.browse(platform,View.DISCOVER);waitFor(()->!rows(library).isEmpty());
+                library.browse(platform,View.SAVED);waitFor(()->!rows(library).isEmpty());
+                String returned=(String)rows(library).getFirst().get("token");check(!returned.equals(old));
+                check(library.cover(returned).equals(alternate));
+                check(library.resolveCover(returned,request).equals(alternate) && lookups.get()==1);
+                library.reload();waitFor(()->!rows(library).isEmpty());
+                String refreshed=(String)rows(library).getFirst().get("token");
+                check(Objects.equals(library.cover(refreshed),missing?null:original));
+                check(library.resolveCover(refreshed,request,!missing).equals(alternate) && lookups.get()==2);
+                library.accountChanged(platform);check(!library.currentRow(refreshed));
+                library.browse(platform,View.SAVED);waitFor(()->!rows(library).isEmpty());
+                String changed=(String)rows(library).getFirst().get("token");
+                check(Objects.equals(library.cover(changed),missing?null:original));
+                check(library.resolveCover(changed,request,!missing).equals(alternate) && lookups.get()==3);
+            }
+        }
     }
 }

@@ -1,6 +1,5 @@
 package io.github.yghfv.saltneri.plugin.ui;
 
-import io.github.yghfv.saltneri.plugin.auth.AccountPlatform;
 import io.github.yghfv.saltneri.plugin.library.CoverSource;
 import io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection;
 import io.github.yghfv.saltneri.plugin.net.RequestScope;
@@ -19,13 +18,15 @@ public final class CoverLoader implements AutoCloseable {
     @FunctionalInterface public interface Opener { HttpURLConnection open(URI uri) throws IOException; }
     @FunctionalInterface public interface Source { URI resolve(RequestScope request) throws IOException; }
     public static final int LIST_EDGE = 480;
-    static final int PARALLEL_LOADS = 3;
+    static final int PARALLEL_LOADS = 6;
+    static final int THUMBNAIL_ENTRIES = 256;
     private static final int MAX_BYTES = 1048576, MAX_ENTRIES = 20;
     private final Opener opener;
     private final ThreadPoolExecutor worker;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private record Thumbnail(byte[] png,long until) { }
     private final LinkedHashMap<URI,Thumbnail> thumbnails=new LinkedHashMap<>(32,0.75f,true);
+    private final Map<URI,CompletableFuture<byte[]>> loading=new HashMap<>();
     private long thumbnailBytes, revision;
     private volatile boolean closed;
     private static final class Entry {
@@ -46,15 +47,22 @@ public final class CoverLoader implements AutoCloseable {
         });
     }
     public byte[] request(String token, URI source, BooleanSupplier valid) {
-        return requestSource(token, scope -> source, valid);
+        return requestSource(token, source, scope -> source, null, valid);
     }
     public synchronized byte[] requestSource(String token, Source source, BooleanSupplier valid) {
         return requestSource(token, source, null, valid);
     }
     public synchronized byte[] requestSource(String token, Source source, Source fallback, BooleanSupplier valid) {
+        return requestSource(token,null,source,fallback,valid);
+    }
+    /** Cache hits bypass worker queues, including when another page currently occupies every worker. */
+    public synchronized byte[] requestSource(String token,URI known,Source source,Source fallback,BooleanSupplier valid) {
         entries.entrySet().removeIf(row -> { if (!row.getValue().active()) { row.getValue().cancel(); return true; } return false; });
         worker.purge();
         if (closed || source == null || !valid.getAsBoolean()) return null;
+        URI original=CoverSource.original(known);
+        byte[] cached=original==null?null:cached(original);
+        if(cached!=null) return cached;
         Entry entry = entries.get(token);
         if (entry != null) return entry.png;
         if (entries.size() >= MAX_ENTRIES) return null;
@@ -79,24 +87,58 @@ public final class CoverLoader implements AutoCloseable {
     }
     public byte[] load(URI source, RequestScope scope) throws IOException {
         URI original=CoverSource.original(source); if(original==null) throw invalid(); scope.check();
-        long captured;
+        long captured;CompletableFuture<byte[]> pending;
         synchronized(this) {
             if(closed) throw invalid(); captured=revision;
-            var hit=thumbnails.get(original);
-            if(hit!=null && System.nanoTime()<hit.until()) return hit.png();
         }
-        // Public, cookie-free thumbnails survive row-token changes when revisiting a page.
-        byte[] png=load(original, scope, LIST_EDGE, 8 * MAX_BYTES); scope.check();
-        synchronized(this) {
-            if(!closed && captured==revision) {
-                var previous=thumbnails.put(original,new Thumbnail(png,System.nanoTime()+TimeUnit.MINUTES.toNanos(5)));
+        for(;;) {
+            scope.check();
+            synchronized(this) {
+                if(closed || captured!=revision) throw new CancellationException("Cover cache cleared");
+                byte[] hit=cached(original);if(hit!=null)return hit;
+                pending=loading.get(original);
+                if(pending==null) {pending=new CompletableFuture<>();loading.put(original,pending);break;}
+            }
+            try {
+                byte[] png=pending.get(50,TimeUnit.MILLISECONDS);scope.check();
+                synchronized(this) {if(closed || captured!=revision)throw new CancellationException("Cover cache cleared");}
+                return png;
+            }
+            catch(TimeoutException ignored) { }
+            catch(InterruptedException error){Thread.currentThread().interrupt();scope.check();throw invalid();}
+            catch(ExecutionException error){scope.check();throw invalid();}
+            // The old page may own the shared download. A still-valid row takes over after cancellation.
+            catch(CancellationException error){scope.check();}
+        }
+        try {
+            URI thumbnail=CoverSource.thumbnail(original,LIST_EDGE);
+            byte[] png;
+            try {png=load(thumbnail,scope,LIST_EDGE,8*MAX_BYTES);}
+            catch(IOException unsupported) {
+                scope.check();if(thumbnail.equals(original))throw unsupported;
+                png=load(original,scope,LIST_EDGE,8*MAX_BYTES);
+            }
+            scope.check();
+            synchronized(this) {
+                if(closed || captured!=revision)throw new CancellationException("Cover cache cleared");
+                var previous=thumbnails.put(original,new Thumbnail(png,System.nanoTime()+TimeUnit.MINUTES.toNanos(30)));
                 thumbnailBytes+=png.length-(previous==null?0:previous.png().length);
-                while(thumbnails.size()>96 || thumbnailBytes>24L*MAX_BYTES) {
+                while(thumbnails.size()>THUMBNAIL_ENTRIES || thumbnailBytes>48L*MAX_BYTES) {
                     var eldest=thumbnails.pollFirstEntry(); thumbnailBytes-=eldest.getValue().png().length;
                 }
             }
+            pending.complete(png);return png;
+        } catch(IOException | RuntimeException | Error failure){
+            synchronized(this){loading.remove(original,pending);}
+            pending.completeExceptionally(failure);throw failure;
         }
-        return png;
+        finally {synchronized(this){loading.remove(original,pending);}}
+    }
+    private byte[] cached(URI original) {
+        var hit=thumbnails.get(original);
+        if(hit==null)return null;
+        if(System.nanoTime()<hit.until())return hit.png();
+        thumbnails.remove(original);thumbnailBytes-=hit.png().length;return null;
     }
     public byte[] loadPlayback(URI source, RequestScope scope) throws IOException {
         URI original = CoverSource.original(source);
@@ -112,8 +154,7 @@ public final class CoverLoader implements AutoCloseable {
         var bytes=new ByteArrayOutputStream(); ImageIO.write(crop,"png",bytes); scope.check(); return bytes.toByteArray();
     }
     private byte[] load(URI source, RequestScope scope, int edge, int maxBytes) throws IOException {
-        source = CoverSource.original(source);
-        if (source == null) throw invalid();
+        if (CoverSource.original(source) == null) throw invalid();
         scope.check(); HttpURLConnection connection = opener.open(source); scope.attach(connection);
         byte[] encoded;
         try {
@@ -181,6 +222,7 @@ public final class CoverLoader implements AutoCloseable {
         } catch (RuntimeException | LinkageError failure) { throw invalid(); }
     }
     private static IOException invalid() { return new IOException("Cover unavailable"); }
-    public synchronized void clear() { revision++; thumbnails.clear(); thumbnailBytes=0; entries.values().forEach(Entry::cancel); entries.clear(); worker.purge(); }
+    public synchronized void releaseRequests() { entries.values().forEach(Entry::cancel); entries.clear(); worker.purge(); }
+    public synchronized void clear() { revision++; thumbnails.clear(); thumbnailBytes=0; loading.values().forEach(f->f.cancel(false)); loading.clear(); releaseRequests(); }
     @Override public synchronized void close() { closed = true; clear(); worker.shutdownNow(); }
 }

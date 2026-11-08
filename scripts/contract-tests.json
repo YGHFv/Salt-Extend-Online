@@ -29,6 +29,16 @@
   ],
   "tests": [
     {
+      "class": "io.github.yghfv.saltneri.plugin.host.SavedArtistRestoreTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.BiliSeasonSnapshotTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.host.BulkSavedQueueContractTest",
       "baseOnly": false,
       "offline": false

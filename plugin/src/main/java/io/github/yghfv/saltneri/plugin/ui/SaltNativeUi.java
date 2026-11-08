@@ -197,10 +197,14 @@ public final class SaltNativeUi implements AutoCloseable {
     public void searchClose(Modifier modifier, Function0<kotlin.Unit> action, Composer composer) { search.close(modifier, action, composer); }
     public byte[] cover(String token) {
         if (!available()) return null;
-        return covers.requestSource(token, scope -> desk.resolveCover(token, scope), scope -> desk.fallbackCover(token, scope),
+        return covers.requestSource(token, desk.cover(token), scope -> desk.resolveCover(token, scope), scope -> desk.fallbackCover(token, scope),
                 () -> !closed && permitted.getAsBoolean() && desk.currentRow(token));
     }
     public void clearCovers() { covers.clear(); }
+    public void releaseCovers() { covers.releaseRequests(); }
+    public void prefetchCovers(java.util.List<String> tokens) {
+        for(String token:tokens.stream().limit(20).toList()) cover(token);
+    }
     public byte[] avatar(AccountPlatform platform, String revision) {
         if (!available()) return null;
         var account = desk.account(platform);

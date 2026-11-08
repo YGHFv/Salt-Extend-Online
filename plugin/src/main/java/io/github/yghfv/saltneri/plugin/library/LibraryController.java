@@ -49,6 +49,7 @@ public final class LibraryController implements AutoCloseable {
         String authorName="";
         final Deque<Location> history=new ArrayDeque<>();
         final Map<String, Item> rows = new LinkedHashMap<>();
+        final LinkedHashMap<String,java.net.URI> resolvedCovers=new LinkedHashMap<>(32,0.75f,true);
         State(AccountPlatform platform) { this.platform = platform; }
     }
     public LibraryController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized,
@@ -120,6 +121,7 @@ public final class LibraryController implements AutoCloseable {
     public synchronized void reload() {
         State s = current(); if (s.query == null) throw new IllegalStateException("No current catalog");
         s.cache.clear();
+        s.resolvedCovers.clear();
         s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.rows.clear();
         s.playPending = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
         if (s.fullMode) {
@@ -219,7 +221,7 @@ public final class LibraryController implements AutoCloseable {
         s.rows.clear(); for (Item item : items) if (item.enabled()) s.rows.put(UUID.randomUUID().toString(),item);
     }
     private List<Item> ordered(State s, boolean filter) {
-        List<Item> items = new ArrayList<>(s.contents.items());
+        List<Item> items = new ArrayList<>(s.contents.items().stream().map(i->withAuthor(s,i)).toList());
         if (filter && !s.filter.isBlank()) { String needle=s.filter.toLowerCase(Locale.ROOT); items.removeIf(i -> !(i.title()+" "+i.subtitle()).toLowerCase(Locale.ROOT).contains(needle)); }
         switch (s.sort) {
             case DEFAULT -> { }
@@ -231,6 +233,10 @@ public final class LibraryController implements AutoCloseable {
             case PLAY_COUNT -> items.sort(Comparator.comparingLong(Item::playCount).reversed());
         }
         return items;
+    }
+    private Item withAuthor(State s,Item item) {
+        if(s.platform!=AccountPlatform.BILIBILI || s.query==null || s.query.view()!=View.COLLECTION || !item.subtitle().isBlank() || s.creator.isBlank()) return item;
+        return new Item(item.kind(),item.target(),item.title(),s.creator,item.count(),item.enabled(),item.cover(),item.owner(),item.playCount(),item.updatedAt());
     }
     private void rebuild(State s) {
         List<Item> items=ordered(s,true); s.knownPages=Math.max(1,(items.size()+19)/20); int page=Math.min(s.query.page(),s.knownPages);
@@ -306,8 +312,10 @@ public final class LibraryController implements AutoCloseable {
         result.put("back",!s.history.isEmpty()); result.put("authorName",s.authorName); return Map.copyOf(result);
     }
     public synchronized java.net.URI cover(String token) {
-        State s = stateFor(token); if (s == null) return null; refresh(s); Item item = s.rows.get(token); return item == null ? null : item.cover();
+        State s = stateFor(token); if (s == null) return null; refresh(s); Item item = s.rows.get(token);
+        return item == null ? null : s.resolvedCovers.getOrDefault(coverKey(item),item.cover());
     }
+    private static String coverKey(Item item) {return item.kind()+":"+item.target()+":"+item.owner();}
     public java.net.URI resolveCover(String token, io.github.yghfv.saltneri.plugin.net.RequestScope request) throws java.io.IOException {
         return resolveCover(token, request, false);
     }
@@ -316,6 +324,7 @@ public final class LibraryController implements AutoCloseable {
         synchronized (this) {
             State s = stateFor(token); if (s == null) return null; refresh(s); item = s.rows.get(token);
             if (item == null) return null;
+            if(!fallback && s.resolvedCovers.containsKey(coverKey(item))) return s.resolvedCovers.get(coverKey(item));
             if (item.cover() != null && !fallback) return item.cover();
             if (fallback && item.cover() == null) return null;
             platform=s.platform;
@@ -328,7 +337,15 @@ public final class LibraryController implements AutoCloseable {
         request.check();
         java.net.URI cover = platform==AccountPlatform.NETEASE?neteaseCoverLookup.resolve(account,item,request):coverLookup.resolve(account, collection, request);
         request.check();
-        synchronized (this) { State s = states.get(platform); refresh(s); return s.rows.get(token) == item && accounts.apply(platform) == account ? cover : null; }
+        synchronized (this) {
+            State s = states.get(platform); refresh(s);
+            if(s.rows.get(token)!=item || accounts.apply(platform)!=account) return null;
+            if(cover!=null) {
+                s.resolvedCovers.put(coverKey(item),cover);
+                while(s.resolvedCovers.size()>256)s.resolvedCovers.pollFirstEntry();
+            }
+            return cover;
+        }
     }
     public synchronized void playRow(String token, Consumer<OnlinePlaybackController.Target> play) {
         State s = stateFor(token); if (s == null) throw new IllegalStateException("Stale row"); refresh(s); Item item = s.rows.get(token);
@@ -336,10 +353,10 @@ public final class LibraryController implements AutoCloseable {
         play.accept(new OnlinePlaybackController.Target(s.platform, item.target()));
     }
     public synchronized void saveRow(String token,java.util.function.BiConsumer<OnlinePlaybackController.Target,Item> save) {
-        playRow(token,target->save.accept(target,stateFor(token).rows.get(token)));
+        playRow(token,target->{State s=stateFor(token);save.accept(target,withAuthor(s,s.rows.get(token)));});
     }
     public synchronized boolean currentRow(String token) { State s = stateFor(token); if (s == null) return false; refresh(s); return s.rows.containsKey(token); }
-    private void invalidate(State s) { s.cache.clear(); reset(s); s.history.clear(); s.authorName=""; s.rows.clear(); s.visible=null; s.query=null; s.loader.invalidate(""); }
+    private void invalidate(State s) { s.cache.clear(); s.resolvedCovers.clear(); reset(s); s.history.clear(); s.authorName=""; s.rows.clear(); s.visible=null; s.query=null; s.loader.invalidate(""); }
     public synchronized void accountChanged(AccountPlatform changed) { invalidate(states.get(changed)); if(platform==changed) navigation.run(); }
     public synchronized void invalidate() { states.values().forEach(this::invalidate); navigation.run(); }
     @Override public synchronized void close() { invalidate(); for(State s:states.values()) { s.loader.close(); s.complete.close(); } }

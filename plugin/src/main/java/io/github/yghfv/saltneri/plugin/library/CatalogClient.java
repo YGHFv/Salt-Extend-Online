@@ -65,6 +65,10 @@ public final class CatalogClient {
             try {
                 Page first=bulkPage(query,1,http,request,cache); int pages=first.totalPages();
                 if(first.totalCount()>10000) throw invalid();
+                if(query.view()==View.COLLECTION && first.hasMore()) {
+                    CollectionContents snapshot=collectionSnapshot(query,first,http,request);
+                    if(snapshot!=null) {progress.accept(pages,pages);return snapshot;}
+                }
                 List<Page> results=new ArrayList<>(); results.add(first); progress.accept(1,pages);
                 // Unknown totals retain the conservative sequential end-of-list protocol.
                 if(pages==0) {
@@ -95,6 +99,47 @@ public final class CatalogClient {
                 for(Page result:results) for(Item item:result.items()) if(item.enabled() && ids.add(item.target())) items.add(item);
                 request.check(); return new CollectionContents(first.title(),items,first.totalCount());
             } finally { pending.forEach(f->f.cancel(true)); worker.shutdownNow(); }
+        }
+    }
+    /** Video detail can embed the entire UGC season; accept only a complete, same-order snapshot. */
+    private CollectionContents collectionSnapshot(Query query,Page first,CatalogHttp http,RequestScope parent) throws IOException {
+        if(first.totalCount()<1 || first.items().isEmpty() || first.items().stream().anyMatch(i->!i.enabled())) return null;
+        String seed=first.items().getFirst().target();
+        try(var request=new RequestScope(()->{parent.check();return true;},3000)) {
+            var root=http.json(URI.create("https://api.bilibili.com/x/web-interface/view?bvid="+seed),null,request);
+            long code=number(root.get("code"),-1);
+            if(code==-404 || code==62002) return null;
+            var data=object(success(root,0,http.stage()).get("data"));
+            if(!seed.equals(data.get("bvid")) || !(data.get("ugc_season") instanceof Map<?,?>)) return null;
+            var season=object(data.get("ugc_season"));
+            if(number(season.get("id"),0)!=query.folder() || number(season.get("mid"),0)!=query.owner()
+                    || number(season.get("ep_count"),-1)!=first.totalCount()) return null;
+            var items=new ArrayList<Item>();var ids=new HashSet<String>();
+            for(Object section:bounded(arrayOrEmpty(season.get("sections")),10000)) {
+                for(Object value:bounded(arrayOrEmpty(object(section).get("episodes")),10000)) {
+                    request.check();var episode=object(value);String bvid=optional(episode.get("bvid"));
+                    if(items.size()>=first.totalCount() || !bvid.matches("BV[0-9A-Za-z]{10}") || !ids.add(bvid)
+                            || number(episode.get("season_id"),query.folder())!=query.folder()) return null;
+                    if(!(episode.get("arc") instanceof Map<?,?>)) return null;
+                    var arc=object(episode.get("arc"));
+                    if(number(arc.get("aid"),0)<=0 || number(arc.get("aid"),0)!=number(episode.get("aid"),-1)) return null;
+                    long duration=number(arc.get("duration"),0),state=number(arc.get("state"),0);
+                    String title=display(arc.get("title"));
+                    if(title.isBlank() || duration<=0) return null;
+                    items.add(new Item(Kind.TRACK,bvid,title,author(arc),duration*1000,state>=0,
+                            cover(AccountPlatform.BILIBILI,arc.get("pic")),authorId(arc,query.owner()),playCount(arc,"stat","view"),number(arc.get("pubdate"),0)));
+                }
+            }
+            if(items.size()!=first.totalCount() || items.size()<first.items().size()) return null;
+            for(int i=0;i<first.items().size();i++) if(!items.get(i).target().equals(first.items().get(i).target())) return null;
+            parent.check();return new CollectionContents(first.title(),items,first.totalCount());
+        } catch(java.util.concurrent.CancellationException timeout) {parent.check();return null;}
+        catch(IOException failure) {
+            parent.check();
+            // Never turn authentication/risk-control rejection into extra catalog requests.
+            if(failure instanceof CatalogFailure safe && (safe.reason()==Reason.API || safe.reason()==Reason.AUTH
+                    || safe.reason()==Reason.HTTP && (Long.valueOf(401).equals(safe.code()) || Long.valueOf(403).equals(safe.code()) || Long.valueOf(429).equals(safe.code())))) throw failure;
+            return null;
         }
     }
     private Page bulkPage(Query query,int page,CatalogHttp http,RequestScope request,CatalogPageCache cache) throws IOException {
@@ -504,7 +549,7 @@ public final class CatalogClient {
         return optional(alias(row, "uname", "author_name"));
     }
     private static long authorId(Map<String,Object> row,long fallback) throws IOException {
-        for(String field:List.of("upper","owner")) if(row.get(field) instanceof Map<?,?> person) {
+        for(String field:List.of("upper","owner","author")) if(row.get(field) instanceof Map<?,?> person) {
             long mid=number(person.get("mid"),0); if(mid>0) return mid;
         }
         return fallback;

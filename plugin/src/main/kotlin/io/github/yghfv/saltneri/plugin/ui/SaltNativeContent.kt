@@ -177,7 +177,7 @@ private fun PageButton(ui: SaltNativeUi,label: String,enabled: Boolean,click: ()
 
 @Composable
 private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mode: CoverMode, card: Boolean = false, stats: Map<*,*>? = null) {
-    var png by remember(token) { mutableStateOf<ByteArray?>(null) }
+    var png by remember(ui,token) { mutableStateOf(ui.cover(token)) }
     LaunchedEffect(ui, token) {
         var attempts=0
         while (true) { png = ui.cover(token); if (png != null) break; delay(if(attempts++<10) 100 else 500) }
@@ -587,13 +587,15 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     }
     DisposableEffect(ui, platform) {
         val lease = ui.pageEntered(platform)
-        onDispose { ui.pageLeft(lease); ui.desk().leave(); ui.clearCovers() }
+        onDispose { ui.pageLeft(lease); ui.desk().leave(); ui.releaseCovers() }
     }
     val palette = ui.palette(currentComposer)
     val catalog = state?.catalog()?.takeIf { it["platform"] == platform.name }
     val playback = state?.playback()
     val login = state?.login()
     val rows = catalog?.get("items") as? List<*>
+    val coverTokens=rows.orEmpty().mapNotNull { (it as? Map<*,*>)?.get("token") as? String }
+    LaunchedEffect(ui,coverTokens) { ui.prefetchCovers(coverTokens) }
     val middleLabel=when(catalog?.get("view")) {
         "FOLDER","COLLECTION" -> ""
         "AUTHOR_VIDEOS" -> "\u66f4\u65b0\u65f6\u95f4"
