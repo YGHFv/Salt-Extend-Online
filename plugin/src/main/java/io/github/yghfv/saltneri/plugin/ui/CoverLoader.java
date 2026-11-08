@@ -75,7 +75,8 @@ public final class CoverLoader implements AutoCloseable {
         return null;
     }
     public byte[] load(URI source, RequestScope scope) throws IOException {
-        return load(source, scope, LIST_EDGE, 4 * MAX_BYTES);
+        // Fetch the same original image as playback, but keep the smaller decoded list thumbnail.
+        return load(source, scope, LIST_EDGE, 8 * MAX_BYTES);
     }
     public byte[] loadPlayback(URI source, RequestScope scope) throws IOException {
         URI original = CoverSource.original(source);

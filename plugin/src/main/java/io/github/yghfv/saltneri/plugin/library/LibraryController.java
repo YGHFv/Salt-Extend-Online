@@ -13,6 +13,9 @@ public final class LibraryController implements AutoCloseable {
     @FunctionalInterface public interface CoverLookup {
         java.net.URI resolve(AccountCredentials account, Query query, io.github.yghfv.saltneri.plugin.net.RequestScope request) throws java.io.IOException;
     }
+    @FunctionalInterface public interface ItemCoverLookup {
+        java.net.URI resolve(AccountCredentials account, Item item, io.github.yghfv.saltneri.plugin.net.RequestScope request) throws java.io.IOException;
+    }
     public record Playlist(AccountPlatform platform, List<Item> items, AccountCredentials account) {
         public Playlist { items = List.copyOf(items); }
         @Override public String toString() { return "Playlist[private catalog]"; }
@@ -21,6 +24,7 @@ public final class LibraryController implements AutoCloseable {
     private record Location(Query query,String creator,String authorName,Sort sort,String filter,Contents contents) { }
     private final Function<AccountPlatform, AccountCredentials> accounts;
     private final CoverLookup coverLookup;
+    private final ItemCoverLookup neteaseCoverLookup;
     private final Consumer<OnlinePlaybackController.Target> prepare;
     private final Runnable navigation;
     private final BooleanSupplier authorized;
@@ -57,7 +61,13 @@ public final class LibraryController implements AutoCloseable {
     }
     public LibraryController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, Consumer<OnlinePlaybackController.Target> prepare,
                              Runnable navigation, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> testLoader, CoverLookup coverLookup) {
-        this.accounts = accounts; this.coverLookup = coverLookup; this.prepare = prepare; this.navigation = navigation; this.authorized = authorized;
+        this(accounts,authorized,prepare,navigation,clock,testLoader,coverLookup,
+                testLoader==null?(account,item,request)->new CatalogClient(account).neteaseCover(item,request):(account,item,request)->null);
+    }
+    public LibraryController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, Consumer<OnlinePlaybackController.Target> prepare,
+                             Runnable navigation, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> testLoader,
+                             CoverLookup coverLookup, ItemCoverLookup neteaseCoverLookup) {
+        this.accounts = accounts; this.coverLookup = coverLookup; this.neteaseCoverLookup=neteaseCoverLookup; this.prepare = prepare; this.navigation = navigation; this.authorized = authorized;
         for (AccountPlatform p : AccountPlatform.values()) {
             State s = new State(p); states.put(p,s);
             s.cache = new CatalogPageCache(clock);
@@ -302,21 +312,23 @@ public final class LibraryController implements AutoCloseable {
         return resolveCover(token, request, false);
     }
     public java.net.URI resolveCover(String token, io.github.yghfv.saltneri.plugin.net.RequestScope request, boolean fallback) throws java.io.IOException {
-        Item item; AccountCredentials account; Query collection;
+        Item item; AccountCredentials account; Query collection; AccountPlatform platform;
         synchronized (this) {
             State s = stateFor(token); if (s == null) return null; refresh(s); item = s.rows.get(token);
             if (item == null) return null;
             if (item.cover() != null && !fallback) return item.cover();
             if (fallback && item.cover() == null) return null;
-            if (item.kind() != Kind.COLLECTION || item.owner() <= 0) return null;
+            platform=s.platform;
+            if(platform==AccountPlatform.BILIBILI && (item.kind()!=Kind.COLLECTION || item.owner()<=0)) return null;
+            if(platform==AccountPlatform.NETEASE && item.kind()!=Kind.TRACK && item.kind()!=Kind.FOLDER) return null;
             account = accounts.apply(s.platform);
-            collection = new Query(s.platform, View.COLLECTION, Long.parseLong(item.target()), 1, item.owner());
+            collection = platform==AccountPlatform.BILIBILI?new Query(s.platform, View.COLLECTION, Long.parseLong(item.target()), 1, item.owner()):null;
         }
         // Network work must not hold the UI/catalog monitor. The row token also fences account changes.
         request.check();
-        java.net.URI cover = coverLookup.resolve(account, collection, request);
+        java.net.URI cover = platform==AccountPlatform.NETEASE?neteaseCoverLookup.resolve(account,item,request):coverLookup.resolve(account, collection, request);
         request.check();
-        synchronized (this) { State s = states.get(collection.platform()); refresh(s); return s.rows.get(token) == item && accounts.apply(collection.platform()) == account ? cover : null; }
+        synchronized (this) { State s = states.get(platform); refresh(s); return s.rows.get(token) == item && accounts.apply(platform) == account ? cover : null; }
     }
     public synchronized void playRow(String token, Consumer<OnlinePlaybackController.Target> play) {
         State s = stateFor(token); if (s == null) throw new IllegalStateException("Stale row"); refresh(s); Item item = s.rows.get(token);

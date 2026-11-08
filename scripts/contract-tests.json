@@ -256,6 +256,11 @@
       "class": "io.github.yghfv.saltneri.plugin.ui.CatalogNavigationContractTest",
       "baseOnly": false,
       "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.NeteaseCatalogCompatibilityTest",
+      "baseOnly": true,
+      "offline": false
     }
   ]
 }

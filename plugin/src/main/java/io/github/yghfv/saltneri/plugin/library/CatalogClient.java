@@ -111,7 +111,7 @@ public final class CatalogClient {
             List<Item> items = new ArrayList<>(); Set<Long> unique = new HashSet<>();
             for (Object row : songs) {
                 var song = object(row); long songId = number(song.get("id"), 0);
-                if (songId <= 0 || optional(song.get("name")).isBlank() || !unique.add(songId)) continue;
+                if (songId <= 0 || display(song.get("name")).isBlank() || !unique.add(songId)) continue;
                 items.add(neteaseSong(song));
             }
             // Pagination counts upstream results, not the remaining playable rows.
@@ -127,16 +127,30 @@ public final class CatalogClient {
         else if (query.page() != 1) throw new IllegalArgumentException("Discovery has a single bounded page");
         String csrf = http.csrf(request);
         var root = success(http.json(URI.create("https://music.163.com" + path + "?csrf_token=" + encode(csrf)), NeteaseWeapi.form(parameters), request), 200, http.stage());
+        String field=query.view()==View.DISCOVER?"result":"playlist";
+        if(query.view()!=View.DISCOVER && !root.containsKey(field) && root.containsKey("playlists")) field="playlists";
+        if(!root.containsKey(field)) throw invalid();
+        List<Object> upstream=bounded(arrayOrEmpty(root.get(field)),1000);
         List<Item> items = new ArrayList<>(); Set<Long> unique = new HashSet<>();
-        for (Object row : bounded(array(root.get(query.view() == View.DISCOVER ? "result" : "playlist")), 20)) {
-            var list = object(row); long listId = id(list.get("id")); if (!unique.add(listId)) throw invalid();
-            boolean mine = query.view() != View.DISCOVER && Long.toString(id(object(list.get("creator")).get("userId"))).equals(account.userId());
-            if (query.view() == View.MINE && !mine || query.view() == View.SAVED && (mine || !Boolean.TRUE.equals(list.get("subscribed")))) continue;
-            items.add(new Item(Kind.FOLDER, Long.toString(listId), text(list.get("name")), author(list), number(list.get("trackCount"), -1), true,
-                    cover(AccountPlatform.NETEASE, alias(list, "coverImgUrl", "picUrl"))));
+        for (Object row : upstream.subList(0,Math.min(20,upstream.size()))) {
+            if(!(row instanceof Map<?,?>)) continue;
+            var list=object(row); long listId=optionalNumber(list.get("id"),0);
+            String title=display(list.get("name"));
+            if(listId<=0 || title.isBlank() || !unique.add(listId)) continue;
+            long owner=optionalNumber(list.get("userId"),0);
+            if(owner<=0 && list.get("creator") instanceof Map<?,?> creator) owner=optionalNumber(creator.get("userId"),0);
+            boolean subscribed=flag(list.get("subscribed"),false);
+            // Legacy/liked playlists can omit creator. Keep readable metadata without inventing an identity.
+            boolean mine=query.view()!=View.DISCOVER && (owner>0?Long.toString(owner).equals(account.userId()):!subscribed);
+            if(query.view()==View.MINE && !mine || query.view()==View.SAVED && mine) continue;
+            items.add(new Item(Kind.FOLDER,Long.toString(listId),title,neteaseAuthor(list),Math.max(-1,optionalNumber(list.get("trackCount"),-1)),true,
+                    firstCover(AccountPlatform.NETEASE,list,"coverImgUrl","picUrl","coverUrl")));
         }
-        return page(viewTitle(query), items, query.view() != View.DISCOVER && Boolean.TRUE.equals(root.get("more")),
-                query.view() == View.DISCOVER ? items.size() : number(root.get("count"), -1));
+        long total=query.view()==View.DISCOVER?items.size():optionalNumber(root.get("count"),-1);
+        boolean more=query.view()!=View.DISCOVER && query.page()<500 && (upstream.size()>20
+                || flag(root.get("more"),total>=0?query.page()*20L<total:upstream.size()==20));
+        if(more && total>=0 && total<=query.page()*20L) total=-1;
+        return page(viewTitle(query),items,more,total);
     }
     private CollectionContents neteaseFolder(Query query,CatalogHttp http,RequestScope request,boolean full) throws IOException {
             Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
@@ -148,13 +162,12 @@ public final class CatalogClient {
             if (!selected.isEmpty()) {
                 Map<Long, Map<String, Object>> songs = new HashMap<>(); Set<Long> seen = new HashSet<>();
                 // First-page playlist responses can already contain the same song metadata. Fetch only gaps.
-                for (Object row : bounded(arrayOrEmpty(list.get("tracks")), 20)) {
+                for (Object row : bounded(arrayOrEmpty(list.get("tracks")), 10000)) {
                     var song = object(row); long songId = id(song.get("id"));
                     if (!all.contains(songId) || !seen.add(songId)) throw invalid();
                     if (selected.contains(songId) && song.get("name") instanceof String && song.get("fee") != null
                             && alias(song,"ar","artists") instanceof List<?>
-                            && alias(song,"dt","duration") != null && alias(song,"al","album") instanceof Map<?,?> album
-                            && album.get("picUrl") instanceof String) songs.put(songId,song);
+                            && alias(song,"dt","duration") != null && neteaseSongCover(song)!=null) songs.put(songId,song);
                 }
                 List<Long> missing = selected.stream().filter(songId -> !songs.containsKey(songId)).toList();
                 for(int from=0;from<missing.size();from+=100) {
@@ -170,18 +183,66 @@ public final class CatalogClient {
                     items.add(neteaseSong(song));
                 }
             }
-            return new CollectionContents(text(list.get("name")),items,ids.size());
+            return new CollectionContents(display(list.get("name")),items,ids.size());
     }
     private Item neteaseSong(Map<String, Object> song) throws IOException {
         long fee = number(song.get("fee"), -1), duration = number(alias(song, "dt", "duration"), 0);
-        String title = text(song.get("name"));
+        String title = display(song.get("name"));
         boolean enabled = !title.isBlank() && (fee == 0 || fee == 8 || account != null && (fee == 1 || fee == 4))
                 && number(alias(song, "st", "status"), 0) >= 0 && duration > 0;
         List<String> artists = new ArrayList<>(); Object artistRows = alias(song, "ar", "artists");
-        if (artistRows != null) for (Object row : bounded(array(artistRows), 64)) artists.add(text(object(row).get("name")));
-        Object album = alias(song, "al", "album");
+        if (artistRows != null) for (Object row : bounded(array(artistRows), 64)) if(row instanceof Map<?,?> artist) {
+            String label=display(artist.get("name")); if(!label.isBlank()) artists.add(label);
+        }
         return new Item(Kind.TRACK, Long.toString(id(song.get("id"))), title, String.join(" / ", artists), duration, enabled,
-                cover(AccountPlatform.NETEASE, album instanceof Map<?,?> ? object(album).get("picUrl") : null));
+                neteaseSongCover(song));
+    }
+    private static URI neteaseSongCover(Map<String,Object> song) {
+        for(String field:List.of("al","album")) if(song.get(field) instanceof Map<?,?> album) {
+            for(String key:List.of("picUrl","coverImgUrl")) { URI image=cover(AccountPlatform.NETEASE,album.get(key)); if(image!=null)return image; }
+        }
+        return null;
+    }
+    /** Lazy artwork-only lookup. No audio URL, queue, or recursive fallback; same account and HTTPS policy. */
+    public URI neteaseCover(Item item,RequestScope request) throws IOException {
+        if(item.kind()!=Kind.TRACK && item.kind()!=Kind.FOLDER) return null;
+        long target;
+        try { target=Long.parseLong(item.target()); } catch(NumberFormatException error) {throw invalid();}
+        if(target<=0) throw invalid();
+        try(var http=new CatalogHttp(AccountPlatform.NETEASE,account,clock,opener)) {
+            if(account!=null) http.verify(request);
+            if(item.kind()==Kind.TRACK) {
+                var root=success(http.json(URI.create("https://music.163.com/api/song/detail?ids="+encode("["+target+"]")),null,request),200,http.stage());
+                List<Object> songs=bounded(array(root.get("songs")),1);
+                if(songs.isEmpty())return null;
+                var song=object(songs.getFirst()); if(id(song.get("id"))!=target) throw invalid();
+                return neteaseSongCover(song);
+            }
+            var root=success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"),form(Map.of("id",Long.toString(target),"n","0","s","0")),request),200,http.stage());
+            var list=object(root.get("playlist")); if(id(list.get("id"))!=target)throw invalid();
+            return firstCover(AccountPlatform.NETEASE,list,"coverImgUrl","picUrl","coverUrl");
+        }
+    }
+    private static long optionalNumber(Object value,long fallback) {
+        try {return value instanceof String text?Long.parseLong(text):number(value,fallback);}
+        catch(IOException | NumberFormatException ignored) {return fallback;}
+    }
+    private static boolean flag(Object value,boolean fallback) {
+        if(value instanceof Boolean b) return b;
+        if("true".equals(value))return true; if("false".equals(value))return false;
+        long n=optionalNumber(value,-1); return n==1 || n!=0 && fallback;
+    }
+    private static String display(Object value) {
+        if(!(value instanceof String text)) return "";
+        String cleaned=text.replaceAll("[\\p{Cntrl}\\u2028\\u2029]+"," ").strip();
+        int end=Math.min(4096,cleaned.length()); if(end>0 && Character.isHighSurrogate(cleaned.charAt(end-1)))end--;
+        return cleaned.substring(0,end);
+    }
+    private static String neteaseAuthor(Map<String,Object> row) {
+        if(row.get("creator") instanceof Map<?,?> person) {
+            String name=display(person.get("nickname")); if(!name.isEmpty())return name;
+        }
+        return display(row.get("creatorName"));
     }
     static Map<String, Object> neteaseSearchParameters(Query query) {
         return Map.of("s", query.keyword(), "type", "1", "limit", "20",

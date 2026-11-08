@@ -117,8 +117,8 @@ public final class CoverLoaderContractTest {
         }
         for (int mode = 0; mode < 6; mode++) {
             Response bad = new Response(SOURCE, fixture);
-            switch (mode) { case 0 -> bad.status = 302; case 1 -> bad.type = "text/html"; case 2 -> bad.length = 4194305;
-                case 3 -> bad.bytes = new byte[4194305]; case 4 -> bad.bytes = "COOKIE_SECRET".getBytes(); case 5 -> bad.encoding = "gzip"; }
+            switch (mode) { case 0 -> bad.status = 302; case 1 -> bad.type = "text/html"; case 2 -> bad.length = 8388609;
+                case 3 -> bad.bytes = new byte[8388609]; case 4 -> bad.bytes = "COOKIE_SECRET".getBytes(); case 5 -> bad.encoding = "gzip"; }
             try (CoverLoader loader = new CoverLoader(uri -> bad); RequestScope scope = new RequestScope(() -> true)) { rejects(() -> loader.load(SOURCE, scope)); check(bad.closed); }
         }
         var huge = new BufferedImage(4097, 1, BufferedImage.TYPE_INT_RGB); var hugeBytes = new ByteArrayOutputStream(); ImageIO.write(huge, "png", hugeBytes); huge.flush();
@@ -149,8 +149,8 @@ public final class CoverLoaderContractTest {
                 case 1 -> bad.bytes = new byte[]{(byte)0xff, (byte)0xd8, (byte)0xff};
                 case 2 -> bad.type = "application/octet-stream";
                 case 3 -> bad.type = "image/jpg-extra";
-                case 4 -> bad.length = 4194305;
-                case 5 -> bad.bytes = new byte[4194305];
+                case 4 -> bad.length = 8388609;
+                case 5 -> bad.bytes = new byte[8388609];
                 case 6 -> bad.bytes = hugeBytes.toByteArray();
             }
             try (CoverLoader loader = new CoverLoader(uri -> bad); RequestScope scope = new RequestScope(() -> true)) {
@@ -202,7 +202,21 @@ public final class CoverLoaderContractTest {
             check(loader.request("stale", SOURCE, () -> true) == null && cancelledOpens.get() == 1);
         } finally { release.countDown(); }
         parallelCovers(fixture);
+        largeOriginal();
         System.out.println("PASS: " + checks + " cover source/HTTPS/bounds/decoder/cache/revocation checks (fake image HTTP)");
+    }
+    private static void largeOriginal() throws Exception {
+        var image=new BufferedImage(1600,1000,BufferedImage.TYPE_INT_RGB);var random=new Random(42);
+        for(int y=0;y<1000;y++)for(int x=0;x<1600;x++)image.setRGB(x,y,random.nextInt());
+        var out=new ByteArrayOutputStream();ImageIO.write(image,"png",out);image.flush();byte[] bytes=out.toByteArray();
+        check(bytes.length>4*1048576 && bytes.length<8*1048576);
+        for(boolean declared:List.of(true,false)) {
+            try(var loader=new CoverLoader(uri->{var response=new Response(uri,bytes);if(declared)response.length=bytes.length;return response;});var scope=new RequestScope(()->true)) {
+                var list=ImageIO.read(new ByteArrayInputStream(loader.load(SOURCE,scope)));
+                var playback=ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE,scope)));
+                check(list.getWidth()==480 && list.getHeight()==300 && playback.getWidth()==1024 && playback.getHeight()==640);
+            }
+        }
     }
     private static void parallelCovers(byte[] fixture) throws Exception {
         var started=new CountDownLatch(CoverLoader.PARALLEL_LOADS); var release=new CountDownLatch(1);
