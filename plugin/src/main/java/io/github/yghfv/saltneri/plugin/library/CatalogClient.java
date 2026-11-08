@@ -45,6 +45,15 @@ public final class CatalogClient {
             } catch (IOException error) { throw CatalogFailure.wrap(http.stage(), Reason.RESPONSE, error); }
         } catch (IOException error) { throw CatalogFailure.wrap(Stage.SESSION, Reason.RESPONSE, error); }
     }
+    public Page autoSourceSearch(String keyword,int duration,RequestScope request) throws IOException {
+        if(duration<0 || duration>4) throw new IllegalArgumentException("Invalid search duration");
+        if(account==null || account.platform()!=AccountPlatform.BILIBILI) throw CatalogFailure.of(Stage.BILI_SEARCH,Reason.LOGIN_REQUIRED);
+        var query=new Query(AccountPlatform.BILIBILI,View.SEARCH,0,1,0,keyword);
+        try(var http=new CatalogHttp(AccountPlatform.BILIBILI,account,clock,opener,sessions)) {
+            http.verify(request);
+            return bili(query,http,request,duration);
+        }
+    }
     /** Explicit play/filter/sort only: one verified session, one NetEase ID list, bounded detail batches. */
     public record CollectionContents(String title,List<Item> items,long totalCount) {
         public CollectionContents { items=List.copyOf(items); if(items.size()>10000) throw new IllegalArgumentException("Collection too large"); }
@@ -202,7 +211,7 @@ public final class CatalogClient {
         return page(viewTitle(query),items,more,total);
     }
     private CollectionContents neteaseFolder(Query query,CatalogHttp http,RequestScope request,boolean full) throws IOException {
-            Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
+            Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", full ? "100" : query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
             Map<String, Object> list = object(root.get("playlist")); if (id(list.get("id")) != query.folder()) throw invalid();
             List<Object> ids = array(list.get("trackIds")); if (ids.size() > 10000) throw invalid();
             Set<Long> all = new HashSet<>(); List<Long> selected = new ArrayList<>(); int offset = (query.page() - 1) * 20;
@@ -326,6 +335,9 @@ public final class CatalogClient {
                 "offset", Integer.toString((query.page() - 1) * 20), "total", "true");
     }
     private Page bili(Query query, CatalogHttp http, RequestScope request) throws IOException {
+        return bili(query,http,request,0);
+    }
+    private Page bili(Query query, CatalogHttp http, RequestScope request,int searchDurationFilter) throws IOException {
         if (query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL) return discovery.load(query,http,request);
         String base = "https://api.bilibili.com";
         if(query.view()==View.AUTHOR_VIDEOS) return authorVideos(query,http,request);
@@ -349,7 +361,7 @@ public final class CatalogClient {
         if (query.view() == View.SEARCH) {
             URI uri = BiliWbi.sign(base + "/x/web-interface/wbi/search/type", Map.of(
                     "search_type", "video", "keyword", query.keyword(), "page", Integer.toString(query.page()),
-                    "page_size", "20", "order", "totalrank", "duration", "0", "tids", "0"), wbi(http, request), clock.instant().getEpochSecond());
+                    "page_size", "20", "order", "totalrank", "duration", Integer.toString(searchDurationFilter), "tids", "0"), wbi(http, request), clock.instant().getEpochSecond());
             var data = object(success(http.json(uri, null, request), 0, http.stage()).get("data"));
             if (number(data.get("page"), query.page()) != query.page() || number(data.get("pagesize"), 20) != 20) throw invalid();
             long total = number(data.get("numResults"), -1), count = number(data.get("numPages"), total < 0 ? -1 : Math.max(1, (total + 19) / 20));

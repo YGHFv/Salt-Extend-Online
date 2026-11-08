@@ -11,6 +11,10 @@ public final class PlaybackSettingsContractTest {
             check(PlaybackSettings.parse("high","standard","2048",mode).coverMode().name().equals(mode.toUpperCase(java.util.Locale.ROOT)));
         check(PlaybackSettings.parse("high","standard","2048","invalid").coverMode()==io.github.yghfv.saltneri.plugin.ui.CoverMode.FIT);
         check(PlaybackSettings.DEFAULT.cacheBytes()==2L*1024*1024*1024);
+        check(!PlaybackSettings.DEFAULT.neteaseAutoSourceSwitch());
+        var original=PlaybackSettings.DEFAULT;
+        var automatic=new PlaybackSettings(original.bili(),original.netease(),original.cacheBytes(),original.coverMode(),true);
+        check(!automatic.qualityKey().equals(original.qualityKey()));
         check(PlaybackSettings.parse(null,null,null).equals(PlaybackSettings.DEFAULT));
         for(String bad:new String[]{"-1","2147483648","999999999999999999","2g",""})
             check(PlaybackSettings.parse("bad","bad",bad).equals(PlaybackSettings.DEFAULT));

@@ -18,6 +18,14 @@ public final class NativeDesk {
     private final Function<AccountPlatform, AccountLoginController.Snapshot> accounts;
     private final BiConsumer<AccountPlatform, Action> actions;
     private final BooleanSupplier permitted;
+    private Consumer<String> errorToast = text -> {};
+    private final Map<String,String> reportedErrors = new java.util.HashMap<>();
+    public void errorToast(Consumer<String> notifier) { errorToast=Objects.requireNonNull(notifier); }
+    public void error(String text) { if(permitted.getAsBoolean() && text!=null && !text.isBlank()) errorToast.accept(text); }
+    private synchronized void report(String source,String text) {
+        String previous=reportedErrors.put(source,text);
+        if(!text.equals(previous)) error(text);
+    }
     private Consumer<LibraryController.Playlist> playlistPlayer = list -> { throw new IllegalStateException("Playlist playback not configured"); };
     public void playlistPlayer(Consumer<LibraryController.Playlist> player) { playlistPlayer=Objects.requireNonNull(player); }
     private SavedPlaylistController savedPlaylists;
@@ -43,11 +51,21 @@ public final class NativeDesk {
     }
     private void check() { if (!permitted.getAsBoolean()) throw new SecurityException("Native desk unavailable"); }
     public State snapshot(AccountPlatform platform) {
-        check(); var catalog=library.snapshot(platform); var pending=library.takePlaylist(); if(pending!=null) playlistPlayer.accept(pending);
-        return new State(catalog, player.snapshot(), accounts.apply(platform));
+        check(); var catalog=library.snapshot(platform); var pending=library.takePlaylist();
+        if(pending!=null) try {playlistPlayer.accept(pending);}
+        catch(RuntimeException failure) {error("\u64ad\u653e\u5168\u90e8\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u6388\u6743\u540e\u91cd\u8bd5");}
+        var playback=player.snapshot();
+        report("catalog:"+platform,(String)catalog.getOrDefault("error",""));
+        report("playback",Boolean.TRUE.equals(playback.get("active"))?(String)playback.getOrDefault("error",""):"");
+        var saved=savedPlaylists();
+        report("saved",saved.loading() || saved.status().equals("\u5df2\u6dfb\u52a0\u5230\u6b4c\u5355")?"":saved.status());
+        return new State(catalog, playback, accounts.apply(platform));
     }
     public void browse(AccountPlatform platform, Catalog.View view) { check(); library.browse(platform, view); }
-    public boolean enter(AccountPlatform platform) { check(); return library.enter(platform); }
+    private Function<AccountPlatform,Catalog.View> platformHome=p->Catalog.View.DISCOVER;
+    public void platformHome(Function<AccountPlatform,Catalog.View> home) {platformHome=Objects.requireNonNull(home);}
+    public Catalog.View platformHome(AccountPlatform platform) {return platformHome.apply(platform);}
+    public boolean enter(AccountPlatform platform) { check(); return library.enter(platform,platformHome(platform)); }
     public void search(String keyword) { check(); library.search(keyword); }
     public void search(AccountPlatform platform, String keyword) { check(); library.search(platform, keyword); }
     public void reload() { check(); library.reload(); }

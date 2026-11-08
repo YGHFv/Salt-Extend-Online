@@ -38,8 +38,14 @@ public final class SaltPlaylistGateway {
     }
     @SuppressWarnings("unchecked")
     public List<Choice> choices() throws Exception {
+        return choices(0);
+    }
+    @SuppressWarnings("unchecked")
+    public List<Choice> choices(long timeoutMillis) throws Exception {
         Flow<List<Object>> flow=(Flow<List<Object>>)list.invoke(repository(playlistRepo));
-        List<Object> values=BuildersKt.runBlocking(EmptyCoroutineContext.INSTANCE,(scope,continuation)->FlowKt.first(flow,continuation));
+        List<Object> values=BuildersKt.runBlocking(EmptyCoroutineContext.INSTANCE,(scope,continuation)->
+                timeoutMillis>0?kotlinx.coroutines.TimeoutKt.withTimeout(timeoutMillis,(s,c)->FlowKt.first(flow,c),continuation)
+                        :FlowKt.first(flow,continuation));
         List<Choice> result=new ArrayList<>();
         for(Object value:values) result.add(new Choice((String)value.getClass().getMethod("getId").invoke(value),
                 (String)value.getClass().getMethod("getTitle").invoke(value),value));

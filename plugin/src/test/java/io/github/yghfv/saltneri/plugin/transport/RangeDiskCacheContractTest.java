@@ -42,6 +42,7 @@ public final class RangeDiskCacheContractTest {
         }
         check(!Files.exists(directory));
         indexedRanges();
+        readAhead();
         var count=new AtomicInteger(); Clock clock=Clock.fixed(Instant.parse("2026-11-07T00:00:00Z"),ZoneOffset.UTC);
         try(var server=new LoopbackRangeServer(clock,uri->{count.incrementAndGet();return new TransportContractTest.FakeConnection(uri,100);})) {
             server.cacheLimit(20);
@@ -59,6 +60,107 @@ public final class RangeDiskCacheContractTest {
             server.revoke(local); check(TransportContractTest.call(local,"GET","Range: bytes=0-9\r\n","").code()==404 && count.get()==3);
         }
         System.out.println("PASS: "+checks+" disk quota/LRU/clear/concurrency/lease isolation and real loopback cache-hit checks; no external traffic");
+    }
+    private static void await(java.util.function.BooleanSupplier done) throws Exception {
+        long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(4);
+        while(!done.getAsBoolean() && System.nanoTime()<end) Thread.sleep(10);
+        check(done.getAsBoolean());
+    }
+    private static void readAhead() throws Exception {
+        int chunk=512*1024,total=chunk*12;Clock clock=Clock.systemUTC();
+        var ranges=new CopyOnWriteArrayList<String>(); var calls=new AtomicInteger();
+        try(var server=new LoopbackRangeServer(clock,uri->{
+            calls.incrementAndGet();
+            return new TransportContractTest.FakeConnection(uri,total) {
+                @Override public java.io.InputStream getInputStream() {
+                    ranges.add(getRequestProperty("Range"));return super.getInputStream();
+                }
+            };
+        })) {
+            server.cacheLimit(chunk*16);
+            URI local=server.register(new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/ahead"),
+                    Map.of(),"fixture",clock.instant().plusSeconds(60),total));
+            try(var scope=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {server.prefetch(local,scope);}
+            check(calls.get()==1 && server.cacheBytes()==chunk);
+            Thread.sleep(150);check(calls.get()==1); // Prefix prefetch does not crawl the song.
+            check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\n","").body().length==chunk);
+            await(()->server.cacheBytes()==chunk*3);check(calls.get()==3);
+            Thread.sleep(150);check(calls.get()==3 && ranges.size()==3);
+            check(TransportContractTest.call(local,"GET","Range: bytes="+chunk+"-"+(2*chunk-1)+"\r\n","").body()[17]==17);
+            await(()->server.cacheBytes()==chunk*4);check(calls.get()==4);
+            // Seek replaces the old window and warms only its two neighbors.
+            check(TransportContractTest.call(local,"GET","Range: bytes="+(7*chunk)+"-"+(8*chunk-1)+"\r\n","").code()==206);
+            await(()->server.cacheBytes()==chunk*7);check(calls.get()==7);
+            check(!ranges.contains("bytes="+(4*chunk)+"-"+(5*chunk-1)));
+            server.cacheLimit(0);int before=calls.get();
+            check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\n","").code()==206);
+            Thread.sleep(150);check(calls.get()==before+1 && server.cacheBytes()==0);
+            server.revoke(local);
+            check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\n","").code()==404);
+        }
+        for(int mode=0;mode<3;mode++) cancelledReadAhead(clock,chunk,total,mode);
+        coalescedReadAhead(clock,chunk);
+    }
+    private static void cancelledReadAhead(Clock clock,int chunk,int total,int mode) throws Exception {
+        var reading=new CountDownLatch(1);var cancelled=new CountDownLatch(1);var calls=new AtomicInteger();
+        try(var server=new LoopbackRangeServer(clock,uri->{
+            calls.incrementAndGet();
+            return new TransportContractTest.FakeConnection(uri,total) {
+                @Override public java.io.InputStream getInputStream() {
+                    if(range().first()!=chunk) return super.getInputStream();
+                    return new java.io.InputStream() {
+                        public int read() throws java.io.IOException {
+                            reading.countDown();
+                            try {if(!cancelled.await(4,TimeUnit.SECONDS))throw new java.io.IOException("Fixture stalled");}
+                            catch(InterruptedException stopped){Thread.currentThread().interrupt();}
+                            throw new java.io.IOException("Fixture revoked");
+                        }
+                    };
+                }
+                @Override public void disconnect(){super.disconnect();if(range().first()==chunk)cancelled.countDown();}
+            };
+        })) {
+            server.cacheLimit(chunk*16);
+            URI local=server.register(new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/cancel"),
+                    Map.of(),"fixture",clock.instant().plusSeconds(60),total));
+            check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\n","").code()==206);
+            check(reading.await(3,TimeUnit.SECONDS));
+            if(mode==0) server.revoke(local);
+            else if(mode==1) server.clearCache();
+            else {
+                check(TransportContractTest.call(local,"GET","Range: bytes="+(7*chunk)+"-"+(8*chunk-1)+"\r\n","").code()==206);
+                await(()->server.cacheBytes()==4L*chunk);
+            }
+            check(cancelled.await(1,TimeUnit.SECONDS));
+            Thread.sleep(100);check(server.cacheBytes()==(mode==2?4L*chunk:0) && calls.get()==(mode==2?5:2));
+        }
+    }
+    private static void coalescedReadAhead(Clock clock,int chunk) throws Exception {
+        var reading=new CountDownLatch(1);var release=new CountDownLatch(1);var calls=new AtomicInteger();
+        try(var server=new LoopbackRangeServer(clock,uri->{
+            calls.incrementAndGet();
+            return new TransportContractTest.FakeConnection(uri,3L*chunk) {
+                @Override public java.io.InputStream getInputStream() {
+                    if(range().first()==chunk) {
+                        reading.countDown();
+                        try {check(release.await(2,TimeUnit.SECONDS));}
+                        catch(InterruptedException stopped){Thread.currentThread().interrupt();throw new AssertionError(stopped);}
+                    }
+                    return super.getInputStream();
+                }
+            };
+        });var worker=Executors.newSingleThreadExecutor()) {
+            server.cacheLimit(8L*chunk);
+            URI local=server.register(new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/coalesce"),
+                    Map.of(),"fixture",clock.instant().plusSeconds(60),3L*chunk));
+            check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\n","").code()==206);
+            check(reading.await(2,TimeUnit.SECONDS));
+            var pending=worker.submit(()->TransportContractTest.call(local,"GET","Range: bytes="+chunk+"-"+(2*chunk-1)+"\r\n",""));
+            Thread.sleep(100);check(calls.get()==2);
+            release.countDown();
+            check(pending.get(3,TimeUnit.SECONDS).body().length==chunk);
+            await(()->server.cacheBytes()==3L*chunk);check(calls.get()==3);
+        } finally {release.countDown();}
     }
     private static void indexedRanges() {
         // Equal values still represent different live leases; never share or revoke their bytes.

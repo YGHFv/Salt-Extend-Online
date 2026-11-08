@@ -66,7 +66,45 @@ public final class LazyPlaylistContractTest {
         }
         check(binding.pending.isEmpty());
         runway(profile);
+        unavailableFirst(profile);
         System.out.println("PASS: "+checks+" lazy 100-track native queue, bounded URL cache, first-track failure and account revocation checks; no audio/network");
+    }
+    private static void unavailableFirst(Salt1193Probe.Result profile) throws Exception {
+        var rows=List.of(new Catalog.Item(Catalog.Kind.TRACK,"1","Unavailable","Artist",1000,true),
+                new Catalog.Item(Catalog.Kind.TRACK,"2","Playable","Artist",1000,true));
+        for(int code:new int[]{-1,301,403,429}) {
+            var binding=new Binding(); var queue=new Queue(); var calls=new AtomicInteger();
+            try(var server=TransportContractTest.offlineServer(java.time.Clock.systemUTC(),()->true);
+                var session=new LazyPlaylistSession(profile,binding,server,queue,rows,"fixture",()->true,(item,scope,request)->{
+                    calls.incrementAndGet();
+                    if(item.target().equals("1")) {
+                        if(code==-1) throw new io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable(-1);
+                        throw new io.github.yghfv.saltneri.plugin.netease.NeteaseClient.PlatformRejected(code);
+                    }
+                    return audio(item,scope);
+                })) {
+                if(code==-1) {
+                    session.play();
+                    check(calls.get()==2 && queue.items.size()==1 && binding.pending.size()==1);
+                    check(profile.mediaFactory().read(queue.items.getFirst())[1].equals("Playable"));
+                } else {
+                    try {session.play();throw new AssertionError("Account/risk failure skipped");}
+                    catch(io.github.yghfv.saltneri.plugin.netease.NeteaseClient.PlatformRejected denied) {check(denied.code()==code);}
+                    check(calls.get()==1 && queue.replacements==0);
+                }
+            }
+            check(binding.pending.isEmpty());
+        }
+        var binding=new Binding();var queue=new Queue();var calls=new AtomicInteger();
+        var many=new ArrayList<Catalog.Item>();for(int i=1;i<=20;i++)many.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,"Song","Artist",1000,true));
+        try(var server=TransportContractTest.offlineServer(java.time.Clock.systemUTC(),()->true);
+            var session=new LazyPlaylistSession(profile,binding,server,queue,many,"fixture",()->true,(item,scope,request)->{
+                calls.incrementAndGet();throw new io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable(-1);
+            })) {
+            try {session.play();throw new AssertionError("All denied accepted");}
+            catch(io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable expected) {check(calls.get()==5 && queue.replacements==0);}
+        }
+        check(binding.pending.isEmpty());
     }
     private static void runway(Salt1193Probe.Result profile) throws Exception {
         var time=new AtomicReference<>(Instant.now());

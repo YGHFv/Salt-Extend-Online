@@ -43,7 +43,7 @@ public final class SidebarOptimizationRenderTest {
             check(count>10);
         }
     }
-    private static final class Hooks extends HookRegistrar {
+    private static class Hooks extends HookRegistrar {
         int installed, closed;
         private HookHandle handle() { return new HookHandle() {
             boolean done;
@@ -57,7 +57,9 @@ public final class SidebarOptimizationRenderTest {
                     || (c.equals(SaltSidebarBindings.TITLEBAR) && i.equals(SaltSidebarBindings.WINDOW) && t.equals(SaltSidebarBindings.TITLE_PARAMETERS)));
             installed++; return handle();
         }
-        public HookHandle replaceComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) { throw new AssertionError("Defaults skip native replacement"); }
+        public HookHandle replaceComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) {
+            check(c.equals(SaltNativeUi.SIDEBAR) || c.equals(SaltSidebarSettingsBindings.SCREEN));return handle();
+        }
         public <S> HookHandle appendContent(String c,String m,String i,String a,Class<S> s,List<String> t,int p,ContentHook<S> h) { throw new AssertionError(); }
     }
     private static Object sheet() throws Exception {
@@ -80,10 +82,17 @@ public final class SidebarOptimizationRenderTest {
                 SaltSidebarBindings.CAPTION,"\u037f",SaltSidebarBindings.TOGGLE,SaltSidebarBindings.PARAMETERS) != null);
         var permitted = new AtomicBoolean(true); var remote = new AtomicInteger(); var subscription = new AtomicInteger();
         var flow = StateFlowKt.MutableStateFlow(List.of(playlist("fixture-one", "Fixture playlist")));
+        var toggleContent=new java.util.concurrent.atomic.AtomicReference<ComposableHook>();
+        var nativeHooks=new Hooks() {
+            @Override public HookHandle afterComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) {
+                if(c.equals(SaltSidebarBindings.CAPTION) && p==60)toggleContent.set(h);
+                return super.afterComposable(c,m,i,t,p,h);
+            }
+        };
         try (OnlinePlaybackController player = new OnlinePlaybackController(p->null,permitted::get,()->false,(a,s)->{throw new AssertionError("Playback");});
              LibraryController library = new LibraryController(p->null,permitted::get,t->{throw new AssertionError("Prepare");},()->{},Clock.systemUTC(),
                      p->(q,v,s,r)->{remote.incrementAndGet(); throw new AssertionError("Network");});
-             SaltNativeUi ui = new SaltNativeUi(host,new Hooks(),new NativeDesk(library,player,
+             SaltNativeUi ui = new SaltNativeUi(host,nativeHooks,new NativeDesk(library,player,
                      p->new AccountLoginController.Snapshot(AccountLoginController.Phase.IDLE,"",null,""),(p,a)->{},permitted::get),permitted::get);
              SaltSidebarBindings binding = new SaltSidebarBindings(host,()->{subscription.incrementAndGet(); return flow;})) {
             var hooks = new Hooks();
@@ -104,18 +113,22 @@ public final class SidebarOptimizationRenderTest {
                     new HashSet<>(binding.entries().stream().map(SaltSidebarBindings.Entry::route).toList()),stack,sheet());
             var localState = (ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u10eb").getMethod("\u037f").invoke(null);
             var localNav = (ProvidableCompositionLocal<Object>)Class.forName("com.xuncorp.voxzen.ui.navigation.AppNavigationKt").getMethod("getLocalNavigator").invoke(null);
+            var blur=Class.forName("com.xuncorp.voxzen.ui.component.\u052c");
+            var haze=Class.forName("dev.chrisbanes.haze.HazeState").getConstructor().newInstance();
+            var localPopup=(ProvidableCompositionLocal<Object>)blur.getMethod("\u037f").invoke(null);
+            var localDialog=(ProvidableCompositionLocal<Object>)blur.getMethod("\u0528").invoke(null);
             ComposableHook content = (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltSidebarContent")
                     .getConstructor(SaltSidebarBindings.class,SaltNativeUi.class).newInstance(binding,ui);
             ComposableHook anchorContent = (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltSidebarAnchor")
                     .getConstructor(SaltSidebarBindings.class,SaltNativeUi.class).newInstance(binding,ui);
             Map<Object,String> nativeLabels = new LinkedHashMap<>();
-            try(var transformed = new SidebarHookTransformFixture(anchorContent, content)) {
+            try(var transformed = new SidebarHookTransformFixture(anchorContent, content,toggleContent.get())) {
             SwingUtilities.invokeAndWait(()->{
                 try {
                     for(int width : new int[]{1280,520}) {
                         binding.enabled(false); stateType.getMethod("\u037f",boolean.class).invoke(state,true);
                         var scene = new ImageComposeScene(width,100,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(composer,flags)->{
-                            CompositionLocalKt.CompositionLocalProvider(new ProvidedValue[]{localState.provides(state),localNav.provides(nav)},(c,f)->{
+                            CompositionLocalKt.CompositionLocalProvider(new ProvidedValue[]{localState.provides(state),localNav.provides(nav),localPopup.provides(haze),localDialog.provides(haze)},(c,f)->{
                                 for(var entry:binding.entries()) nativeLabels.put(entry.route(),binding.label(entry,c));
                                 Modifier modifier=SemanticsModifierKt.semantics(Modifier.Companion,false,s->{SemanticsPropertiesKt.setContentDescription(s,"Fixture toggle");return Unit.INSTANCE;});
                                 transformed.render(modifier,c);
@@ -136,6 +149,27 @@ public final class SidebarOptimizationRenderTest {
                                 check(bili.getBoundsInRoot().getLeft()>=toggleNode.getBoundsInRoot().getRight());
                                 check(Math.abs(bili.getBoundsInRoot().getTop()-toggleNode.getBoundsInRoot().getTop())<2);
                                 check(bili.getBoundsInRoot().getWidth()==40f && bili.getBoundsInRoot().getLeft()>260f);
+                                var visibleBili=bili.getBoundsInRoot();
+                                var installedBinding=SaltNativeUi.class.getDeclaredField("sidebar");installedBinding.setAccessible(true);
+                                installedBinding.set(ui,binding);
+                                ui.sidebarSettings(true,false,true,Set.of());HeaderSearchRenderTest.render(scene);
+                                var hiddenToggle=HeaderSearchRenderTest.find(scene,"Fixture toggle",SemanticsActions.INSTANCE.getOnClick());
+                                check(hiddenToggle==null || hiddenToggle.getBoundsInRoot().getWidth()==0f && hiddenToggle.getBoundsInRoot().getHeight()==0f);
+                                var hiddenBili=HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick());
+                                check(hiddenBili!=null && Math.abs(visibleBili.getLeft()-hiddenBili.getBoundsInRoot().getLeft()-binding.captionWidth())<2);
+                                check(Math.abs(visibleBili.getTop()-hiddenBili.getBoundsInRoot().getTop())<1);
+                                check(toggleContent.get()!=null);
+                                stateType.getMethod("\u037f",boolean.class).invoke(state,true);
+                                ui.sidebarSettings(true,true,true,Set.of());HeaderSearchRenderTest.render(scene);
+                                check(!binding.expanded(state));
+                                check(HeaderSearchRenderTest.find(scene,"Fixture toggle",SemanticsActions.INSTANCE.getOnClick())==null);
+                                check(HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                check(HeaderSearchRenderTest.find(scene,"\u7f51\u6613\u4e91",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                check(Math.abs(visibleBili.getTop()-HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getTop())<1);
+                                ui.sidebarSettings(true,false,false,Set.of());HeaderSearchRenderTest.render(scene);
+                                installedBinding.set(ui,null);
+                                check(HeaderSearchRenderTest.find(scene,"Fixture toggle",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getWidth()>0);
+                                check(Math.abs(visibleBili.getTop()-HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getTop())<1);
                                 centeredIcon(scene,"Bilibili",true);centeredIcon(scene,"\u7f51\u6613\u4e91",true);
                                 float right=toggleNode.getBoundsInRoot().getRight();
                                 for(var entry:binding.entries()) {
@@ -154,10 +188,57 @@ public final class SidebarOptimizationRenderTest {
                                 HeaderSearchRenderTest.click(scene,"Fixture playlist");
                                 check(stack.getLast().getClass().getSimpleName().equals("PlaylistContent"));
                                 check(!binding.expanded(state));
+                                ui.sidebarSettings(true,false,Set.of());HeaderSearchRenderTest.render(scene);
+                                var playlistNode=HeaderSearchRenderTest.find(scene,"Fixture playlist",SemanticsActions.INSTANCE.getOnClick());
+                                var playlistBounds=playlistNode.getBoundsInRoot();
+                                NativePageRenderTest.tap(scene,(playlistBounds.getLeft()+playlistBounds.getRight())/2,
+                                        (playlistBounds.getTop()+playlistBounds.getBottom())/2,System.currentTimeMillis(),1);
+                                HeaderSearchRenderTest.render(scene);
+                                check(HeaderSearchRenderTest.find(scene,"\u7f16\u8f91",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                check(HeaderSearchRenderTest.find(scene,"\u5220\u9664",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                HeaderSearchRenderTest.click(scene,"\u7f16\u8f91");
+                                check(stack.getLast().getClass().getSimpleName().equals("EditPlaylist"));
+                                check(stack.getLast().getClass().getMethod("getId").invoke(stack.getLast()).equals("fixture-one"));
+                                NativePageRenderTest.tap(scene,(playlistBounds.getLeft()+playlistBounds.getRight())/2,
+                                        (playlistBounds.getTop()+playlistBounds.getBottom())/2,System.currentTimeMillis(),1);
+                                HeaderSearchRenderTest.render(scene);
+                                HeaderSearchRenderTest.click(scene,"\u5220\u9664");
+                                check(HeaderSearchRenderTest.find(scene,"\u53d6\u6d88",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                HeaderSearchRenderTest.click(scene,"\u53d6\u6d88");
+                                ui.sidebarSettings(false,false,Set.of());HeaderSearchRenderTest.render(scene);
                                 HeaderSearchRenderTest.click(scene,"Bilibili"); check(ui.platform(stack.getLast())==AccountPlatform.BILIBILI);
                                 HeaderSearchRenderTest.click(scene,"\u7f51\u6613\u4e91"); check(ui.platform(stack.getLast())==AccountPlatform.NETEASE);
                                 flow.setValue(List.of()); HeaderSearchRenderTest.render(scene);
                                 check(HeaderSearchRenderTest.find(scene,"Fixture playlist",SemanticsActions.INSTANCE.getOnClick())==null);
+                                ui.sidebarSettings(false,false,Set.of("MusicLibrary","BILIBILI"));
+                                HeaderSearchRenderTest.render(scene);
+                                check(HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick())==null);
+                                check(HeaderSearchRenderTest.find(scene,nativeLabels.get(binding.entries().get(5).route()),SemanticsActions.INSTANCE.getOnClick())==null);
+                                check(HeaderSearchRenderTest.find(scene,"\u7f51\u6613\u4e91",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                ui.sidebarSettings(false,false,Set.of());HeaderSearchRenderTest.render(scene);
+                                installedBinding.set(ui,binding);
+                                for(float scale:new float[]{1.25f,1.5f,2f}) {
+                                    stateType.getMethod("\u037f",boolean.class).invoke(state,false);
+                                    ui.sidebarSettings(true,true,false,Set.of());
+                                    var scaled=new ImageComposeScene((int)(1280*scale),(int)(100*scale),DensityKt.Density(scale,1f),
+                                            LayoutDirection.Ltr,Dispatchers.getUnconfined(),(composer,flags)->{
+                                        CompositionLocalKt.CompositionLocalProvider(new ProvidedValue[]{localState.provides(state),localNav.provides(nav)},(c,f)->{
+                                            transformed.render(Modifier.Companion,c);return Unit.INSTANCE;
+                                        },composer,0);return Unit.INSTANCE;
+                                    });
+                                    try {
+                                        HeaderSearchRenderTest.render(scaled);
+                                        var shown=HeaderSearchRenderTest.find(scaled,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                                        ui.sidebarSettings(true,true,true,Set.of());HeaderSearchRenderTest.render(scaled);
+                                        var concealed=HeaderSearchRenderTest.find(scaled,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                                        check(Math.abs(shown.getTop()-concealed.getTop())<=1);
+                                        check(Math.abs(shown.getLeft()-concealed.getLeft()-binding.captionWidth()*scale)<=1);
+                                        ui.sidebarSettings(true,true,false,Set.of());HeaderSearchRenderTest.render(scaled);
+                                        check(Math.abs(shown.getTop()-HeaderSearchRenderTest.find(scaled,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getTop())<=1);
+                                    } finally {scaled.close();}
+                                }
+                                ui.sidebarSettings(true,false,false,Set.of());
+                                installedBinding.set(ui,null);HeaderSearchRenderTest.render(scene);
                             }
                             var scroll=HeaderSearchRenderTest.find(scene,null,SemanticsActions.INSTANCE.getScrollBy()); check(scroll!=null);
                             check(scroll.getBoundsInRoot().getRight()<=width-240+1);

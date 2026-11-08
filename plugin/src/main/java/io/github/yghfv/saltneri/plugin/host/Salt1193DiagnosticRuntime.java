@@ -28,6 +28,8 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     private volatile boolean closed;
     private java.util.function.Supplier<io.github.yghfv.saltneri.plugin.PlaybackSettings> settings=()->io.github.yghfv.saltneri.plugin.PlaybackSettings.DEFAULT;
     public void settings(java.util.function.Supplier<io.github.yghfv.saltneri.plugin.PlaybackSettings> source) { settings=Objects.requireNonNull(source); }
+    private java.util.function.Function<io.github.yghfv.saltneri.plugin.auth.AccountPlatform,io.github.yghfv.saltneri.plugin.auth.AccountCredentials> accounts=p->null;
+    public void accounts(java.util.function.Function<io.github.yghfv.saltneri.plugin.auth.AccountPlatform,io.github.yghfv.saltneri.plugin.auth.AccountCredentials> source) {accounts=Objects.requireNonNull(source);}
     public void cacheLimit(long bytes) { transport.cacheLimit(bytes); }
     public void clearCache() { transport.clearCache(); }
     public long cacheBytes() { return transport.cacheBytes(); }
@@ -67,7 +69,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
             adapter = new Salt1193StreamAdapter(loader, profile, authorized, Salt1193StreamAdapter.nativeFactory(loader, transport::revoke));
             return new Salt1193DiagnosticRuntime(profile, adapter, transport,
                     Salt1193EngineLink.nativeHost(loader, profile), Salt1193EngineLink.hooks(registrar),
-                    Salt1193PlaybackSession.nativeQueue(loader, profile, authorized), authorized);
+                    Salt1193PlaybackSession.nativeQueue(loader, profile, authorized,registrar), authorized);
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
             try { if (adapter != null) adapter.close(); } finally { transport.close(); }
             throw failure;
@@ -157,6 +159,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         catch (ReflectiveOperationException | RuntimeException failure) { track.close(); throw failure; }
     }
     public synchronized void revokePlatform(MediaLease.Platform platform) {
+        queue.cancelStart();
         if(savedTracks!=null) savedTracks.revoke(io.github.yghfv.saltneri.plugin.auth.AccountPlatform.valueOf(platform.name()));
         if(playlist!=null && playlistPlatform==platform) { playlist.close(); playlist=null; }
         for (String scope : java.util.List.copyOf(sessions.keySet())) if (sessionPlatforms.get(scope) == platform) {
@@ -174,7 +177,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
                     public Object revision() { return settings.get().qualityKey(); }
                     public io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.library.Catalog.Item item,String identity,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
                         return io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.resolveAudio(list.account(),
-                            new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request,settings.get());
+                            new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),identity,request,settings.get(),accounts);
                     }
                 },
                 item -> list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE
@@ -192,6 +195,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     @Override public synchronized void close() {
         if (closed) return;
         closed = true;
+        queue.close();
         if(savedTracks!=null) {savedTracks.close();savedTracks=null;}
         if(playlist!=null) { playlist.close(); playlist=null; }
         watchdog.shutdownNow();

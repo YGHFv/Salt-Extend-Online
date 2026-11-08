@@ -17,10 +17,17 @@ import java.util.concurrent.*;
 /** Preparation is inert; an explicit double-click owns a cancellable, one-use resolve-and-play intent. */
 public final class OnlinePlaybackController implements AutoCloseable {
     public record Target(AccountPlatform platform, String id) { }
-    public record Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target) {
+    public record Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target, TrackKey sourceKey) {
+        public Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target) {this(key,metadata,lease,expiresAt,target,key);}
         public Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt) { this(key,metadata,lease,expiresAt,null); }
         public static Audio from(BiliClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
         public static Audio from(NeteaseClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
+        public boolean transportMatches() {
+            return sourceKey!=null && sourceKey.platform().name().equals(lease.platform().name()) && lease.isActive()
+                    && (sourceKey.equals(key) || key.platform()==TrackKey.Platform.NETEASE
+                        && sourceKey.platform()==TrackKey.Platform.BILIBILI && target!=null
+                        && target.platform()==AccountPlatform.NETEASE && key.equals(TrackKey.netease(target.id())));
+        }
         @Override public String toString() { return "PreparedAudio[" + key.stableId() + ", URL redacted]"; }
     }
     public enum QueueAction { PLAY, AFTER_CURRENT, AFTER_LAST_ADDED, AT_QUEUE_END }
@@ -56,7 +63,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
     private OnlinePlaybackController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, BooleanSupplier armed,
                                     Player player, Clock clock, Function<AccountCredentials, PlatformResolutionController.Resolver<Target, String, Audio>> testResolver, Supplier<PlaybackSettings> settings) {
         this.accounts = accounts; this.authorized = authorized; this.armed = armed; this.player = player;
-        resolver = new PlatformResolutionController<>("Online", account -> testResolver == null ? (target, quality, scope, request) -> resolveAudio(account,target,scope,request,settings.get())
+        resolver = new PlatformResolutionController<>("Online", account -> testResolver == null ? (target, quality, scope, request) -> resolveAudio(account,target,scope,request,settings.get(),accounts)
             : testResolver.apply(account), () -> accounts.apply(platform), authorized, clock, Audio::expiresAt,
                 audio -> "\u97f3\u8f68\u5df2\u51c6\u5907\uff0c\u5c1a\u672a\u64ad\u653e\u3002", error -> null);
         playbackWorker = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -71,15 +78,23 @@ public final class OnlinePlaybackController implements AutoCloseable {
             return resolveAudio(account,target,scope,request,PlaybackSettings.DEFAULT);
     }
     public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings) throws Exception {
+            return resolveAudio(account,target,scope,request,settings,p->null);
+    }
+    public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings,Function<AccountPlatform,AccountCredentials> accounts) throws Exception {
             Audio audio;
             if (target.platform() == AccountPlatform.BILIBILI) {
                 var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
                 audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
             } else {
-                var resolved = new NeteaseClient(account).resolve(NeteaseTarget.parse(target.id()), settings.netease(), scope, request);
-                audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
+                try {
+                    var resolved = new NeteaseClient(account).resolve(NeteaseTarget.parse(target.id()), settings.netease(), scope, request);
+                    audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
+                } catch(NeteaseClient.TrackUnavailable unavailable) {
+                    if(!settings.neteaseAutoSourceSwitch())throw unavailable;
+                    audio=NeteaseAutoSourceResolver.resolve(account,target,scope,request,settings,accounts,unavailable);
+                }
             }
-            return new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),target);
+            return new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),target,audio.sourceKey());
     }
     @FunctionalInterface public interface PlaylistPlayer { void play(LibraryController.Playlist list, BooleanSupplier active) throws Exception; }
     public synchronized void playPlaylist(LibraryController.Playlist list, Runnable setup, PlaylistPlayer submit) {
@@ -94,17 +109,23 @@ public final class OnlinePlaybackController implements AutoCloseable {
                 published.set(true);
                 synchronized(this) { if(token.equals(expected)) { consumed=true; status=""; } }
             } catch(Exception | LinkageError failure) {
-                synchronized(this) { if(token.equals(expected)) { submissionFailed=true; status="\u5408\u96c6\u64ad\u653e\u5931\u8d25 [PLAYLIST/"+failure.getClass().getSimpleName()+"]"; } }
+                synchronized(this) { if(token.equals(expected)) {
+                    submissionFailed=true;
+                    String reason=failure instanceof NeteaseClient.PlatformRejected denied
+                            ? (denied instanceof NeteaseClient.TrackUnavailable ? "TRACK_UNAVAILABLE=" : "NETEASE_REJECTED=")+denied.code()
+                            : failure.getClass().getSimpleName();
+                    status="\u5408\u96c6\u64ad\u653e\u5931\u8d25 [PLAYLIST/"+reason+"]";
+                } }
             }
         });
     }
-    private static Audio withCover(Audio audio, java.net.URI source, io.github.yghfv.saltneri.plugin.net.RequestScope request, io.github.yghfv.saltneri.plugin.ui.CoverMode mode) {
+    static Audio withCover(Audio audio, java.net.URI source, io.github.yghfv.saltneri.plugin.net.RequestScope request, io.github.yghfv.saltneri.plugin.ui.CoverMode mode) {
         if (source == null) return audio;
         try (var images = new io.github.yghfv.saltneri.plugin.ui.CoverLoader();
              var coverRequest = new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> { request.check(); return true; }, 3000)) {
             byte[] png = images.loadPlayback(source, coverRequest,mode);
             Metadata old = audio.metadata();
-            return new Audio(audio.key(), new Metadata(old.title(), old.artist(), old.album(), old.albumArtist(), png), audio.lease(), audio.expiresAt());
+            return new Audio(audio.key(), new Metadata(old.title(), old.artist(), old.album(), old.albumArtist(), png), audio.lease(), audio.expiresAt(),audio.target(),audio.sourceKey());
         } catch (java.io.IOException | RuntimeException ignored) { request.check(); return audio; }
     }
     public synchronized void prepare(Target target) {
@@ -160,7 +181,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
         var state = resolver.snapshot(); Audio audio = state.resolved();
         if (!authorized.getAsBoolean() || selected != null && !selected.isActive() || accounts.apply(platform) != selected) throw new SecurityException("Account or permission changed");
         if (audio == null || consumed || token.isEmpty() || !token.equals(capability)) throw new IllegalStateException("Prepare and confirm the current track first");
-        if (!audio.key().platform().name().equals(platform.name()) || selected != null && !audio.lease().belongsTo(selected.accountScope())) throw new SecurityException("Prepared audio scope mismatch");
+        if (!audio.transportMatches() || !audio.key().platform().name().equals(platform.name()) || selected != null && !audio.lease().belongsTo(selected.accountScope())) throw new SecurityException("Prepared audio scope mismatch");
         return audio;
     }
     public synchronized void adapterFailed() {

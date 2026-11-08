@@ -5,25 +5,68 @@
       "config": "config.json",
       "preferences": [
         {
-          "type": "button",
-          "title": "打开在线音乐",
-          "summary": "从侧栏进入 Bilibili / 网易云；登录、搜索与账号管理都在平台页面。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openLibrary"
-        },
-        {
-          "key": "auth.remember",
-          "type": "switch",
-          "title": "记住登录",
-          "summary": "加密保存并在启动时恢复本插件账号；关闭后删除保存，不退出当前账号。",
-          "default_value": true
-        },
-        {
           "key": "ui.sidebarOptimization",
           "type": "switch",
           "title": "侧栏优化",
           "summary": "收起侧栏时，将导航图标移至顶部侧栏切换按钮右侧；再次展开自动还原。包括在线平台和本地歌单，窄窗口可横向滚动。默认关闭。",
           "default_value": false
+        },
+        {
+          "key": "ui.hiddenSidebar",
+          "type": "switch",
+          "title": "隐藏侧栏",
+          "summary": "仅在侧栏优化开启时生效。启用后收起侧栏，鼠标移到侧边或切换按钮不再自动展开；只有点击切换按钮才展开。",
+          "default_value": false
+        },
+        {
+          "key": "ui.hideSidebarToggle",
+          "type": "switch",
+          "title": "隐藏切换侧边栏按钮",
+          "summary": "隐藏窗口顶部的侧栏切换按钮，不改变侧栏状态；开启侧栏优化后快捷入口仍显示。可在模组设置中关闭以恢复。",
+          "default_value": false
+        },
+        {
+          "key": "ui.home",
+          "type": "list",
+          "title": "Salt 首页",
+          "summary": "启动时打开的页面；本地歌单自动逐个列出。恢复上次保留歌曲、平台或歌单页面。",
+          "entries": [
+            "恢复上次",
+            "歌曲",
+            "Bilibili",
+            "网易云"
+          ],
+          "entry_values": [
+            "restore",
+            "Track",
+            "BILIBILI",
+            "NETEASE"
+          ],
+          "default_value": "restore"
+        },
+        {
+          "type": "button",
+          "title": "侧栏管理",
+          "summary": "设置入口固定保留，其他功能按钮在此配置显隐。",
+          "arrow_type": "arrow",
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openSidebarSettings"
+        },
+        {
+          "key": "bili.home",
+          "type": "list",
+          "title": "Bilibili 默认首页",
+          "summary": "首次进入平台时打开的栏目。",
+          "entries": [
+            "发现",
+            "收藏",
+            "订阅"
+          ],
+          "entry_values": [
+            "DISCOVER",
+            "MINE",
+            "SAVED"
+          ],
+          "default_value": "DISCOVER"
         },
         {
           "key": "bili.quality",
@@ -47,6 +90,23 @@
             "low"
           ],
           "default_value": "high"
+        },
+        {
+          "key": "netease.home",
+          "type": "list",
+          "title": "网易云 默认首页",
+          "summary": "首次进入平台时打开的栏目。",
+          "entries": [
+            "发现",
+            "收藏",
+            "订阅"
+          ],
+          "entry_values": [
+            "DISCOVER",
+            "MINE",
+            "SAVED"
+          ],
+          "default_value": "DISCOVER"
         },
         {
           "key": "netease.quality",
@@ -76,6 +136,13 @@
           "default_value": "standard"
         },
         {
+          "key": "netease.autoSourceSwitch",
+          "type": "switch",
+          "title": "网易云自动换源",
+          "summary": "网易云无法提供完整音轨时，按歌名、歌手及时长匹配 Bilibili 音源。需要已登录 B 站，保留原歌曲身份与歌词；不绕过会员、试听或风控。下一次打开曲目生效。",
+          "default_value": false
+        },
+        {
           "key": "cover.mode",
           "type": "list",
           "title": "封面裁切",
@@ -99,8 +166,22 @@
           "type": "list",
           "title": "单页上限",
           "summary": "Bilibili 与网易云共用，默认 30。无上限先显示前 30 项，向下滚动时继续加载；搜索、排序和全部播放仍覆盖完整合集。修改后当前列表回到开头，保留搜索与排序。",
-          "entries": ["20", "30（默认）", "50", "60", "100", "无上限"],
-          "entry_values": ["20", "30", "50", "60", "100", "0"],
+          "entries": [
+            "20",
+            "30（默认）",
+            "50",
+            "60",
+            "100",
+            "无上限"
+          ],
+          "entry_values": [
+            "20",
+            "30",
+            "50",
+            "60",
+            "100",
+            "0"
+          ],
           "default_value": "30"
         },
         {

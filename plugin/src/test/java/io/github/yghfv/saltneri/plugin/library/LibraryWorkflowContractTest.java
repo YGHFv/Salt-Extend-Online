@@ -24,6 +24,7 @@ public final class LibraryWorkflowContractTest {
     }
     public static void main(String[] args) throws Exception {
         retainedCoverSources();
+        playlistRejection();
         var account = CatalogContractTest.account(AccountPlatform.NETEASE); AtomicReference<AccountCredentials> accounts = new AtomicReference<>(account);
         List<OnlinePlaybackController.Target> selections = new ArrayList<>(); AtomicInteger navigation = new AtomicInteger();
         try (LibraryController library = new LibraryController(p -> accounts.get(), () -> true, selections::add, navigation::incrementAndGet, CatalogContractTest.CLOCK,
@@ -162,6 +163,21 @@ public final class LibraryWorkflowContractTest {
             check(!Boolean.TRUE.equals(cancelled.snapshot().get("ready"))); check(queue.get() == 1);
         } finally { release.countDown(); }
         System.out.println("PASS: " + checks + " library rows/selection/one-use playback/account capture checks (recording queue)");
+    }
+    private static void playlistRejection() throws Exception {
+        for(boolean unavailable:List.of(false,true)) {
+            try(var online=new OnlinePlaybackController(p->null,()->true,()->true,(m,a)->{throw new AssertionError("No single playback");},
+                    CatalogContractTest.CLOCK,a->(t,q,s,r)->audio(s))) {
+                var list=new LibraryController.Playlist(AccountPlatform.NETEASE,List.of(new Item(Kind.TRACK,"123","Song","Artist",120000,true)),null);
+                online.playPlaylist(list,()->{throw new AssertionError("Already armed");},(playlist,active)->{
+                    if(unavailable) throw new io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable(-1);
+                    throw new io.github.yghfv.saltneri.plugin.netease.NeteaseClient.PlatformRejected(429);
+                });
+                waitFor(()->!online.snapshot().get("error").equals(""));
+                check(online.snapshot().get("error").toString().contains(unavailable?"TRACK_UNAVAILABLE=-1":"NETEASE_REJECTED=429"));
+                check(!online.snapshot().toString().contains("SECRET"));
+            }
+        }
     }
     private static void retainedCoverSources() throws Exception {
         for(AccountPlatform platform:AccountPlatform.values())for(boolean missing:List.of(true,false)) {

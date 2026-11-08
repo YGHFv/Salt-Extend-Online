@@ -21,6 +21,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import com.xuncorp.spw.workshop.api.hook.ComposableHook
 import com.xuncorp.spw.workshop.api.hook.UiHookCall
 import io.github.yghfv.saltneri.plugin.auth.AccountPlatform
@@ -35,10 +38,14 @@ class SaltSidebarAnchor(private val binding: SaltSidebarBindings, private val ui
     override fun Content(call: UiHookCall) {
         if (!binding.enabled() || !ui.available()) return
         val state = binding.state(currentComposer)
+        val hidden=ui.hiddenSidebar()
+        LaunchedEffect(hidden,state) { if(hidden) ui.collapseHiddenSidebar(state) }
         if (binding.expanded(state)) return
         DisposableEffect(binding) { onDispose { binding.anchor(null) } }
         Box(Modifier.size(0.dp).onGloballyPositioned {
-            val p = it.positionInRoot()
+            // A zero-height marker is centered differently by native caption rows.
+            // Locate the actual caption instead of using the marker's own y coordinate.
+            val p = (ui.captionCoordinates(it) ?: it).positionInRoot()
             binding.anchor(SaltSidebarBindings.Anchor(p.x, p.y))
         })
     }
@@ -57,6 +64,7 @@ class SaltSidebarContent(private val binding: SaltSidebarBindings, private val u
         if (binding.expanded(state)) return
         DisposableEffect(binding) { onDispose { binding.visibleWidth(0) } }
         val navigator = ui.navigator(currentComposer)
+        LaunchedEffect(ui,navigator,ui.navigationStack(navigator)) {ui.observeNavigation(navigator)}
         val style = binding.style(currentComposer)
         SideEffect { ui.publishSidebarStyle(style) }
         var playlists by remember { mutableStateOf(emptyList<SaltSidebarBindings.Entry>()) }
@@ -73,35 +81,48 @@ class SaltSidebarContent(private val binding: SaltSidebarBindings, private val u
             var origin by remember { mutableStateOf(Offset.Zero) }
             // This slot is a sibling of the entire native titlebar, outside its 260dp left region.
             BoxWithConstraints(Modifier.fillMaxWidth().height(binding.titleHeight().dp).onGloballyPositioned { origin = it.positionInRoot() }) {
-                val start = with(density) { (anchor.x() - origin.x).toDp() } + binding.captionWidth().dp
+                val start = with(density) { (anchor.x() - origin.x).toDp() } + if(ui.hiddenSidebarToggle()) 0.dp else binding.captionWidth().dp
                 val top = with(density) { (anchor.y() - origin.y).toDp() }
                 Row(Modifier.offset(x = start, y = top).widthIn(max = (maxWidth - start - 240.dp).coerceAtLeast(40.dp))
                     .height(binding.captionHeight().dp).horizontalScroll(rememberScrollState()).onSizeChanged { binding.visibleWidth(it.width) }, verticalAlignment = Alignment.CenterVertically) {
                     val selectedRoute = binding.selected(navigator)
                     binding.entries().forEach { entry ->
+                        if(ui.sidebarVisible(entry.route().javaClass.simpleName)) {
                         key(entry.route()) {
                             SidebarShortcut(binding, ui, binding.label(entry, currentComposer), selectedRoute == entry.route(),
                                 { if (ui.available()) binding.open(navigator, state, entry) }) {
                                 Image(binding.painter(entry, currentComposer), null, Modifier.size(20.dp))
                             }
                         }
+                        }
                         if (entry.route().javaClass.simpleName == "MusicLibrary") {
                             AccountPlatform.entries.forEach { platform ->
+                                if(ui.sidebarVisible(platform.name)) {
                                 key(platform) {
                                     SidebarShortcut(binding, ui, if (platform == AccountPlatform.BILIBILI) "Bilibili" else "\u7f51\u6613\u4e91",
                                         ui.platform(selectedRoute) == platform, { if (ui.available()) ui.open(platform) }) {
                                         PlatformIcon(ui, platform)
                                     }
                                 }
+                                }
                             }
                         }
                     }
                     playlists.forEach { entry ->
                         key(entry.route()) {
+                            val popup=ui.playlistMenuState(currentComposer)
+                            val native=binding.nativePlaylist(entry)
+                            val context=Modifier.onPointerEvent(PointerEventType.Press) {
+                                if(it.buttons.isSecondaryPressed) {
+                                    ui.showPlaylistMenu(popup)
+                                    it.changes.forEach { change -> change.consume() }
+                                }
+                            }
                             SidebarShortcut(binding, ui, entry.label(), selectedRoute == entry.route(),
-                                { if (ui.available()) binding.open(navigator, state, entry) }) {
+                                { if (ui.available()) binding.open(navigator, state, entry) },context) {
                                 Image(binding.painter(entry, currentComposer), null, Modifier.size(20.dp))
                             }
+                            ui.playlistMenu(popup,native,navigator,{binding.currentPlaylist(native)},currentComposer)
                         }
                     }
                 }
@@ -112,9 +133,9 @@ class SaltSidebarContent(private val binding: SaltSidebarBindings, private val u
 
 @Composable
 private fun SidebarShortcut(binding: SaltSidebarBindings, ui: SaltNativeUi, label: String, active: Boolean,
-                            action: () -> Unit, icon: @Composable BoxScope.() -> Unit) {
+                            action: () -> Unit, context: Modifier = Modifier, icon: @Composable BoxScope.() -> Unit) {
     val palette = ui.palette(currentComposer)
-    val modifier = Modifier.semantics { selected = active; contentDescription = label }.clip(palette.shape())
+    val modifier = context.semantics { selected = active; contentDescription = label }.clip(palette.shape())
         .background(if (active) Color(palette.background().toULong()) else Color.Transparent)
     val centered: @Composable BoxScope.() -> Unit = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Box(Modifier.size(20.dp).semantics { contentDescription = "$label icon" }, contentAlignment = Alignment.Center, content = icon)

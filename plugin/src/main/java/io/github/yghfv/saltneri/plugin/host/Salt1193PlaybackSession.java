@@ -48,6 +48,8 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         }
         default NativePlaylistOrder.Plan upcoming() throws ReflectiveOperationException { return NativePlaylistOrder.Plan.EMPTY; }
         default void update(Object item) throws ReflectiveOperationException { }
+        default void cancelStart() { }
+        default void close() { }
     }
     @FunctionalInterface public interface Renewer {
         Audio resolve(RequestScope request) throws Exception;
@@ -275,15 +277,24 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
 
     /** Lazy native queue port; no initialization until its addToPlay method is explicitly invoked. */
     public static QueueSink nativeQueue(ClassLoader loader, Salt1193Probe.Result profile, BooleanSupplier authorized) {
+        return nativeQueue(loader,profile,authorized,null);
+    }
+    public static QueueSink nativeQueue(ClassLoader loader, Salt1193Probe.Result profile, BooleanSupplier authorized,
+                                        com.xuncorp.spw.workshop.api.hook.HookRegistrar hooks) {
         requireProfile(profile);
         Objects.requireNonNull(authorized);
         return new QueueSink() {
+          private SaltPlaybackStartBindings start;
+          private synchronized SaltPlaybackStartBindings start() throws ReflectiveOperationException {
+            if(hooks!=null && start==null)start=new SaltPlaybackStartBindings(loader,profile,hooks,authorized);
+            return start;
+          }
           private Object controller() throws ReflectiveOperationException {
             if (!authorized.getAsBoolean()) throw new SecurityException("CLASS_TRANSFORM not granted");
             return Class.forName("com.xuncorp.voxzen.service.PlaybackController",false,loader).getField("INSTANCE").get(null);
           }
           public void replace(java.util.List<Object> items) throws ReflectiveOperationException {
-            replaceAndPlay(controller(),items,authorized);
+            replace(items,0);
           }
           private Object queueState() throws ReflectiveOperationException {
             Object instance=controller(); Object flow=instance.getClass().getMethod("getPlaybackQueueState").invoke(instance);
@@ -294,7 +305,11 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
                     bound->java.util.concurrent.ThreadLocalRandom.current().nextInt(bound));
           }
           public NativePlaylistOrder.Plan upcoming() throws ReflectiveOperationException { return NativePlaylistOrder.read(queueState()); }
-          public void replace(java.util.List<Object> items,int index) throws ReflectiveOperationException { replaceAndPlay(controller(),items,index,authorized); }
+          public void replace(java.util.List<Object> items,int index) throws ReflectiveOperationException {
+            Object instance=controller();var binding=start();
+            if(binding==null)replaceAndPlay(instance,items,index,authorized);
+            else binding.submit(items.get(index),()->replaceAndPlay(instance,items,index,authorized));
+          }
           public void update(Object item) throws ReflectiveOperationException {
             Object instance=controller(); Class<?> media=Class.forName("com.xuncorp.pisces.PiscesMediaItem",false,loader);
             Object array=java.lang.reflect.Array.newInstance(media,1); java.lang.reflect.Array.set(array,0,item);
@@ -308,12 +323,16 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
             Class<?> media = Class.forName("com.xuncorp.pisces.PiscesMediaItem", false, loader);
             if (!media.isInstance(item)) throw new IllegalArgumentException("Not a native media item");
             Object instance = controller.getField("INSTANCE").get(null);
-            submitAndPlay(instance, media, item, authorized);
+            var binding=start();
+            if(binding==null)submitAndPlay(instance,media,item,authorized);
+            else binding.submit(item,()->submitAndPlay(instance,media,item,authorized));
           }
           public void insert(Object item, io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws ReflectiveOperationException {
             Class<?> media = Class.forName("com.xuncorp.pisces.PiscesMediaItem", false, loader);
             submitNext(controller(), media, item, action, authorized);
           }
+          public synchronized void cancelStart() {if(start!=null)start.cancel();}
+          public synchronized void close() {if(start!=null){start.close();start=null;}}
         };
     }
 

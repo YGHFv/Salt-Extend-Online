@@ -27,16 +27,21 @@ public final class NativeUiContractTest {
             public void close() { unhook(); }
         }; }
         public HookHandle afterComposable(String owner, String name, String inClass, List<String> types, int priority, ComposableHook hook) {
+            if(owner.equals(SaltSidebarBindings.CAPTION))return handle();
             check(owner.equals(SaltNativeUi.SIDEBAR) && inClass.equals(SaltNativeUi.SIDEBAR_CALL));
             check(name.equals("\u037f") && types.equals(List.of(SaltNativeUi.ROUTE_ITEM)));
             if (failUi) throw new IllegalStateException("Fixture UI registration failure");
             uiCalls++; content = hook; return handle();
         }
         public HookHandle hookMethod(String owner, String name, List<String> types, MethodHook hook) {
-            check(owner.equals("com.xuncorp.voxzen.ui.navigation.Navigator") && name.equals("back") && types.isEmpty());
+            check(owner.equals("com.xuncorp.voxzen.ui.navigation.Navigator") && name.equals("back") && types.isEmpty()
+                    || owner.equals("androidx.compose.ui.\u09b8") && types.equals(List.of("boolean"))
+                    || owner.equals("androidx.compose.ui.\u05d0") && name.equals("\u037f") && types.isEmpty());
             methodCalls++; return handle();
         }
-        public HookHandle replaceComposable(String c, String m, String i, List<String> t, int p, ComposableHook h) { throw new AssertionError("Original UI must not be replaced"); }
+        public HookHandle replaceComposable(String c, String m, String i, List<String> t, int p, ComposableHook h) {
+            check(c.equals(SaltNativeUi.SIDEBAR) || c.equals(SaltSidebarSettingsBindings.SCREEN));return handle();
+        }
         public <S> HookHandle appendContent(String c, String m, String i, String a, Class<S> s, List<String> t, int p, ContentHook<S> h) { throw new AssertionError("Unexpected DSL append"); }
     }
     private static Composer composerFixture() {
@@ -106,7 +111,7 @@ public final class NativeUiContractTest {
                 javax.swing.SwingUtilities.invokeAndWait(() -> {});
                 check(ui.nativeSearchAvailable());
                 check(ui.diagnostics().contains("bound=true"));
-                check(hooks.uiCalls == 1 && hooks.methodCalls == 1);
+                check(hooks.uiCalls == 1 && hooks.methodCalls == 4);
                 check(upstream.get() == 0 && queue.get() == 0 && actions.get() == 0);
                 check(hooks.content.getClass().getMethod("Content", UiHookCall.class, Composer.class, int.class).getReturnType() == void.class);
                 check(desk.snapshot(AccountPlatform.NETEASE).login().qrContent() == null);
@@ -209,7 +214,7 @@ public final class NativeUiContractTest {
                 check(!ui.available() && queue.get() == 0);
                 permitted.set(true); check(!ui.available());
                 ui.close(); ui.close(); javax.swing.SwingUtilities.invokeAndWait(() -> {});
-                check(hooks.closed == 2 && blockField.get(cachedContent) == fixtureBlock);
+                check(hooks.closed == 8 && blockField.get(cachedContent) == fixtureBlock);
                 Object oldKey = route.getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID + "/native/NETEASE");
                 Object retired = built.invoke(oldKey);
                 javax.swing.SwingUtilities.invokeAndWait(() -> {

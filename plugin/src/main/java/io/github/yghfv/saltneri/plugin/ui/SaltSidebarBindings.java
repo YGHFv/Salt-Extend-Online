@@ -33,6 +33,7 @@ public final class SaltSidebarBindings implements AutoCloseable {
     private final Class<?> repository;
     private final Constructor<?> playlistRoute;
     private final List<Entry> entries;
+    private volatile Map<Object,Object> nativePlaylists=Map.of();
     private final java.util.function.Supplier<Flow<List<Object>>> playlistSource;
     private final MutableState<Boolean> enabled = SnapshotStateKt.mutableStateOf(false, SnapshotStateKt.structuralEqualityPolicy());
     private HookHandle handle, titleHandle;
@@ -159,12 +160,20 @@ public final class SaltSidebarBindings implements AutoCloseable {
     }
     public List<Entry> playlistEntries(List<?> values) {
         List<Entry> result = new ArrayList<>();
+        Map<Object,Object> snapshot=new HashMap<>();
         for (Object value : values) {
-            try { result.add(new Entry(playlistRoute.newInstance(invoke(playlistId, value)), (String)invoke(playlistTitle, value), entries.getFirst().drawable(), null)); }
+            try {
+                Object route=playlistRoute.newInstance(invoke(playlistId,value));
+                snapshot.put(route,value);
+                result.add(new Entry(route,(String)invoke(playlistTitle,value),entries.getFirst().drawable(),null));
+            }
             catch (ReflectiveOperationException e) { throw new IllegalStateException("Invalid native playlist route", e); }
         }
+        nativePlaylists=Map.copyOf(snapshot);
         return List.copyOf(result);
     }
+    public Object nativePlaylist(Entry entry) {return nativePlaylists.get(entry.route());}
+    public boolean currentPlaylist(Object playlist) {return nativePlaylists.containsValue(playlist);}
     public float captionWidth() { return captionWidth; }
     public float captionHeight() { return captionHeight; }
     public float titleHeight() { return titleHeight; }
@@ -179,6 +188,7 @@ public final class SaltSidebarBindings implements AutoCloseable {
     @Override public synchronized void close() {
         if (closed) return;
         enabled.setValue(false); visibleWidth = 0; closed = true;
+        nativePlaylists=Map.of();
         anchor.setValue(null);
         if (titleHandle != null) { titleHandle.close(); titleHandle = null; }
         if (handle != null) { handle.close(); handle = null; }

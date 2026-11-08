@@ -92,6 +92,7 @@ Plugin-Id: $($pluginMetadata.id)
 Plugin-Version: $pluginVersion
 Plugin-Provider: $($pluginMetadata.provider)
 Plugin-Name: $pluginName
+Plugin-Open-Source-Url: $($pluginMetadata.openSourceUrl)
 Plugin-Description: $pluginDescription
 Plugin-Has-Config: true
 $permissionLine

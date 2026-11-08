@@ -39,16 +39,22 @@ import io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection;
 public final class LoopbackRangeServer implements AutoCloseable {
     public Instant now() { return clock.instant(); }
     private final RangeDiskCache cache=new RangeDiskCache();
-    public void cacheLimit(long bytes) { cache.limit(bytes); }
+    public void cacheLimit(long bytes) { cache.limit(bytes); cancelReadAhead(); }
     public long cacheBytes() { return cache.usedBytes(); }
-    public void clearCache() { cache.clear(); }
+    public void clearCache() { cache.clear(); cancelReadAhead(); }
     @FunctionalInterface
     interface ConnectionOpener { HttpURLConnection open(URI uri) throws IOException; }
 
     private static final int TIMEOUT_MILLIS = 8000;
+    private static final long HOST_CHUNK_BYTES = 512L * 1024;
+    private static final int READ_AHEAD_CHUNKS = 2;
     private final ServerSocket listener;
     private final Thread acceptThread;
     private final ThreadPoolExecutor workers;
+    private final ThreadPoolExecutor readAheadWorker;
+    private final AtomicBoolean readAheadRunning = new AtomicBoolean();
+    private volatile ReadAheadPlan readAheadPlan;
+    private record ReadAheadPlan(Entry entry, long first, long cacheRevision) { }
     private final ScheduledExecutorService deadlines;
     private final Clock clock;
     private final ConnectionOpener opener;
@@ -67,6 +73,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         final byte[] fixture;
         final Instant fixtureExpiry;
         final AtomicBoolean revoked = new AtomicBoolean();
+        final java.util.concurrent.locks.ReentrantLock downloadLock = new java.util.concurrent.locks.ReentrantLock(true);
         Entry(MediaLease lease) { this.lease = lease; fixture = null; fixtureExpiry = null; }
         Entry(byte[] fixture, Instant expiresAt) { lease = null; this.fixture = fixture; fixtureExpiry = expiresAt; }
         long length() { return lease == null ? fixture.length : lease.length(); }
@@ -77,6 +84,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
         final Socket socket;
         volatile Entry entry;
         volatile HttpURLConnection upstream;
+        volatile ReadAheadPlan speculative;
+        volatile ByteRange speculativeRange;
         boolean replied;
         private boolean closed;
         Request(Socket socket) { this.socket = socket; }
@@ -92,7 +101,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         public synchronized void close() {
             if (closed) return;
             closed = true;
-            try { socket.close(); } catch (IOException ignored) { }
+            if(socket!=null) try { socket.close(); } catch (IOException ignored) { }
             HttpURLConnection connection = upstream;
             upstream = null;
             if (connection != null) connection.disconnect();
@@ -122,6 +131,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
         listener.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 16);
         workers = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(16),
                 runnable -> daemon(runnable, "salt-neri-range-worker"));
+        readAheadWorker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(1),
+                runnable -> daemon(runnable, "salt-neri-range-ahead"));
         ScheduledThreadPoolExecutor timer = new ScheduledThreadPoolExecutor(1,
                 runnable -> daemon(runnable, "salt-neri-range-deadline"));
         timer.setRemoveOnCancelPolicy(true);
@@ -135,6 +146,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
     public synchronized URI register(MediaLease lease) {
         if (closed.get()) throw new IllegalStateException("Transport stopped");
         if (!permitted()) throw new SecurityException("Transport permission revoked");
+        if(!lease.isActive())throw new SecurityException("Media source account revoked");
         Duration lifetime = Duration.between(clock.instant(), lease.expiresAt());
         if (lifetime.isNegative() || lifetime.isZero() || lifetime.compareTo(Duration.ofMinutes(30)) > 0) {
             throw new IllegalArgumentException("Lease must expire within 30 minutes");
@@ -180,6 +192,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         try {
             connection.setConnectTimeout(2000); connection.setReadTimeout(2000); connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Range","bytes=0-"+(count-1)); connection.setUseCaches(false);
+            connection.setRequestProperty("X-Salt-Prefetch","1");
             if(connection.getResponseCode()!=206 || connection.getContentLengthLong()!=count) throw new IOException("Invalid prefetch range");
             try(InputStream input=connection.getInputStream()) {
                 byte[] buffer=new byte[16384]; long remaining=count;
@@ -294,7 +307,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
                         "Content-Range", range.contentHeader(total), "Accept-Ranges", "bytes"));
                 ensureValid(entry);
                 request.socket.getOutputStream().write(entry.fixture, (int)range.first(), (int)range.length());
-            } else fetch(request, entry, range);
+            } else fetch(request, entry, range, !headers.containsKey("x-salt-prefetch"));
         } catch (IOException | IllegalArgumentException failure) {
             if (!request.replied) {
                 try { reply(request, request.entry == null ? 400 : 502, Map.of()); } catch (IOException ignored) { }
@@ -302,14 +315,37 @@ public final class LoopbackRangeServer implements AutoCloseable {
         }
     }
 
-    private void fetch(Request request, Entry entry, ByteRange range) throws IOException {
-        long revision=cache.revision();
-        byte[] hit=cache.get(entry,range);
-        if(hit!=null) {
-            ensureValid(entry);
-            reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
-            ensureValid(entry); request.socket.getOutputStream().write(hit); return;
+    private void fetch(Request request, Entry entry, ByteRange range, boolean foreground) throws IOException {
+        ReadAheadPlan previous=readAheadPlan;
+        if(foreground && previous!=null && (previous.entry()!=entry || range.first()<previous.first()
+                || range.first()>=previous.first()+READ_AHEAD_CHUNKS*HOST_CHUNK_BYTES)) {
+            readAheadPlan=null;
+            requests.forEach(r->{if(r.speculative!=null) r.close();});
         }
+        long revision=cache.revision();
+        ensureValid(entry); request.check();
+        byte[] data=cache.get(entry,range);
+        // Coalesce host/prefix/read-ahead requests for the same lease; no duplicate CDN downloads.
+        // Cached foreground bytes must not wait behind another slow speculative chunk.
+        if(data==null) {
+            entry.downloadLock.lock();
+            try {
+                ensureValid(entry); request.check();
+                data=cache.get(entry,range);
+                if(data==null) {
+                    data=download(request,entry,range);
+                    cache.put(entry,range,data,revision,()->valid(entry));
+                }
+            } finally { entry.downloadLock.unlock(); }
+        }
+        ensureValid(entry); request.check();
+        // Publish only complete verified ranges; the host buffers the same aligned chunk.
+        reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
+        request.socket.getOutputStream().write(data); request.socket.getOutputStream().flush();
+        if(foreground) scheduleReadAhead(entry,range);
+    }
+
+    private byte[] download(Request request, Entry entry, ByteRange range) throws IOException {
         byte[] data=null;
         for(int attempt=0;attempt<3;attempt++) {
             ensureValid(entry); request.check();
@@ -320,12 +356,75 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 if(attempt==2) throw transientFailure;
             }
         }
-        ensureValid(entry); request.check();
-        // Buffer at most one bounded range (host: 512 KiB, protocol cap: 4 MiB). Do not
-        // publish a successful 206 until all bytes are verified; a short 206 can stall Salt.
-        reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
-        request.socket.getOutputStream().write(data); request.socket.getOutputStream().flush();
-        cache.put(entry,range,data,revision,()->valid(entry));
+        ensureValid(entry); request.check(); return data;
+    }
+
+    private void scheduleReadAhead(Entry entry,ByteRange range) {
+        if(cache.limitBytes()<HOST_CHUNK_BYTES || range.first()%HOST_CHUNK_BYTES!=0
+                || range.length()!=Math.min(HOST_CHUNK_BYTES,entry.length()-range.first())) return;
+        // Only an actual host read advances the window. Prefix prefetch cannot chain to a whole song.
+        ReadAheadPlan plan=new ReadAheadPlan(entry,range.last()+1,cache.revision());
+        readAheadPlan=plan;
+        requests.forEach(r->{if(r.speculative!=null && !aheadRangeValid(r.speculative,r.speculativeRange)) r.close();});
+        startReadAhead();
+    }
+
+    private void cancelReadAhead() {
+        readAheadPlan=null;
+        requests.forEach(r->{if(r.speculative!=null) r.close();});
+    }
+
+    private void startReadAhead() {
+        if(closed.get() || !readAheadRunning.compareAndSet(false,true)) return;
+        try { readAheadWorker.execute(this::readAhead); }
+        catch(RejectedExecutionException stopped) { readAheadRunning.set(false); }
+    }
+
+    private boolean aheadValid(ReadAheadPlan plan) {
+        return readAheadPlan==plan && cache.revision()==plan.cacheRevision()
+                && cache.limitBytes()>=HOST_CHUNK_BYTES && valid(plan.entry());
+    }
+
+    private boolean aheadRangeValid(ReadAheadPlan original,ByteRange range) {
+        ReadAheadPlan current=readAheadPlan;
+        return current!=null && range!=null && current.entry()==original.entry()
+                && current.cacheRevision()==original.cacheRevision() && cache.revision()==current.cacheRevision()
+                && range.first()>=current.first() && range.first()<current.first()+READ_AHEAD_CHUNKS*HOST_CHUNK_BYTES
+                && cache.limitBytes()>=HOST_CHUNK_BYTES && valid(current.entry());
+    }
+
+    private void readAhead() {
+        ReadAheadPlan plan=readAheadPlan;
+        try {
+            if(plan==null) return;
+            Entry entry=plan.entry();
+            for(int i=0;i<READ_AHEAD_CHUNKS && aheadValid(plan);i++) {
+                long first=plan.first()+i*HOST_CHUNK_BYTES;
+                if(first>=entry.length()) break;
+                ByteRange range=new ByteRange(first,Math.min(entry.length(),first+HOST_CHUNK_BYTES)-1);
+                Request request=new Request(null); request.entry=entry; request.speculative=plan; request.speculativeRange=range;
+                requests.add(request);
+                ScheduledFuture<?> deadline=deadlines.schedule(request::close,2500,TimeUnit.MILLISECONDS);
+                try {
+                    entry.downloadLock.lock();
+                    try {
+                        if(!aheadValid(plan)) return;
+                        request.check();
+                        if(cache.get(entry,range)==null) {
+                            // Speculation is single-attempt and uses its own worker, not host HTTP slots.
+                            byte[] data=readRange(request,entry,range);
+                            request.check();
+                            // Advancing one chunk retains overlapping in-flight work instead of downloading twice.
+                            cache.put(entry,range,data,plan.cacheRevision(),()->aheadRangeValid(plan,range));
+                        }
+                    } finally { entry.downloadLock.unlock(); }
+                } finally { deadline.cancel(false); request.close(); requests.remove(request); }
+            }
+        } catch(IOException | RuntimeException ignored) { /* A speculative failure never fails playback. */ }
+        finally {
+            readAheadRunning.set(false);
+            if(readAheadPlan!=plan && !closed.get()) startReadAhead();
+        }
     }
 
     private static final class InvalidRange extends IOException {
@@ -340,8 +439,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
             request.attach(connection);
             try {
                 connection.setInstanceFollowRedirects(false);
-                connection.setConnectTimeout(TIMEOUT_MILLIS);
-                connection.setReadTimeout(TIMEOUT_MILLIS);
+                connection.setConnectTimeout(request.speculative==null?TIMEOUT_MILLIS:2000);
+                connection.setReadTimeout(request.speculative==null?TIMEOUT_MILLIS:2000);
                 connection.setUseCaches(false);
                 connection.setRequestMethod("GET");
                 entry.lease.headers().forEach(connection::setRequestProperty);
@@ -386,7 +485,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
 
     private boolean valid(Entry entry) {
         return !closed.get() && !entry.revoked.get() && permitted()
-                && clock.instant().isBefore(entry.expiresAt());
+                && clock.instant().isBefore(entry.expiresAt()) && (entry.lease==null || entry.lease.isActive());
     }
 
     private boolean permitted() {
@@ -441,6 +540,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
         // Queued workers removed by shutdownNow never run their per-request finally block.
         requests.clear();
         workers.shutdownNow();
+        readAheadPlan=null;
+        readAheadWorker.shutdownNow();
         deadlines.shutdownNow();
         cache.close();
     }

@@ -86,9 +86,26 @@ public final class LazyPlaylistSession implements AutoCloseable {
     }
     private void check() { if(closed || !active.getAsBoolean()) throw new java.util.concurrent.CancellationException("Playlist retired"); }
     public void play() throws Exception {
-        // A failed first track must not destroy the user's existing playback queue.
+        // Preserve the old queue until one full track is ready. Never retry account/network rejection.
         int first=Objects.checkIndex(queue.firstIndex(entries.size()),entries.size());
-        resolve(entries.get(first),()->true); check();
+        int skipped=0;
+        long deadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(30);
+        while(true) {
+            check();
+            try { resolve(entries.get(first),()->System.nanoTime()<deadline); break; }
+            catch(io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable unavailable) {
+                check();
+                if(entries.size()==1 || ++skipped>=5 || System.nanoTime()>=deadline) throw unavailable;
+                Entry rejected=entries.remove(first); byId.remove(rejected.id);
+                if(persistent==null) {
+                    adapter.unregister(rejected.path);
+                    if(rejected.lyrics!=null) rejected.lyrics.close();
+                    if(rejected.cover!=null) rejected.cover.close();
+                }
+                first%=entries.size();
+            }
+        }
+        check();
         queue.replace(entries.stream().map(e->e.media).toList(),first); submitted=true;
         synchronized(cache) {
             check();
@@ -109,7 +126,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
             try(RequestScope request=new RequestScope(()->!closed && active.getAsBoolean() && valid.getAsBoolean())) {
                 Object revision=resolver.revision();
                 requests.add(request); request.check(); var audio=resolver.resolve(entry.row,scope,request); request.check(); check();
-                if(!audio.lease().belongsTo(scope) || !audio.key().platform().name().equals(audio.lease().platform().name())
+                if(!audio.lease().belongsTo(scope) || !audio.transportMatches()
                         || entry.key!=null && !entry.key.equals(audio.key())) throw new SecurityException("Playlist audio identity mismatch");
                 if(!transport.now().isBefore(audio.expiresAt())) throw new IllegalStateException("Playlist audio already expired");
                 URI local=transport.register(audio.lease());

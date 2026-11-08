@@ -97,8 +97,10 @@ public final class PlaylistPrefetchContractTest {
             try(var scope=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) { server.prefetch(local,scope); }
             await(()->server.cacheBytes()==512*1024); check(calls.get()==1);
             try(var reader=HostRangeReader.open(local)) {
-                byte[] bytes=new byte[16]; check(reader.read(bytes)==16 && bytes[15]==15 && calls.get()==1);
-                check(reader.seek(512*1024-16) && reader.read(bytes)==16 && bytes[15]==(byte)255 && calls.get()==1);
+                byte[] bytes=new byte[16]; check(reader.read(bytes)==16 && bytes[15]==15);
+                await(()->server.cacheBytes()==1024*1024);
+                check(calls.get()==2); // The actual read, not prefix prefetch, warms the next chunk.
+                check(reader.seek(512*1024-16) && reader.read(bytes)==16 && bytes[15]==(byte)255 && calls.get()==2);
                 check(reader.seek(512*1024) && reader.read(bytes)==16 && calls.get()==2);
             }
             server.cacheLimit(0); int before=calls.get();

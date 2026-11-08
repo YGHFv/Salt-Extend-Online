@@ -21,6 +21,9 @@ final class SidebarHookTransformFixture implements AutoCloseable {
     private final ComposableHook overlay;
     private final Method overlayDraw;
     SidebarHookTransformFixture(ComposableHook content, ComposableHook overlay) throws Exception {
+        this(content,overlay,null);
+    }
+    SidebarHookTransformFixture(ComposableHook content, ComposableHook overlay,ComposableHook toggleContent) throws Exception {
         this.overlay = overlay;
         overlayDraw = overlay.getClass().getMethod("Content",UiHookCall.class,Composer.class,int.class);
         ClassLoader host = getClass().getClassLoader();
@@ -35,7 +38,8 @@ final class SidebarHookTransformFixture implements AutoCloseable {
         Object transform = transformer.getConstructor(siteType).newInstance(site);
         byte[] original;
         try(var in=host.getResourceAsStream(SaltSidebarBindings.TOGGLE.replace('.','/')+".class")) { original=in.readAllBytes(); }
-        transformed=(byte[])transformer.getMethod("\u037f",String.class,byte[].class).invoke(transform,SaltSidebarBindings.TOGGLE,original);
+        byte[] captionTransform=(byte[])transformer.getMethod("\u037f",String.class,byte[].class).invoke(transform,SaltSidebarBindings.TOGGLE,original);
+        transformed=captionTransform;
         if(Arrays.equals(original,transformed)) throw new AssertionError("Missing real host transform");
         Object rootTarget = resolver.getMethod("\u037f",String.class,String.class,String.class,List.class).invoke(resolver.getField("\u037f").get(null),
                 SaltSidebarBindings.TITLEBAR,"\u037f",SaltSidebarBindings.WINDOW,SaltSidebarBindings.TITLE_PARAMETERS);
@@ -82,6 +86,7 @@ final class SidebarHookTransformFixture implements AutoCloseable {
             }
         };
         bridge=isolated.loadClass("com.xuncorp.voxzen.workshop.hooks.WorkshopHookBridge");
+        Method hideDraw=toggleContent==null?null:toggleContent.getClass().getMethod("Content",UiHookCall.class,Composer.class,int.class);
         Method draw=content.getClass().getMethod("Content",UiHookCall.class,Composer.class,int.class);
         bridge.getField("after").set(null,(Function3<Object[],Composer,Integer,Unit>)(args,c,f)->{
             UiHookCall call=new UiHookCall() {
@@ -91,7 +96,7 @@ final class SidebarHookTransformFixture implements AutoCloseable {
             };
             if(args.length!=10 || !Boolean.FALSE.equals(args[4]) || !Float.valueOf(0f).equals(args[6]))
                 throw new AssertionError("Expected untouched default-argument placeholders from actual host caller");
-            try{draw.invoke(content,call,c,0);}catch(ReflectiveOperationException e){throw new AssertionError(e);}
+            try{if(hideDraw!=null)hideDraw.invoke(toggleContent,call,c,0);draw.invoke(content,call,c,0);}catch(ReflectiveOperationException e){throw new AssertionError(e);}
             return Unit.INSTANCE;
         });
         toggle=isolated.loadClass(SaltSidebarBindings.TOGGLE).getMethod("\u037f",Modifier.class,Composer.class,int.class,int.class);
@@ -106,10 +111,15 @@ final class SidebarHookTransformFixture implements AutoCloseable {
             left=androidx.compose.ui.draw.ClipKt.clipToBounds(left);
             Modifier offset=(Modifier)Class.forName("androidx.compose.foundation.layout.OffsetKt")
                     .getMethod("offset-VpY3zN4",Modifier.class,float.class,float.class).invoke(null,Modifier.Companion,48f,4f);
+            offset=(Modifier)size.getMethod("height-3ABfNKs",Modifier.class,float.class).invoke(null,offset,40f);
             final Modifier clipped=left;
+            final Modifier captionRow=offset;
             androidx.compose.foundation.layout.BoxKt.Box(root,androidx.compose.ui.Alignment.Companion.getTopStart(),false,(scope,c,f)->{
                 androidx.compose.foundation.layout.BoxKt.Box(clipped,androidx.compose.ui.Alignment.Companion.getTopStart(),false,(s,c2,f2)->{
-                    androidx.compose.foundation.layout.BoxKt.Box(offset,androidx.compose.ui.Alignment.Companion.getTopStart(),false,(s3,c3,f3)->{
+                    // Native titlebar centers the caption container vertically. A zero-height
+                    // hidden caption moves the anchor down by half the row height.
+                    androidx.compose.foundation.layout.RowKt.Row(captionRow,androidx.compose.foundation.layout.Arrangement.INSTANCE.getStart(),
+                            androidx.compose.ui.Alignment.Companion.getCenterVertically(),(s3,c3,f3)->{
                         try{toggle.invoke(null,modifier,c3,0,0);}catch(ReflectiveOperationException e){throw new AssertionError(e);}return Unit.INSTANCE;
                     },c2,0,0);return Unit.INSTANCE;
                 },c,0,0);

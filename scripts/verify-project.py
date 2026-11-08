@@ -12,9 +12,10 @@ def verify():
     pairs = [line.split("=", 1) for line in lines if line and not line.startswith("#")]
     metadata = dict(pairs)
     assert len(pairs) == len(metadata), "Duplicate plugin metadata"
-    assert set(metadata) == {"id", "name", "provider", "version", "passiveVersion"}
+    assert set(metadata) == {"id", "name", "provider", "openSourceUrl", "version", "passiveVersion"}
     assert metadata["id"] == "io.github.yghfv.saltneri.online", "Do not change upgrade identity"
     assert metadata["name"] == "Salt Extend Online"
+    assert metadata["openSourceUrl"] == "https://github.com/YGHFv/Salt-Extend-Online"
     for key in ("version", "passiveVersion"):
         assert re.fullmatch(r"\d+\.\d+\.\d+(?:-[a-z0-9-]+)?", metadata[key]), key
     matrix = json.loads((ROOT / "scripts/contract-tests.json").read_text(encoding="ascii"))

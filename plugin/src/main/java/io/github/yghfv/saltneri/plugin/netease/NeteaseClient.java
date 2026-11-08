@@ -47,8 +47,14 @@ public final class NeteaseClient {
                            int bitrateKbps, String level, String mimeType, MediaLease lease, Instant expiresAt) {
         @Override public String toString() { return "NeteaseResolved[" + key.stableId() + ", URLs redacted]"; }
     }
-    public static final class PlatformRejected extends IOException {
-        public PlatformRejected(long code) { super("NetEase rejected request (code " + code + ")"); }
+    public static class PlatformRejected extends IOException {
+        private final long code;
+        public PlatformRejected(long code) { super("NetEase rejected request (code " + code + ")"); this.code=code; }
+        public long code() { return code; }
+    }
+    /** Only explicit song-level gates may be skipped; login/CDN/risk failures stop the operation. */
+    public static final class TrackUnavailable extends PlatformRejected {
+        public TrackUnavailable(long code) { super(code); }
     }
     private static final URI AUDIO_API = URI.create("https://interface.music.163.com" + NeteaseEapi.PATH);
     private static final Map<String, String> HEADERS = Map.of(
@@ -73,6 +79,24 @@ public final class NeteaseClient {
         this.clock = Objects.requireNonNull(clock); this.opener = Objects.requireNonNull(opener); this.credentials = credentials;
         if (credentials != null && credentials.platform() != AccountPlatform.NETEASE) throw new IllegalArgumentException("NetEase account required");
     }
+    public record SongInfo(Metadata metadata,URI cover,long durationMillis) { }
+    /** Read the original metadata only; this does not authorize or request an alternative audio URL. */
+    public SongInfo songInfo(NeteaseTarget target,RequestScope scope) throws IOException {
+        check(scope);
+        var detail=successful(json(URI.create("https://music.163.com/api/song/detail?ids=%5B"+target.songId()+"%5D"),null,scope,credentials));
+        var song=exact(detail.get("songs"),target.songId());
+        List<String> artists=new ArrayList<>();
+        Object artistField=alias(song,"ar","artists");
+        if(artistField!=null) {
+            var entries=BoundedJson.array(artistField);if(entries.size()>64)throw invalid();
+            for(Object entry:entries)artists.add(label(BoundedJson.object(entry).get("name"),false));
+        }
+        Object albumField=alias(song,"al","album");
+        var album=albumField==null?Map.<String,Object>of():BoundedJson.object(albumField);
+        String artist=String.join(" / ",artists);
+        long duration=positive(alias(song,"dt","duration"));if(duration>7L*24*3600*1000)throw invalid();
+        return new SongInfo(new Metadata(label(song.get("name"),false),artist,label(album.get("name"),true),artist),cover(album.get("picUrl")),duration);
+    }
     public Resolved resolve(NeteaseTarget target, Quality quality, String accountScope, RequestScope scope) throws IOException {
         Objects.requireNonNull(target); Objects.requireNonNull(quality); Objects.requireNonNull(scope);
         if (accountScope == null || accountScope.isBlank()) throw new IllegalArgumentException("Missing operation scope");
@@ -91,11 +115,11 @@ public final class NeteaseClient {
         }
         Map<String, Object> detail = successful(json(URI.create("https://music.163.com/api/song/detail?ids=%5B" + target.songId() + "%5D"), null, scope, session));
         Map<String, Object> song = exact(detail.get("songs"), target.songId());
-        fee(song.get("fee")); if (numberOrZero(song.get("status")) < 0 || numberOrZero(song.get("st")) < 0) throw new PlatformRejected(-1);
+        fee(song.get("fee")); if (numberOrZero(song.get("status")) < 0 || numberOrZero(song.get("st")) < 0) throw new TrackUnavailable(-1);
         if (detail.get("privileges") != null) {
             Map<String, Object> privilege = exact(detail.get("privileges"), target.songId());
             fee(privilege.get("fee"));
-            if (numberOrZero(privilege.get("st")) < 0 || (privilege.get("pl") != null && BoundedJson.integer(privilege.get("pl")) <= 0)) throw new PlatformRejected(-1);
+            if (numberOrZero(privilege.get("st")) < 0 || (privilege.get("pl") != null && BoundedJson.integer(privilege.get("pl")) <= 0)) throw new TrackUnavailable(-1);
         }
         String title = label(song.get("name"), false);
         Object artistField = alias(song, "ar", "artists"); List<String> artists = new ArrayList<>();
@@ -111,13 +135,16 @@ public final class NeteaseClient {
         Map<String, Object> parameters = new LinkedHashMap<>(); parameters.put("ids", "[" + target.songId() + "]");
         parameters.put("level", quality.key()); parameters.put("encodeType", "flac");
         Map<String, Object> data = exact(successful(json(AUDIO_API, NeteaseEapi.form(parameters), scope, session)).get("data"), target.songId());
-        long dataCode = BoundedJson.integer(data.get("code")); if (dataCode != 200) throw new PlatformRejected(dataCode);
+        long dataCode = BoundedJson.integer(data.get("code"));
+        if (dataCode == 404) throw new TrackUnavailable(dataCode);
+        if (dataCode != 200) throw new PlatformRejected(dataCode);
         fee(data.get("fee"));
-        if (data.get("freeTrialInfo") != null || flag(data.get("isPreview")) || flag(data.get("isTrial"))) throw new PlatformRejected(-1);
+        if (data.get("freeTrialInfo") != null || flag(data.get("isPreview")) || flag(data.get("isTrial"))) throw new TrackUnavailable(-1);
         if (data.get("freeTrialPrivilege") != null) {
             Map<String, Object> privilege = BoundedJson.object(data.get("freeTrialPrivilege"));
-            if (numberOrZero(privilege.get("cannotListenReason")) != 0 || flag(privilege.get("listenType"))) throw new PlatformRejected(-1);
+            if (numberOrZero(privilege.get("cannotListenReason")) != 0 || flag(privilege.get("listenType"))) throw new TrackUnavailable(-1);
         }
+        if(data.get("url")==null) throw new TrackUnavailable(-1);
         long audioDuration = positive(data.get("time"));
         if (Math.abs(audioDuration - duration) > Math.max(2000, duration / 100)) throw new IOException("Incomplete or mismatched NetEase duration");
         long size = positive(data.get("size")); if (size > 2L * 1024 * 1024 * 1024) throw invalid();
@@ -174,7 +201,7 @@ public final class NeteaseClient {
     private static boolean flag(Object value) throws IOException { return value instanceof Boolean b ? b : numberOrZero(value) != 0; }
     private void fee(Object value) throws IOException {
         long fee = BoundedJson.integer(value);
-        if (fee != 0 && fee != 8 && !(credentials != null && (fee == 1 || fee == 4))) throw new PlatformRejected(-1);
+        if (fee != 0 && fee != 8 && !(credentials != null && (fee == 1 || fee == 4))) throw new TrackUnavailable(-1);
     }
     private static String label(Object value, boolean optional) throws IOException {
         if (value == null && optional) return ""; String text = BoundedJson.string(value);

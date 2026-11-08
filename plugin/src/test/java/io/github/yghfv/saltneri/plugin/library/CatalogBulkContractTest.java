@@ -31,6 +31,7 @@ public final class CatalogBulkContractTest {
                     if(uri.getPath().contains("account")) return verify.open(uri,form);
                     String json;
                     if(uri.getPath().equals("/api/v6/playlist/detail")) {
+                        check(new String(form,StandardCharsets.US_ASCII).contains("n=100"));
                         details.incrementAndGet();
                         var ids=new ArrayList<String>(); var tracks=new ArrayList<String>();
                         for(int i=1;i<=315;i++) { ids.add("{\"id\":"+i+"}"); if(i<=20) tracks.add(song(i)); }
@@ -72,15 +73,37 @@ public final class CatalogBulkContractTest {
         })) {
             library.pageLimit(20); library.browse(AccountPlatform.NETEASE,View.SAVED); await(()->library.snapshot().get("loaded").equals(true));
             List<?> folders=(List<?>)library.snapshot().get("items"); library.choose((String)((Map<?,?>)folders.getFirst()).get("token"));
-            await(()->library.snapshot().get("loaded").equals(true)); var original=library.snapshot();
+            await(()->library.snapshot().get("loaded").equals(true));
+            library.turn(1);await(()->library.snapshot().get("loaded").equals(true));
+            var original=library.snapshot();check(original.get("page").equals(2));
             library.requestPlaylist(); check(entered.await(3,TimeUnit.SECONDS));
             check(library.snapshot().get("items").equals(original.get("items")) && library.snapshot().get("loaded").equals(true));
             check(library.snapshot().get("loadingAll").equals(true) && library.takePlaylist()==null);
             hold.countDown(); await(()->library.snapshot().get("loadingAll").equals(false));
+            check(library.snapshot().get("items").equals(original.get("items")));
+            check(library.snapshot().get("page").equals(original.get("page")));
+            check(library.snapshot().get("loadToken").equals(original.get("loadToken")));
             check(library.takePlaylist().items().size()==2 && library.takePlaylist()==null);
         } finally { hold.countDown(); }
         parallelWaves();
+        embeddedFullList(clock);
         System.out.println("PASS: "+checks+" bulk parallel batching/order/cancellation/single account verification and visible-list preservation checks; fake HTTP, no audio");
+    }
+    private static void embeddedFullList(Clock clock) throws Exception {
+        var calls=new AtomicInteger();
+        try(var request=new RequestScope(()->true)) {
+            var client=new CatalogClient(null,clock,(uri,form)->{
+                calls.incrementAndGet();
+                check(uri.getPath().equals("/api/v6/playlist/detail"));
+                check(new String(form,StandardCharsets.US_ASCII).contains("n=100"));
+                var ids=new ArrayList<String>();var tracks=new ArrayList<String>();
+                for(int i=1;i<=100;i++) {ids.add("{\"id\":"+i+"}");tracks.add(song(i));}
+                return new CatalogContractTest.Response(uri,"{\"code\":200,\"playlist\":{\"id\":10,\"name\":\"Fixture\",\"trackIds\":["
+                        +String.join(",",ids)+"],\"tracks\":["+String.join(",",tracks)+"]}}",List.of());
+            });
+            var result=client.loadAll(new Query(AccountPlatform.NETEASE,View.FOLDER,10,1),request);
+            check(result.items().size()==100 && calls.get()==1);
+        }
     }
     private static void parallelWaves() throws Exception {
         for(int failure:List.of(0,1,2)) {

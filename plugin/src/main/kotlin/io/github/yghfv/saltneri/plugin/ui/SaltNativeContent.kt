@@ -71,6 +71,10 @@ import kotlinx.coroutines.flow.collect
 class SaltNativeContent(private val ui: SaltNativeUi) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
+        val navigator=ui.navigator(currentComposer)
+        val style=ui.readSidebarStyle(currentComposer)
+        SideEffect {ui.publishSidebarStyle(style)}
+        LaunchedEffect(ui,navigator,ui.navigationStack(navigator)) {ui.observeNavigation(navigator)}
         if (ui.isMusicLibrary(call.getArgument(0))) {
             // A LazyColumn item can contain multiple vertically placed elements.
             Column { SidebarEntries(ui) }
@@ -83,7 +87,8 @@ class SaltNativeContent(private val ui: SaltNativeUi) : ComposableHook() {
             val fallback = original as @Composable (Any) -> Unit
             val content: @Composable (Any) -> Unit = { key ->
                 val platform = ui.dispatch(key)
-                if (platform == null) fallback(key)
+                if(ui.settingsPage(key)) SidebarConfigurationPage(ui)
+                else if (platform == null) fallback(key)
                 else (ui.entry(platform) as @Composable (Any) -> Unit)(key)
             }
             return content
@@ -117,8 +122,10 @@ private fun SidebarEntries(ui: SaltNativeUi) {
             if (it.javaClass.name == SaltNativeUi.MOD_ROUTE) ui.platform(it) else null
         }
         AccountPlatform.entries.forEach { platform ->
+            if(ui.sidebarVisible(platform.name)) {
             NativeRow(ui, name(platform), selected == platform, true, { ui.open(platform) }) {
                 PlatformIcon(ui, platform)
+            }
             }
         }
     }
@@ -440,15 +447,29 @@ private class PageMemory(val platform: AccountPlatform, layout: String) {
 @Composable
 private fun CatalogTitle(ui: SaltNativeUi, platform: AccountPlatform, title: String, count: Long, action: (() -> Unit) -> Unit,
                          memory: PageMemory, selectedSort: String, back: Boolean, folder: Boolean, author: Boolean) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
-        if(back) HeaderIcon(ui,"\u8fd4\u56de\u5217\u8868",HeaderGlyph.BACK) {action {ui.desk().back(platform);memory.localSearch=false;memory.localText=""}}
-        NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch && folder) 0.6f else 1f),maxLines=1)
-        if(folder) {
-            SearchControl(ui,memory.localField,memory.localSearch,{memory.localSearch=it},true,"\u641c\u7d22\u5408\u96c6") { keyword -> action {ui.desk().filter(keyword)} }
-            HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) { action {ui.desk().playPlaylist()} }
+    val goBack={action {ui.desk().back(platform);memory.localSearch=false;memory.localText=""}}
+    val tools: @Composable () -> Unit = {
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            if(folder) {
+                SearchControl(ui,memory.localField,memory.localSearch,{memory.localSearch=it},true,"\u641c\u7d22\u5408\u96c6") { keyword -> action {ui.desk().filter(keyword)} }
+                HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) {action {ui.desk().playPlaylist()}}
+            }
+            LayoutSwitch(ui,memory,action)
+            if(folder || author) SortMenu(ui,platform,selectedSort,author,action)
         }
-        LayoutSwitch(ui,memory,action)
-        if(folder || author) SortMenu(ui,platform,selectedSort,author,action)
+    }
+    if(back && ui.nativeSecondaryHeaderAvailable()) {
+        val nativeBack: @Composable () -> Unit = {
+            ui.secondaryBack(goBack,Modifier.semantics {contentDescription="\u8fd4\u56de\u5217\u8868"},currentComposer)
+        }
+        ui.secondaryHeader(title,if(count>=0) "($count)" else null,
+            Modifier.fillMaxWidth().semantics {contentDescription="\u539f\u751f\u4e8c\u7ea7\u9875\u6807\u9898\u680f"},nativeBack,tools,currentComposer)
+        return
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment=Alignment.CenterVertically) {
+        if(back) HeaderIcon(ui,"\u8fd4\u56de\u5217\u8868",HeaderGlyph.BACK,click=goBack)
+        NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch && folder) 0.6f else 1f),maxLines=1)
+        tools()
     }
 }
 
@@ -570,23 +591,21 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
 private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     val memory=remember(ui,platform) { ui.pageMemory(platform) { PageMemory(platform,ui.desk().layout(platform)) } as PageMemory }
     var state by remember(ui, platform) { mutableStateOf<NativeDesk.State?>(if(ui.available()) ui.desk().snapshot(platform) else null) }
-    var error by remember(ui, platform) { mutableStateOf("") }
     var enabled by remember(ui) { mutableStateOf(ui.available()) }
     var coverMode by remember(ui) {mutableStateOf(ui.desk().coverMode())}
-    var playlistStatus by remember(ui) {mutableStateOf("")}
     val action: (() -> Unit) -> Unit = { block ->
-        try { block(); error = "" }
-        catch (failure: Exception) { error = "\u64cd\u4f5c\u672a\u5b8c\u6210\uff08${failure.javaClass.simpleName}\uff09\uff0c\u8bf7\u68c0\u67e5\u6388\u6743\u548c\u5b9e\u9a8c\u9002\u914d\u72b6\u6001\u3002" }
+        try { block() }
+        catch (failure: Exception) { ui.desk().error("\u64cd\u4f5c\u672a\u5b8c\u6210\uff08${failure.javaClass.simpleName}\uff09\uff0c\u8bf7\u68c0\u67e5\u6388\u6743\u548c\u9002\u914d\u72b6\u6001\u3002") }
     }
     LaunchedEffect(ui, platform) {
         while (true) {
             enabled = ui.available()
             coverMode=ui.desk().coverMode()
-            playlistStatus=ui.desk().savedPlaylists().status()
-            state = if (enabled) try {
-                if (ui.desk().enter(platform)) { memory.view=Catalog.View.DISCOVER; memory.localSearch=false; memory.localText="" }
-                ui.desk().snapshot(platform)
-            } catch (_: Exception) { null } else null
+            if (enabled) try {
+                if (ui.desk().enter(platform)) { memory.view=ui.desk().platformHome(platform); memory.localSearch=false; memory.localText="" }
+                state=ui.desk().snapshot(platform)
+            } catch (_: Exception) { /* Retain the last rendered catalog on a transient poll failure. */ }
+            else state=null
             delay(100)
         }
     }
@@ -596,7 +615,6 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     }
     val palette = ui.palette(currentComposer)
     val catalog = state?.catalog()?.takeIf { it["platform"] == platform.name }
-    val playback = state?.playback()
     val login = state?.login()
     val rows = catalog?.get("items") as? List<*>
     val coverTokens=rows.orEmpty().mapNotNull { (it as? Map<*,*>)?.get("token") as? String }
@@ -635,7 +653,21 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         val narrowHeader=maxWidth<640.dp
         val columns=when(memory.layout) {ListLayout.SINGLE -> 1; ListLayout.DOUBLE -> if(maxWidth>=600.dp) 2 else 1; ListLayout.CARDS -> (maxWidth.value/210f).toInt().coerceIn(1,6)}
         Column(Modifier.fillMaxSize()) {
-        AccountHeader(ui, platform, login, action, memory, narrowHeader, catalog, enabled)
+        val secondary=enabled && catalog?.get("back")==true
+        if(!secondary) AccountHeader(ui, platform, login, action, memory, narrowHeader, catalog, enabled)
+        if(enabled) {
+            val title=catalog?.get("title") as? String ?: ""
+            val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
+            val author=catalog?.get("view") in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")
+            Column(Modifier.fillMaxWidth().padding(horizontal=if(secondary && ui.nativeSecondaryHeaderAvailable()) 0.dp else 16.dp).padding(bottom=8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                CatalogTitle(ui,platform,if(author) (catalog?.get("authorName") as? String).orEmpty() else title,
+                    if(folder || author) (catalog?.get("totalCount") as? Number)?.toLong() ?: -1 else -1,
+                    action,memory,(catalog?.get("sort") as? String) ?: "DEFAULT",catalog?.get("back")==true,folder,catalog?.get("view")=="AUTHOR_VIDEOS")
+                if(author) NativeButtons(ui,listOf(
+                    NativeButton("\u89c6\u9891",catalog?.get("view")=="AUTHOR_VIDEOS") {action {ui.desk().authorTab(false)}},
+                    NativeButton("\u5408\u96c6",catalog?.get("view")=="AUTHOR_COLLECTIONS") {action {ui.desk().authorTab(true)}}))
+            }
+        }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp).onPointerEvent(PointerEventType.Scroll) {
             if(it.changes.any {change -> change.scrollDelta.y>0f}) downScroll++
         }, state = listState,
@@ -669,27 +701,6 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                             action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}
                         }
                     })
-                }
-                if (playback?.get("active") == true && (playback["error"] as? String).orEmpty().isNotEmpty()) item {
-                    NativeText(ui, playback["error"] as String)
-                }
-                item {
-                    if (error.isNotEmpty()) NativeText(ui, error)
-                    if (playlistStatus.isNotEmpty()) NativeText(ui, playlistStatus)
-                    val catalogError = (catalog?.get("error") as? String).orEmpty()
-                    if (catalogError.isNotEmpty()) NativeText(ui, catalogError)
-                    val title=catalog?.get("title") as? String ?: ""
-                    val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
-                    val author=catalog?.get("view") in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")
-                    Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                        CatalogTitle(ui,platform,if(author) (catalog?.get("authorName") as? String).orEmpty() else title,
-                            if(folder || author) (catalog?.get("totalCount") as? Number)?.toLong() ?: -1 else -1,
-                            action,memory,(catalog?.get("sort") as? String) ?: "DEFAULT",catalog?.get("back")==true,folder,catalog?.get("view")=="AUTHOR_VIDEOS")
-                        if(author) NativeButtons(ui,listOf(
-                            NativeButton("\u89c6\u9891",catalog?.get("view")=="AUTHOR_VIDEOS") {action {ui.desk().authorTab(false)}},
-                            NativeButton("\u5408\u96c6",catalog?.get("view")=="AUTHOR_COLLECTIONS") {action {ui.desk().authorTab(true)}}))
-                        if(catalog?.get("loadingAll")==true) NativeText(ui,"\u6b63\u5728\u6574\u7406\u5408\u96c6 " + catalog["loadProgress"] + " \u9875\uff0c\u5b8c\u6210\u540e\u5e94\u7528\u6392\u5e8f",true)
-                    }
                 }
                 if(!rows.isNullOrEmpty() && rows.first().let {(it as? Map<*,*>)?.get("kind")=="TRACK"} && columns==1 && memory.layout==ListLayout.SINGLE) item {
                     Row(Modifier.fillMaxWidth()) {

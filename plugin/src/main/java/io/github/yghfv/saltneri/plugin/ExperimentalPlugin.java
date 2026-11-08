@@ -49,11 +49,20 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
     private volatile String mediaIdentityStatus="not registered";
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
+    private io.github.yghfv.saltneri.plugin.ui.NavigationPreferences navigationPreferences;
     private void applySettings(ConfigHelper config) {
-        settings=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
+        var parsed=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
+        settings=new PlaybackSettings(parsed.bili(),parsed.netease(),parsed.cacheBytes(),parsed.coverMode(),config.get("netease.autoSourceSwitch",false));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
         LibraryController catalog=library; if(catalog!=null) catalog.pageLimit(CatalogPaging.parse(config.get("catalog.pageLimit","30")));
-        SaltNativeUi ui=nativeUi; if(ui!=null) ui.sidebarOptimization(config.get("ui.sidebarOptimization",false));
+        SaltNativeUi ui=nativeUi; if(ui!=null) applySidebarSettings(ui,config);
+    }
+    private void applySidebarSettings(SaltNativeUi ui,ConfigHelper config) {
+        var hidden=new java.util.HashSet<String>();
+        for(String button:io.github.yghfv.saltneri.plugin.ui.SidebarPolicy.BUTTONS)
+            if(!config.get("ui.sidebar."+button,true))hidden.add(button);
+        ui.sidebarSettings(config.get("ui.sidebarOptimization",false),config.get("ui.hiddenSidebar",false),config.get("ui.hideSidebarToggle",false),hidden);
+        ui.configuration(configManager,navigationPreferences);
     }
 
     public ExperimentalPlugin(PluginContext context) { super(context); }
@@ -65,13 +74,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
         status = "Checking native UI capabilities; no network or queue changes.";
         configManager = WorkshopApi.manager().createConfigManager();
         ConfigHelper initialConfig = configManager.getConfig();
+        navigationPreferences=new io.github.yghfv.saltneri.plugin.ui.NavigationPreferences(initialConfig);
         applySettings(initialConfig);
-        if (!initialConfig.get("auth.rememberPolicyV2", false)) {
-            // Migrate the old default-off preference once, as requested; later opt-outs are preserved.
-            initialConfig.set("auth.remember", true);
-            initialConfig.set("auth.rememberPolicyV2", true);
-            if (!initialConfig.save()) throw new IllegalStateException("Login preference migration could not be saved");
-        }
         EncryptedAccountStore accounts = new EncryptedAccountStore(configManager.getConfig().getConfigPath().getParent());
         biliLogin = new AccountLoginController(AccountPlatform.BILIBILI, this::granted, accounts, () -> accountChanged(AccountPlatform.BILIBILI));
         neteaseLogin = new AccountLoginController(AccountPlatform.NETEASE, this::granted, accounts, () -> accountChanged(AccountPlatform.NETEASE));
@@ -99,7 +103,9 @@ public final class ExperimentalPlugin extends SpwPlugin {
             catch (RuntimeException failure) { throw failure; }
             catch (Exception failure) { throw new IllegalStateException("Native action failed", failure); }
         }, () -> generation == started && granted());
+        desk.errorToast(text -> toast(text,WorkshopApi.Ui.ToastType.Error));
         desk.coverMode(()->settings.coverMode());
+        desk.platformHome(navigationPreferences::platformHome);
         desk.preferences(new io.github.yghfv.saltneri.plugin.ui.CatalogPreferences(configManager.getConfig("catalog-ui.json")));
         try {
             savedTracks=new io.github.yghfv.saltneri.plugin.host.SavedTrackStore(configManager.getConfig().getConfigPath().getParent().resolve("saved-online-tracks"));
@@ -129,7 +135,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         NeteaseResolutionController startedNetease = netease;
         configListener = config -> {
             PlaybackSettings previous=settings; applySettings(config);
-            boolean remember = config.get("auth.remember", true);
+            boolean remember = true;
             AccountLoginController a = biliLogin, b = neteaseLogin;
             if (a != null) a.setRememberEnabled(remember);
             if (b != null) b.setRememberEnabled(remember);
@@ -201,10 +207,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
             Object owner = generation;
             nativeUi = new SaltNativeUi(WorkshopApi.class.getClassLoader(), WorkshopApi.hookRegistrar(), desk,
                     () -> generation == owner && granted());
-            nativeUi.sidebarOptimization(configManager.getConfig().get("ui.sidebarOptimization", false));
+            applySidebarSettings(nativeUi,configManager.getConfig());
         }
         status = "0.7.6: Salt native UI requested; remembered plugin logins are verified in background. No automatic playback.";
-        boolean remember = configManager.getConfig().get("auth.remember", true);
+        boolean remember = true;
         biliLogin.restoreOnStartup(remember);
         neteaseLogin.restoreOnStartup(remember);
     }
@@ -213,8 +219,14 @@ public final class ExperimentalPlugin extends SpwPlugin {
         status = "\u5df2\u8bf7\u6c42\u8fdb\u5165\u7f51\u6613\u4e91\uff1b\u9875\u9762\u51fa\u73b0\u540e\u9009\u62e9\u680f\u76ee\u3002\u4e0d\u6253\u5f00\u6d4f\u89c8\u5668\u3002";
     }
     private synchronized void reinstallNativeUi() throws Exception {
-        if (nativeUi != null) { nativeUi.close(); nativeUi = null; }
         ensureNativeUi();
+        nativeUi.repairSidebar();
+    }
+    public static void openSidebarSettings() {
+        ExperimentalPlugin plugin=active;
+        if(plugin==null)return;
+        try {plugin.ensureNativeUi();plugin.nativeUi.openSidebarConfiguration();}
+        catch(Exception failure) {toast("Sidebar settings unavailable",WorkshopApi.Ui.ToastType.Error);}
     }
     private synchronized void startLogin(AccountPlatform platform) throws Exception {
         ensureNativeUi(); nativeUi.requestLogin(platform);
@@ -224,12 +236,12 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private synchronized void nativeAction(AccountPlatform platform, NativeDesk.Action operation) throws Exception {
         if (stopped || !granted()) throw new SecurityException("Experimental permission required");
         switch (operation) {
-            case LOGIN -> login(platform).start(configManager.getConfig().get("auth.remember", true));
-            case WEB_LOGIN -> login(platform).startWebLogin(configManager.getConfig().get("auth.remember", true));
+            case LOGIN -> login(platform).start(true);
+            case WEB_LOGIN -> login(platform).startWebLogin(true);
             case RESTORE -> restoreLogin(platform);
             case LOGOUT -> logout(platform);
             case CANCEL_LOGIN -> login(platform).cancelLogin();
-            case SWITCH_ACCOUNT -> { logout(platform); login(platform).start(configManager.getConfig().get("auth.remember", true)); }
+            case SWITCH_ACCOUNT -> { logout(platform); login(platform).start(true); }
             case ARM -> arm();
             case STOP -> disarm();
         }
@@ -256,13 +268,13 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if (runtime == null || runtime.isClosed()) {
             runtime = Salt1193DiagnosticRuntime.open(WorkshopApi.class.getClassLoader(), profile,
                     WorkshopApi.hookRegistrar(), this::granted);
-            runtime.settings(()->settings); runtime.cacheLimit(settings.cacheBytes());
+            runtime.settings(()->settings); runtime.accounts(this::credentials); runtime.cacheLimit(settings.cacheBytes());
         }
         if(savedTracks!=null) runtime.savedTracks(savedTracks,new io.github.yghfv.saltneri.plugin.host.SavedTrackSession.Resolver() {
             public Object revision(AccountPlatform platform) {return java.util.Arrays.asList(credentials(platform),settings.qualityKey());}
             public OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
                 AccountCredentials account=credentials(entry.target().platform());
-                return OnlinePlaybackController.resolveAudio(account,entry.target(),account==null?"anonymous:saved:"+java.util.UUID.randomUUID():account.accountScope(),request,settings);
+                return OnlinePlaybackController.resolveAudio(account,entry.target(),account==null?"anonymous:saved:"+java.util.UUID.randomUUID():account.accountScope(),request,settings,ExperimentalPlugin.this::credentials);
             }
             public io.github.yghfv.saltneri.plugin.host.OnlineLyrics.Source lyrics(io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry) {
                 return entry.target().platform()==AccountPlatform.NETEASE?request->new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(credentials(AccountPlatform.NETEASE)).load(Long.parseLong(entry.target().id()),request):null;

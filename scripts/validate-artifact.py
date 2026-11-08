@@ -40,6 +40,8 @@ def validate(path, experimental):
             raise ValueError("Unexpected mod display name")
         if attributes["Plugin-Version"] != metadata["version" if experimental else "passiveVersion"]:
             raise ValueError("Unexpected mod version")
+        if attributes.get("Plugin-Open-Source-Url") != metadata["openSourceUrl"]:
+            raise ValueError("Missing or unexpected open-source URL")
         if experimental:
             if attributes.get("Plugin-Permissions") != "class-transform":
                 raise ValueError("Experimental permission/version missing")
@@ -47,13 +49,22 @@ def validate(path, experimental):
             raise ValueError("Passive artifact requests permissions")
         configs = json.loads(archive.read("classes/preference_config.json"))
         buttons = [pref["on_click"] for config in configs["configs"] for pref in config["preferences"] if pref["type"] == "button"]
-        expected = ["openLibrary", "clearCache", "installNativeUi", "showStatus"] if experimental else ["showStatus"]
+        expected = ["openSidebarSettings", "clearCache", "installNativeUi", "showStatus"] if experimental else ["showStatus"]
         if buttons != ["io.github.yghfv.saltneri.plugin." + entry_class + "." + method for method in expected]:
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(prefs) != {"bili.quality", "netease.quality", "auth.remember", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization"} or sum(len(c["preferences"]) for c in configs["configs"]) != 11:
-                raise ValueError("Unexpected expanded settings menu")
+            if set(prefs) != {"bili.home", "netease.home", "ui.home", "bili.quality", "netease.quality", "netease.autoSourceSwitch", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 16:
+                raise ValueError("Unexpected condensed settings menu")
+            if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "ui.hideSidebarToggle")):
+                raise ValueError("Automatic source switching and toggle hiding must be opt-in")
+            if prefs["ui.hiddenSidebar"]["default_value"] is not False:
+                raise ValueError("Sidebar hiding must be opt-in")
+            if prefs["ui.home"]["entry_values"] != ["restore", "Track", "BILIBILI", "NETEASE"] or prefs["ui.home"]["default_value"] != "restore":
+                raise ValueError("Wrong Salt startup home options")
+            for key in ("bili.home", "netease.home"):
+                if prefs[key]["entry_values"] != ["DISCOVER", "MINE", "SAVED"] or prefs[key]["default_value"] != "DISCOVER":
+                    raise ValueError("Wrong platform startup home options")
             if prefs["ui.sidebarOptimization"]["type"] != "switch" or prefs["ui.sidebarOptimization"]["default_value"] is not False:
                 raise ValueError("Sidebar optimization must be opt-in")
             if prefs["cover.mode"]["entry_values"] != ["fit", "center", "left", "right"] or prefs["cover.mode"]["default_value"] != "fit":
@@ -62,8 +73,6 @@ def validate(path, experimental):
                 raise ValueError("Wrong catalog page limits/default")
             if prefs["bili.quality"]["entry_values"] != ["dolby", "hires", "lossless", "high", "medium", "low"]:
                 raise ValueError("Wrong Bilibili quality order")
-            if prefs["auth.remember"]["type"] != "switch" or prefs["auth.remember"]["default_value"] is not True:
-                raise ValueError("Remembered login must default on")
             if prefs["netease.quality"]["entry_values"] != ["standard", "higher", "exhigh", "lossless", "hires", "jyeffect", "sky", "jymaster"] or prefs["netease.quality"]["default_value"] != "standard":
                 raise ValueError("Wrong NetEase quality options")
             if prefs["cache.limitMiB"]["entry_values"] != ["0", "512", "1024", "2048", "4096", "8192"] or prefs["cache.limitMiB"]["default_value"] != "2048":

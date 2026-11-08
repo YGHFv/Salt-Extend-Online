@@ -30,8 +30,8 @@ public final class NativePageRenderTest {
         public HookHandle afterComposable(String o, String m, String i, List<String> t, int p, ComposableHook c) {
             return new HookHandle() { public void unhook() {} public void close() {} };
         }
-        public HookHandle hookMethod(String o, String m, List<String> t, MethodHook h) { if(!o.equals("com.xuncorp.voxzen.ui.navigation.Navigator") || !m.equals("back") || !t.isEmpty()) throw new AssertionError("Unexpected method hook"); return new HookHandle() { public void unhook() {} public void close() {} }; }
-        public HookHandle replaceComposable(String o, String m, String i, List<String> t, int p, ComposableHook c) { throw new AssertionError(); }
+        public HookHandle hookMethod(String o, String m, List<String> t, MethodHook h) { if(!o.equals("com.xuncorp.voxzen.ui.navigation.Navigator") && !o.equals("androidx.compose.ui.\u09b8") && !o.equals("androidx.compose.ui.\u05d0")) throw new AssertionError("Unexpected method hook"); return new HookHandle() { public void unhook() {} public void close() {} }; }
+        public HookHandle replaceComposable(String o, String m, String i, List<String> t, int p, ComposableHook c) { return new HookHandle() { public void unhook() {} public void close() {} }; }
         public <S> HookHandle appendContent(String o, String m, String i, String a, Class<S> s, List<String> t, int p, ContentHook<S> c) { throw new AssertionError(); }
     }
     private static int checks;
@@ -289,7 +289,7 @@ public final class NativePageRenderTest {
                 int rows = ((List<?>)library.snapshot().get("items")).size();
                 if (rows == 20) check(findText(root,"\u4e0b\u4e00\u9875") == null);
                 if (expected) {
-                    scrollTo(scene, rows + 3); // Refresh now belongs to the fixed header, not this list.
+                    scrollTo(scene, rows + 2); // Title/actions now also belong to the fixed header.
                     root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                     for(String label:List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605")) {
                         var button=HeaderSearchRenderTest.find(scene,label,androidx.compose.ui.semantics.SemanticsActions.INSTANCE.getOnClick());
@@ -312,7 +312,7 @@ public final class NativePageRenderTest {
                     while ((!library.snapshot().get("page").equals(first ? 2 : 1) || !Boolean.TRUE.equals(library.snapshot().get("loaded"))) && System.nanoTime()<until) Thread.sleep(10);
                     check(library.snapshot().get("page").equals(first ? 2 : 1) && Boolean.TRUE.equals(library.snapshot().get("loaded")));
                     Thread.sleep(450);
-                    scrollTo(scene, ((List<?>)library.snapshot().get("items")).size() + 3);
+                    scrollTo(scene, ((List<?>)library.snapshot().get("items")).size() + 2);
                     try (Image ignored = scene.render(System.nanoTime())) {
                         var after = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                         check(findText(after,"\u4e0a\u4e00\u9875") != null && findText(after,"\u4e0b\u4e00\u9875") != null);

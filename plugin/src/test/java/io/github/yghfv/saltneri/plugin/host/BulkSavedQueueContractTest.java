@@ -52,8 +52,66 @@ public final class BulkSavedQueueContractTest {
             check(files(root)==3,"Legacy save created an empty cover");
         }
         try(var store=new SavedTrackStore(root)) {check(store.entries().size()==1001,"Mixed legacy/batch restart failed");}
-        cancellation();corruption();runtime();
+        cancellation();corruption();runtime();unavailableSaved();alternativeSource();
         System.out.println("PASS: "+checks+" bulk durable queue checks; 1000 identities fresh="+fresh+"ms / repeated="+warm+"ms, one metadata file, no eager covers; synthetic only");
+    }
+    private static void alternativeSource() throws Exception {
+        var root=Files.createTempDirectory("salt-saved-alternative-").toRealPath();
+        var binding=new LazyPlaylistContractTest.Binding();var active=new AtomicBoolean(true);
+        var expected=new AtomicReference<Audio>();var resolutions=new AtomicInteger();
+        try(var store=new SavedTrackStore(root);var server=TransportContractTest.offlineServer(Clock.systemUTC(),()->true);
+            var saved=new SavedTrackSession(binding,server,()->true,new SavedTrackSession.Resolver() {
+                public Object revision(AccountPlatform platform){return "alternative-fixture";}
+                public Audio resolve(SavedTrackStore.Entry entry,io.github.yghfv.saltneri.plugin.net.RequestScope request) {resolutions.incrementAndGet();return expected.get();}
+            })) {
+            var entry=store.save(new Target(AccountPlatform.NETEASE,"123"),new Catalog.Item(Catalog.Kind.TRACK,"123","Original","Artist",240000,true));
+            var expiry=java.time.Instant.now().plusSeconds(600);
+            var source=new io.github.yghfv.saltneri.plugin.transport.MediaLease(io.github.yghfv.saltneri.plugin.transport.MediaLease.Platform.BILIBILI,
+                    java.net.URI.create("https://fixture.bilivideo.com/audio"),Map.of(),"bili-fixture",expiry,4096);
+            var fallback=new Audio(io.github.yghfv.saltneri.core.TrackKey.netease("123"),new Salt1193PlaybackSession.Metadata("Original","Artist","Album","Artist"),
+                    source.bindTo("original-fixture",active::get),expiry,entry.target(),io.github.yghfv.saltneri.core.TrackKey.bilibili("BV17x411w7KC",123));
+            expected.set(fallback);saved.prime(entry,fallback,"alternative-fixture");
+            var first=saved.warm(entry,()->true);
+            check(server.isAvailable(first) && resolutions.get()==0,"Alternative source was rejected or re-resolved after prime");
+            server.revoke(first);
+            var reopened=binding.pending.get(entry.path()).resolve();
+            check(resolutions.get()==1 && server.isAvailable(reopened),"Saved alternative source failed to reopen");
+            check(store.entries().size()==1 && store.entries().getFirst().target().platform()==AccountPlatform.NETEASE,"Fallback changed saved identity");
+            active.set(false);check(!server.isAvailable(reopened),"Alternative source served after source account revocation");
+        }
+        check(binding.pending.isEmpty(),"Alternative source leaked native bindings");
+    }
+    private static void unavailableSaved() throws Exception {
+        var profile=Salt1193Probe.inspect(BulkSavedQueueContractTest.class.getClassLoader(),"1.19.3","Steam");
+        var binding=new LazyPlaylistContractTest.Binding();var queued=new ArrayList<Object>();var calls=new ArrayList<String>();
+        var root=Files.createTempDirectory("salt-bulk-unavailable-").toRealPath();
+        try(var store=new SavedTrackStore(root);var server=TransportContractTest.offlineServer(Clock.systemUTC(),()->true);
+            var saved=new SavedTrackSession(binding,server,()->true,new SavedTrackSession.Resolver() {
+                public Object revision(AccountPlatform platform){return "fixture";}
+                public Audio resolve(SavedTrackStore.Entry entry,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
+                    calls.add(entry.target().id());
+                    if(entry.target().id().equals("2"))throw new io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable(-1);
+                    return audio(entry);
+                }
+            })) {
+            var rows=rows(3);var identities=store.saveAll(AccountPlatform.NETEASE,rows,()->true).iterator();
+            var sink=new Salt1193PlaybackSession.QueueSink() {
+                public void addToPlay(Object item){throw new AssertionError();}
+                public int firstIndex(int size){return 1;}
+                public void replace(List<Object> items,int first){check(first==1 && items.size()==2,"Skipped indexed first lost order");queued.addAll(items);}
+            };
+            try(var session=new LazyPlaylistSession(profile,binding,server,sink,rows,"fixture",()->true,(item,scope,request)->{
+                throw new AssertionError("Must use saved resolver");
+            },item->null,saved,item->identities.next())) {
+                session.play();
+                check(calls.equals(List.of("2","3")),"Saved unavailable first not skipped");
+                check(profile.mediaFactory().read(queued.getFirst())[1].equals("Fixture 1")
+                        && profile.mediaFactory().read(queued.getLast())[1].equals("Fixture 3"),"Saved order changed");
+                check(binding.pending.get(profile.mediaFactory().read(queued.getLast())[5]).resolve()!=null && calls.size()==2,"Saved first was resolved twice");
+            }
+            check(store.entries().size()==3 && binding.pending.size()==3,"Skipped queue deleted durable library mapping");
+        }
+        check(binding.pending.isEmpty(),"Saved mappings leaked after shutdown");
     }
     private static void cancellation() throws Exception {
         Path root=Files.createTempDirectory("salt-bulk-cancel-").toRealPath();var rows=rows(1000);var polls=new AtomicInteger();

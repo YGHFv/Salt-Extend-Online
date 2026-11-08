@@ -60,7 +60,7 @@ public final class SavedTrackSession implements AutoCloseable {
     }
     private void validate(SavedTrackStore.Entry entry,Audio audio) {
         if(!audio.key().platform().name().equals(entry.target().platform().name())
-                || !audio.lease().platform().name().equals(entry.target().platform().name())
+                || !audio.transportMatches()
                 || !SavedTrackStore.matches(entry,audio.target()) || !transport.now().isBefore(audio.expiresAt())) throw new SecurityException("Saved target mismatch or expiry");
     }
     private URI publish(Binding binding,Audio audio,Object revision) {

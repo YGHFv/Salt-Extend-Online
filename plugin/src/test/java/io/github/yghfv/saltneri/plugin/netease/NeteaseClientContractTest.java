@@ -128,6 +128,12 @@ public final class NeteaseClientContractTest {
                 "https://music.163.com:443/song?id=123", "https://music.163.com/playlist?id=123", "https://music.163.com/song?id=1&%69d=123",
                 "https://music.163.com/#//evil/song?id=123", "https://music.163.com/#https://evil/song?id=123", "https://music.163.com/song", "https://163cn.tv/abc")) fails(() -> NeteaseTarget.parse(input));
         Fixture fixture = new Fixture(); var result = resolve(fixture, null);
+        Fixture detailOnly=new Fixture();
+        try(var request=new RequestScope(()->true)) {
+            var info=detailOnly.client(null).songInfo(TARGET,request);
+            check(info.metadata().title().equals(result.metadata().title()) && info.durationMillis()==result.durationMillis());
+            check(detailOnly.requests.size()==1 && detailOnly.forms.getFirst()==null);
+        }
         check(result.key().stableId().equals("netease:song:123")); check(result.durationMillis() == 120000 && result.bitrateKbps() == 128);
         check(result.lease().length() == 4096 && result.lease().belongsTo("fixture-anonymous"));
         check(result.mimeType().equals("audio/mpeg") && result.level().equals("standard"));
@@ -175,6 +181,22 @@ public final class NeteaseClientContractTest {
         check(resolve(aliases, null).metadata().artist().equals("One / Two"));
         Fixture objectData = new Fixture(); objectData.audio = AUDIO.replace("\"data\":[", "\"data\":").replace("}]}", "}}");
         check(resolve(objectData, null).lease().length() == 4096);
+        for(int mode=0;mode<5;mode++) {
+            var rejected=new Fixture();
+            switch(mode) {
+                case 0 -> rejected.detail=DETAIL.replace("\"fee\":0","\"fee\":1");
+                case 1 -> rejected.audio=AUDIO.replace("\"freeTrialInfo\":null","\"freeTrialInfo\":{}");
+                case 2 -> rejected.audio=AUDIO.replace("\"url\":\""+MEDIA+"\"","\"url\":null");
+                case 3 -> rejected.audio=AUDIO.replace("\"id\":123,\"code\":200","\"id\":123,\"code\":404");
+                case 4 -> rejected.audio=AUDIO.replace("\"id\":123,\"code\":200","\"id\":123,\"code\":429");
+            }
+            try {resolve(rejected,null);throw new AssertionError("Gate accepted");}
+            catch(NeteaseClient.PlatformRejected denied) {
+                check((denied instanceof NeteaseClient.TrackUnavailable)==(mode<4));
+                if(mode==4) check(denied.code()==429);
+            }
+            check(rejected.requests.size()==(mode==0?1:2));
+        }
         rejectDetail(DETAIL.replace("\"songs\":", "\"privileges\":[{\"id\":123,\"fee\":0,\"st\":-1,\"pl\":128000}],\"songs\":"));
         rejectDetail(DETAIL.replace("\"songs\":", "\"privileges\":[{\"id\":123,\"fee\":0,\"st\":0,\"pl\":0}],\"songs\":"));
         rejectDetail(DETAIL.replace("\"fee\":0,", ""));

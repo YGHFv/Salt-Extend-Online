@@ -96,6 +96,7 @@ spmod {
     PluginVersion = pluginMetadata.getProperty(if (experimentalAdapter) "version" else "passiveVersion")
     PluginProvider = pluginMetadata.getProperty("provider")
     PluginName = pluginMetadata.getProperty("name")
+    PluginOpenSourceUrl = pluginMetadata.getProperty("openSourceUrl")
     PluginDescription = if (experimentalAdapter) "Native Salt sidebar/catalog/QR UI and explicit playback preview; unverified." else "Passive host preview; online playback is not connected yet."
     PluginPermissions = if (experimentalAdapter) listOf(com.xuncorp.spw.workshop.gradle.PluginPermission.CLASS_TRANSFORM) else emptyList()
     PluginHasConfig = true

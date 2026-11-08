@@ -85,6 +85,12 @@ public final class BiliClientContractTest {
     }
     public static BiliClient.Resolved resolvedFixture() throws IOException { return resolve(new Fixture().client()); }
     public static void main(String[] args) throws Exception {
+        try(var request=new RequestScope(()->true)) {
+            var fixture=new Fixture();
+            var pages=fixture.client().pages(BV,request);
+            check(pages.size()==2 && pages.getLast().target().page()==2 && pages.getLast().durationMillis()==120000);
+            check(pages.getLast().title().equals("Part 2 Fixture title"));
+        }
         check(BiliTarget.parse(BV).equals(new BiliTarget(BV, 1)));
         check(BiliTarget.parse("av170001").page() == 1);
         check(BiliTarget.parse("https://www.bilibili.com/video/" + BV + "/?p=2&spm_id_from=test#reply").page() == 2);

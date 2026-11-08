@@ -34,6 +34,7 @@ The following Java files are ports or adaptations, not independent claims of aut
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseClient.java` | Song detail/audio parameters of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/client/NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteaseSongMapping.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/playback/parser/NeteasePlaybackResponseParser.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseLyricsClient.java`, `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseLyricsText.java` | `getLyricNew` endpoint/parameters from the same `NeteaseClient.kt`; YRC/LRC and translation field priority from `modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/metadata/PlayerLyricsSupport.kt`. Salt serialization, transport and item bindings are plugin-specific. |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogClient.java` | Read-only favorites/playlist and CloudSearch parameters of the same `BiliClient.kt` and `NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteasePlaylistMapping.kt` and `NeteaseSongMapping.kt` |
+| `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/AutoSourceMatcher.java`, `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/NeteaseAutoSourceResolver.java` | Query ordering, six-candidate scoring, duration filters and page matching from `modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/resolver/netease/PlayerManagerNeteaseAutoSourceSwitch.kt`. Two-account revocation, logical identity retention, alternative-version gates and bounded work are plugin-specific. QQ Music networking is not connected. |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogHttp.java` | Authenticated-only WEAPI preheat condition from `shouldPreheatNeteaseWeapiSession` in `NeteaseClient.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogFailure.java` | NetEase code 50000005 login hint from `buildHomeErrorText` in `app/src/main/java/moe/ouom/neriplayer/ui/viewmodel/tab/HomeViewModel.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/BiliDiscovery.java` | Music chart endpoints/mapping from `BiliClient.kt`; latest-period selection from `app/src/main/java/moe/ouom/neriplayer/ui/viewmodel/tab/bili/BiliMusicHomeRepository.kt`; source priority from `modules/model/src/main/java/moe/ouom/neriplayer/data/model/bilibili/music/BiliMusicModels.kt` |
@@ -64,12 +65,19 @@ The Windows Edge/PowerShell bridge is plugin-specific, uses a fresh isolated pro
 does not redistribute Microsoft Edge, its runtime, or a captcha/device-fingerprint solver.
 
 The NetEase resolver ports exact song detail GET and EAPI audio URL parameters, not Android playback,
-full account-session preheating or automatic retry/fallback policies. It rejects preview,
+full account-session preheating or automatic network retry policies. It rejects preview,
 anonymous paid/unknown-fee resources, missing/mismatched durations and CDN size mismatches.
 Logged-in paid tracks still require a server-authorized full-track response. API account cookies
 retain their original host/domain/path scope and are never sent to a media CDN. Tests use synthetic
 fixtures; the fixed EAPI framing vector was independently computed with Windows .NET cryptography.
 No live NetEase song resolution or actual Salt/BASS playback has been verified. See `docs/NETEASE_PROGRESS.md`.
+
+An opt-in alternative-source port searches Bilibili only after an explicit NetEase song-level
+unavailable response, using a separately verified Bilibili account. It retains the NetEase
+queue/lyrics identity and uses Bilibili CDN/cache policy. It never retries login/risk/transport
+failures with another NetEase URL, does not use previews, and stops serving the fallback when
+either original or source account revision changes. Unlike upstream eager backup resolution,
+it returns the first qualifying full stream to avoid delaying initial playback.
 
 Catalog ports are read-only. Ordinary browsing remains page-bounded; explicit collection search,
 sort or play can fetch up to 500 pages / 10000 tracks with an overall deadline. Platform-local

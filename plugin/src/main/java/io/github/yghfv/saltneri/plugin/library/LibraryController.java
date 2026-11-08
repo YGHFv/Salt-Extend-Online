@@ -48,7 +48,7 @@ public final class LibraryController implements AutoCloseable {
         long totalCount = -1;
         String creator = "", filter = "", error = "", title = "";
         Sort sort = Sort.DEFAULT;
-        boolean fullMode, playPending;
+        boolean fullMode, playPending, preserveWindow;
         volatile int completedPages, requestedPages;
         int resultPage=1;
         String authorName="";
@@ -109,7 +109,7 @@ public final class LibraryController implements AutoCloseable {
         if(pageLimit==value)return;
         pageLimit=value;
         for(State s:states.values()) {
-            s.chunks=1;s.appending=false;s.playPending=false;s.loadToken=UUID.randomUUID().toString();
+            s.chunks=1;s.appending=false;s.playPending=false;s.preserveWindow=false;s.loadToken=UUID.randomUUID().toString();
             if(s.query==null)continue;
             s.query=at(s.query,1);s.resultPage=1;
             if(s.contents!=null)rebuild(s);
@@ -118,10 +118,14 @@ public final class LibraryController implements AutoCloseable {
         }
     }
     public synchronized boolean enter(AccountPlatform destination) {
+        return enter(destination,View.DISCOVER);
+    }
+    public synchronized boolean enter(AccountPlatform destination,View home) {
+        if(home!=View.DISCOVER && home!=View.MINE && home!=View.SAVED)throw new IllegalArgumentException("Invalid platform home");
         if (!permitted()) throw new SecurityException("Catalog unavailable");
         State s = states.get(destination); refresh(s);
         if (s.query != null) return false;
-        browse(destination,View.DISCOVER); return true;
+        browse(destination,home); return true;
     }
     private State stateFor(String token) { for (State s : states.values()) if (s.rows.containsKey(token)) return s; return null; }
     public synchronized void browse(AccountPlatform platform, View view) {
@@ -142,13 +146,13 @@ public final class LibraryController implements AutoCloseable {
         s.resolvedCovers.clear();
         s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.delivered=null; s.rows.clear();
         s.chunks=1;s.appending=false;s.loadToken=UUID.randomUUID().toString();
-        s.playPending = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
+        s.playPending = false; s.preserveWindow = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
         if (s.fullMode) {
             navigation.run(); s.resultPage=s.query.page(); s.account = accounts.apply(s.platform); s.complete.start(allQuery(s.query),"all");
         } else load(s,s.query);
     }
     private void reset(State s) {
-        s.complete.invalidate(""); s.contents = null; s.fullMode = false; s.playPending = false;
+        s.complete.invalidate(""); s.contents = null; s.fullMode = false; s.playPending = false; s.preserveWindow = false;
         s.knownPages = 0; s.totalCount = -1; s.creator = ""; s.filter = ""; s.sort = Sort.DEFAULT; s.error = ""; s.title="";
         s.completedPages=0; s.requestedPages=0;
         s.chunks=1;s.visibleChunks=1;s.appending=false;s.delivered=null;s.loadToken=UUID.randomUUID().toString();
@@ -224,7 +228,12 @@ public final class LibraryController implements AutoCloseable {
         var raw = s.loader.snapshot();
         if (s.fullMode) {
             var all = s.complete.snapshot();
-            if (all.resolved()!=null && all.resolved() != s.contents) { s.contents = all.resolved(); s.rows.clear(); s.visible = null; s.query=at(s.query,s.resultPage); rebuild(s); }
+            if (all.resolved()!=null && all.resolved() != s.contents) {
+                s.contents = all.resolved();
+                // Playback preparation must not republish visible row capabilities or reset scroll.
+                if (!s.preserveWindow) { s.query=at(s.query,s.resultPage); rebuild(s); }
+                s.preserveWindow=false;
+            }
             if (all.failed()) {
                 s.playPending = false;
                 // Bulk failure must not strand a preserved, otherwise usable paginated catalog.
@@ -309,13 +318,13 @@ public final class LibraryController implements AutoCloseable {
             s.contents=new Contents(s.title,List.copyOf(items));
             s.fullMode=true; return;
         }
-        if (!s.fullMode) { s.loader.invalidate("");s.appending=false;s.fullMode=true; s.resultPage=1; s.completedPages=0; s.requestedPages=0; s.complete.start(allQuery(s.query),"all"); }
+        if (!s.fullMode) { s.loader.invalidate("");s.appending=false;s.fullMode=true; s.completedPages=0; s.requestedPages=0; s.complete.start(allQuery(s.query),"all"); }
         else if (s.complete.snapshot().failed()) s.complete.start(allQuery(s.query),"all");
     }
     public synchronized void filter(String keyword) {
         State s=current(); requireFolder(s); String value=keyword.strip();
         if (value.length()>100 || value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("Invalid filter");
-        s.filter=value;s.chunks=1; complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
+        s.filter=value;s.chunks=1;s.preserveWindow=false;s.resultPage=1; complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
     public synchronized void sort(Sort order) {
         State s=current(); refresh(s); Objects.requireNonNull(order);
@@ -328,7 +337,7 @@ public final class LibraryController implements AutoCloseable {
         }
         requireFolder(s);
         if(s.sort==order && s.error.isEmpty() && !s.complete.snapshot().failed()) return;
-        s.sort=order;
+        s.sort=order;s.preserveWindow=false;s.resultPage=1;
         s.chunks=1;
         if(s.platform==AccountPlatform.BILIBILI && s.query.view()==View.COLLECTION && s.contents==null && s.filter.isEmpty()
                 && (order==Sort.DEFAULT || order==Sort.REVERSE)) {
@@ -337,7 +346,11 @@ public final class LibraryController implements AutoCloseable {
         }
         complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
-    public synchronized void requestPlaylist() { State s=current(); requireFolder(s); s.playPending=true; s.error=""; complete(s); }
+    public synchronized void requestPlaylist() {
+        State s=current(); requireFolder(s); s.playPending=true; s.error="";
+        if(!s.fullMode) {s.preserveWindow=true;s.resultPage=s.query.page();}
+        complete(s);
+    }
     public synchronized void cancelPendingPlayback() { for(State s:states.values()) s.playPending=false; }
     public synchronized Playlist takePlaylist() {
         State s=current(); refresh(s); if(!s.playPending || s.contents==null) return null; s.playPending=false;

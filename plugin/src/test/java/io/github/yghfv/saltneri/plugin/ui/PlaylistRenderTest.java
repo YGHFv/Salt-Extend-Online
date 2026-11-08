@@ -129,6 +129,22 @@ public final class PlaylistRenderTest {
                         try {
                             render(scene); check(find(scene,"My collection (21)",null)!=null && find(scene,"Uploader",null)!=null);
                             click(scene,"My collection (21)");
+                            check(find(scene,"\u539f\u751f\u4e8c\u7ea7\u9875\u6807\u9898\u680f",null)!=null);
+                            check(find(scene,"\u5728\u7ebf\u9875\u9762\u6807\u9898\u680f",null)==null);
+                            var nativeTitle=find(scene,"My collection",SemanticsActions.INSTANCE.getGetTextLayoutResult());
+                            var nativeBack=find(scene,"\u8fd4\u56de\u5217\u8868",SemanticsActions.INSTANCE.getOnClick());
+                            check(nativeTitle!=null && nativeBack!=null);
+                            check(nativeTitle.getBoundsInRoot().getTop()<64*density && nativeBack.getBoundsInRoot().getBottom()<72*density);
+                            var screenshot=java.nio.file.Path.of(System.getProperty("java.io.tmpdir"),"native-ui-render",
+                                    "secondary-header-"+logicalWidth+"-"+density+".png");
+                            java.nio.file.Files.createDirectories(screenshot.getParent());
+                            try(var image=scene.render(System.nanoTime());
+                                var surface=org.jetbrains.skia.Surface.Companion.makeRasterN32Premul(width,height)) {
+                                surface.getCanvas().clear(0xffeeeeee);surface.getCanvas().drawImage(image,0,0);
+                                try(var composite=surface.makeImageSnapshot();var png=composite.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
+                                    java.nio.file.Files.write(screenshot,png.getBytes());
+                                }
+                            }
                             int beforeLayout=requests.get();
                             for(String layout:List.of("\u53cc\u5217\u5217\u8868","\u5361\u7247\u5217\u8868","\u5355\u5217\u5217\u8868")) {
                                 click(scene,"\u5207\u6362\u5217\u8868");render(scene);
@@ -153,6 +169,13 @@ public final class PlaylistRenderTest {
                                 }
                             }
                             check(unmerged(scene,"00:01",null)!=null);
+                            var toolbar=find(scene,"\u5168\u90e8\u64ad\u653e",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                            var scrollKey=SemanticsActions.INSTANCE.getScrollToIndex();
+                            var scroller=find(scene,null,scrollKey);check(scroller!=null);
+                            check(Boolean.TRUE.equals(scroller.getConfig().get(scrollKey).getAction().invoke(10)));render(scene);
+                            var fixed=find(scene,"\u5168\u90e8\u64ad\u653e",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                            check(toolbar.equals(fixed) && find(scene,"My collection",SemanticsActions.INSTANCE.getGetTextLayoutResult())!=null);
+                            check(Boolean.TRUE.equals(find(scene,null,scrollKey).getConfig().get(scrollKey).getAction().invoke(0)));render(scene);
                             check(unmerged(scene,"\u5408\u96c6",SemanticsActions.INSTANCE.getGetTextLayoutResult())==null);
                             var back=unmerged(scene,"\u8fd4\u56de\u5217\u8868",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
                             var layoutBounds=unmerged(scene,"\u5207\u6362\u5217\u8868",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
@@ -217,6 +240,7 @@ public final class PlaylistRenderTest {
                             int before=requests.get(); scene.close();
                             scene=new ImageComposeScene(width,height,DensityKt.Density(density,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{body.invoke(route,c,f);return Unit.INSTANCE;});
                             render(scene); check(find(scene,"Song 21",null)!=null && library.snapshot().get("filter").equals("Song 21") && requests.get()==before);
+                            click(scene,"\u8fd4\u56de\u5217\u8868");
                             click(scene,"\u53d1\u73b0");
                             check(find(scene,"\u6682\u672a\u63a5\u5165",null)==null && find(scene,"\u70ed\u95e8\u89c6\u9891",null)!=null);
                             navigationRows(scene,density,width);

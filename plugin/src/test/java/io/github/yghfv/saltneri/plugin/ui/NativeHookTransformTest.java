@@ -87,6 +87,11 @@ public final class NativeHookTransformTest {
                     .getMethod("build", List.class).invoke(null, page);
             check(cached.invoke("key").equals("generic"));
             Field callback = isolated.loadClass("com.xuncorp.voxzen.workshop.hooks.WorkshopHookBridge").getField("hook");
+            callback.set(null,new MethodHook() {
+                @Override public void before(MethodHookParam call) {call.getArgs()[0]=new ArrayList<>(List.of("argument-replaced"));}
+            });
+            // Installed advice does not copy a replaced argument slot back to the local variables.
+            check(cached.invoke("key").equals("generic"));
             callback.set(null, new MethodHook() {
                 @Override public void after(MethodHookParam call) { call.setResult("replacement"); }
             });

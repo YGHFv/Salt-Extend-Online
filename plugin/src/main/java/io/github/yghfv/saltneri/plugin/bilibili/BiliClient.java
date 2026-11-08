@@ -75,6 +75,27 @@ public class BiliClient {
         this.clock = Objects.requireNonNull(clock); this.opener = Objects.requireNonNull(opener); this.credentials = credentials;
         if (credentials != null && credentials.platform() != AccountPlatform.BILIBILI) throw new IllegalArgumentException("Bilibili account required");
     }
+    public record VideoPage(BiliTarget target,String title,String author,long durationMillis) { }
+    public List<VideoPage> pages(String bvid,RequestScope scope) throws IOException {
+        BiliTarget target=BiliTarget.parse(bvid);
+        var view=successful(json(BiliWbi.sign(API+"/x/web-interface/wbi/view",Map.of("bvid",target.id()),key(scope),now()),scope));
+        if(!bvid.equals(BoundedJson.string(view.get("bvid"))))throw invalid();
+        if(view.get("state")!=null && BoundedJson.integer(view.get("state"))<0)throw new PlatformRejected(-1);
+        if(flag(view.get("is_upower_exclusive")) || flag(view.get("is_upower_play")))throw new PlatformRejected(-1);
+        if(view.get("rights")!=null) for(String gate:List.of("pay","is_stein_gate","is_upower_exclusive"))
+            if(flag(BoundedJson.object(view.get("rights")).get(gate)))throw new PlatformRejected(-1);
+        String title=label(view.get("title")),owner=label(BoundedJson.object(view.get("owner")).get("name"));
+        var rows=BoundedJson.array(view.get("pages"));if(rows.size()>10000)throw invalid();
+        List<VideoPage> pages=new ArrayList<>();
+        for(Object row:rows) {
+            var page=BoundedJson.object(row);
+            long duration=positive(page.get("duration")),number=positive(page.get("page"));
+            positive(page.get("cid"));
+            if(duration>7*24*3600 || number>10000)throw invalid();
+            pages.add(new VideoPage(new BiliTarget(bvid,(int)number),label(page.get("part"))+" "+title,owner,duration*1000));
+        }
+        check(scope);return List.copyOf(pages);
+    }
 
     public Resolved resolve(BiliTarget target, BiliAudioSelector.Quality quality, String accountScope, RequestScope scope) throws IOException {
         Objects.requireNonNull(target); Objects.requireNonNull(quality); Objects.requireNonNull(scope);

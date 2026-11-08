@@ -35,12 +35,17 @@ public final class SaltNativeUi implements AutoCloseable {
     private final CoverLoader covers;
     private final CoverLoader avatars;
     private final SaltToolbarBindings toolbar;
+    private final SaltSecondaryHeaderBindings secondaryHeader;
     private final SaltSearchBindings search;
     private final SaltContextMenuBindings contextMenu;
+    private final SaltPlaylistMenuBindings playlistMenu;
     private final BooleanSupplier permitted;
     private final ClassLoader host;
     private final HookRegistrar hooks;
     private volatile SaltSidebarBindings sidebar;
+    private final SidebarPolicy sidebarPolicy=new SidebarPolicy();
+    private SaltSidebarSettingsBindings sidebarSettings;
+    private String sidebarSettingsFailure = "none";
     private String sidebarFailure = "none";
     private final List<HookHandle> handles = new ArrayList<>();
     private final Method routeGetter, pluginIdGetter, nativeRow, text, canvas;
@@ -57,6 +62,57 @@ public final class SaltNativeUi implements AutoCloseable {
     private final ProvidableCompositionLocal<Object> styleLocal;
     private final MutableState<Object> sidebarStyle = SnapshotStateKt.mutableStateOf(null, SnapshotStateKt.structuralEqualityPolicy());
     private volatile Object navigator;
+    private com.xuncorp.spw.workshop.api.config.ConfigManager configManager;
+    private NavigationPreferences navigationPreferences;
+    private final java.util.concurrent.atomic.AtomicBoolean homeScheduled=new java.util.concurrent.atomic.AtomicBoolean();
+    private volatile boolean homePending;
+    private final java.util.concurrent.ExecutorService homeWorker=java.util.concurrent.Executors.newSingleThreadExecutor(r->{
+        Thread thread=new Thread(r,"salt-extend-home");thread.setDaemon(true);return thread;
+    });
+    public static final String SIDEBAR_CONFIG=PLUGIN_ID+"/settings/sidebar";
+    public void configuration(com.xuncorp.spw.workshop.api.config.ConfigManager manager,NavigationPreferences preferences) {
+        configManager=manager;navigationPreferences=preferences;
+    }
+    public boolean settingsPage(Object route) {
+        return available() && route!=null && routeConstructor.getDeclaringClass().isInstance(route)
+                && SIDEBAR_CONFIG.equals(invoke(pluginIdGetter,route));
+    }
+    public void openSidebarConfiguration() {
+        if(!available() || navigator==null)throw new IllegalStateException("Native navigation unavailable");
+        SaltPageContentBinding.onUiThread(()->{
+            try {pageBinding.requireInstalled();invoke(navigate,navigator,routeConstructor.newInstance(SIDEBAR_CONFIG));}
+            catch(ReflectiveOperationException error) {throw new IllegalStateException("Sidebar settings unavailable",error);}
+        });
+    }
+    public void settingsBack() {if(available() && navigator!=null)invoke(valueMethod(navigator,"back"),navigator);}
+    private static Method valueMethod(Object owner,String name) {
+        try {return owner.getClass().getMethod(name);}
+        catch(NoSuchMethodException failure) {throw new IllegalStateException("Navigation capability missing",failure);}
+    }
+    public String sidebarLabel(String button) {return sidebarSettings==null?button:sidebarSettings.label(button);}
+    public void sidebarSwitch(String button,boolean visible,Composer composer) {
+        if(sidebarSettings==null || "Settings".equals(button))return;
+        sidebarSettings.switchSetting(visible,sidebarLabel(button),value->{
+            if(!available() || configManager==null)return kotlin.Unit.INSTANCE;
+            var config=configManager.getConfig();String key="ui.sidebar."+button;
+            boolean previous=config.get(key,true);config.set(key,value);
+            if(!config.save())config.set(key,previous);
+            else {
+                Set<String> invisible=new HashSet<>();
+                for(String name:SidebarPolicy.BUTTONS)if(!config.get("ui.sidebar."+name,true))invisible.add(name);
+                sidebarSettings(sidebarOptimized(),hiddenSidebar(),hiddenSidebarToggle(),invisible);
+            }
+            return kotlin.Unit.INSTANCE;
+        },composer);
+    }
+    public List<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice> nativePlaylistChoices() {
+        if(!available())return List.of();
+        try{return new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway(host).choices(3000);}
+        catch(Exception failure) {return List.of();}
+    }
+    public void homePlaylistChoices(List<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice> choices) {
+        if(sidebarSettings!=null)sidebarSettings.playlistChoices(choices);
+    }
     private volatile boolean closed;
 
     public SaltNativeUi(ClassLoader host, HookRegistrar hooks, NativeDesk desk, BooleanSupplier permitted) throws Exception {
@@ -78,6 +134,10 @@ public final class SaltNativeUi implements AutoCloseable {
         try { optionalToolbar = new SaltToolbarBindings(host); }
         catch (ReflectiveOperationException | LinkageError unsupported) { optionalToolbar = null; }
         toolbar = optionalToolbar;
+        SaltSecondaryHeaderBindings optionalHeader;
+        try {optionalHeader=new SaltSecondaryHeaderBindings(host);}
+        catch(ReflectiveOperationException | LinkageError unsupported) {optionalHeader=null;}
+        secondaryHeader=optionalHeader;
         SaltSearchBindings optionalSearch;
         try { optionalSearch = new SaltSearchBindings(host); }
         catch (ReflectiveOperationException | RuntimeException | LinkageError unsupported) { optionalSearch = null; }
@@ -86,6 +146,10 @@ public final class SaltNativeUi implements AutoCloseable {
         try { optionalMenu = new SaltContextMenuBindings(host); }
         catch (ReflectiveOperationException | RuntimeException | LinkageError unsupported) { optionalMenu = null; }
         contextMenu = optionalMenu;
+        SaltPlaylistMenuBindings optionalPlaylistMenu;
+        try {optionalPlaylistMenu=new SaltPlaylistMenuBindings(host);}
+        catch(ReflectiveOperationException | RuntimeException | LinkageError unsupported) {optionalPlaylistMenu=null;}
+        playlistMenu=optionalPlaylistMenu;
         Class<?> item = type(host, ROUTE_ITEM), modRoute = type(host, MOD_ROUTE);
         type(host, SIDEBAR).getMethod("\u037f", item, Composer.class, int.class);
         routeGetter = item.getMethod("\u0528"); pluginIdGetter = modRoute.getMethod("getPluginId");
@@ -123,6 +187,21 @@ public final class SaltNativeUi implements AutoCloseable {
                 }
             }));
         } catch (Exception | LinkageError failure) { close(); throw failure; }
+        installSidebarSettings();
+    }
+    private void installSidebarSettings() {
+        if(sidebarSettings!=null)return;
+        try {
+            sidebarSettings=new SaltSidebarSettingsBindings(host,hooks,this);
+            sidebarSettingsFailure="none";
+        } catch(ReflectiveOperationException | RuntimeException | LinkageError failure) {
+            sidebarSettingsFailure="settings-hooks/"+failure.getClass().getSimpleName();
+        }
+    }
+    public synchronized void repairSidebar() {
+        if(!available())throw new IllegalStateException("Native UI unavailable");
+        installSidebarSettings();
+        sidebarOptimization(sidebarOptimized());
     }
     private static Class<?> type(ClassLoader loader, String name) throws ClassNotFoundException { return Class.forName(name, false, loader); }
     public static void verify(ClassLoader host) throws Exception {
@@ -177,6 +256,54 @@ public final class SaltNativeUi implements AutoCloseable {
         return true;
     }
     public NativeDesk desk() { return desk; }
+    public void sidebarSettings(boolean optimized,boolean hidden,Set<String> invisible) {
+        sidebarSettings(optimized,hidden,false,invisible);
+    }
+    public void sidebarSettings(boolean optimized,boolean hidden,boolean hideToggle,Set<String> invisible) {
+        if(closed)return;
+        sidebarPolicy.update(optimized,hidden,hideToggle,invisible);
+        sidebarOptimization(optimized);
+    }
+    public boolean sidebarVisible(String button) {return sidebarPolicy.visible(button);}
+    public boolean sidebarItemVisible(Object item) {return sidebarVisible(invoke(routeGetter,item).getClass().getSimpleName());}
+    public boolean sidebarOptimized() {return sidebarPolicy.optimized();}
+    public boolean hiddenSidebar() {return sidebarPolicy.hidden();}
+    public boolean hiddenSidebarToggle() {return sidebarPolicy.hideToggle();}
+    public SaltSidebarBindings sidebarBinding() {return sidebar;}
+    public void sidebarViewModel(Object value) {if(playlistMenu!=null)playlistMenu.viewModel(value);}
+    public Object playlistMenuState(Composer composer) {return playlistMenu==null?null:playlistMenu.state(composer);}
+    public void showPlaylistMenu(Object state) {if(available() && state!=null)playlistMenu.show(state);}
+    public void playlistMenu(Object state,Object playlist,Object navigator,BooleanSupplier current,Composer composer) {
+        if(available() && state!=null && playlist!=null)playlistMenu.menu(state,playlist,navigator,
+                ()->available() && sidebarOptimized() && current.getAsBoolean(),composer);
+    }
+    public float sidebarCaptionHeight() {return sidebarSettings.captionHeight();}
+    public Object captionNode(Object current) {
+        if(!(current instanceof androidx.compose.ui.node.NodeCoordinator coordinates))return null;
+        var marker=coordinates.getLayoutNode();
+        var parent=marker.getParent$ui();
+        if(parent==null)return null;
+        var children=parent.getChildren$ui();
+        int index=children.indexOf(marker);
+        for(int i=index-1;i>=0;i--) if(!children.get(i).getChildren$ui().isEmpty())return children.get(i);
+        return null;
+    }
+    public androidx.compose.ui.layout.LayoutCoordinates captionCoordinates(Object marker) {
+        var node=captionNode(marker);
+        return node==null?null:((androidx.compose.ui.node.LayoutNode)node).getOuterCoordinator$ui();
+    }
+    public Modifier captionModifier(Object node) {return ((androidx.compose.ui.node.LayoutNode)node).getModifier();}
+    public void captionModifier(Object node,Modifier modifier) {((androidx.compose.ui.node.LayoutNode)node).setModifier(modifier);}
+    public List<Object> captionTree(Object node) {
+        List<Object> result=new ArrayList<>();
+        result.add(node);
+        for(var child:((androidx.compose.ui.node.LayoutNode)node).getChildren$ui()) result.addAll(captionTree(child));
+        return result;
+    }
+    public void hiddenToggleAnchor(float x,float y) {
+        var binding=sidebar;if(binding!=null && binding.enabled())binding.anchor(new SaltSidebarBindings.Anchor(x,y));
+    }
+    public void collapseHiddenSidebar(Object state) {if(available() && hiddenSidebar() && sidebarSettings!=null)sidebarSettings.collapse(state);}
     public synchronized void sidebarOptimization(boolean enabled) {
         if (closed) return;
         if (enabled && sidebar == null) {
@@ -193,6 +320,11 @@ public final class SaltNativeUi implements AutoCloseable {
         if (sidebar != null) sidebar.enabled(enabled);
     }
     public boolean nativeToolbarAvailable() { return toolbar != null; }
+    public boolean nativeSecondaryHeaderAvailable() {return secondaryHeader!=null;}
+    public void secondaryBack(Function0<kotlin.Unit> action,Modifier modifier,Composer composer) {secondaryHeader.back(action,modifier,composer);}
+    public void secondaryHeader(String title,String subtitle,Modifier modifier,Object action,Object tools,Composer composer) {
+        secondaryHeader.title(title,subtitle,modifier,action,tools,composer);
+    }
     public void toolbarButton(String label, Modifier modifier, Function0<kotlin.Unit> click,
                               Object content, Composer composer) {
         toolbar.button(label, modifier, click, content, composer);
@@ -261,6 +393,65 @@ public final class SaltNativeUi implements AutoCloseable {
         Object current = composer.consume((CompositionLocal<Object>)invoke(localNavigator, null));
         if (available()) navigator = current; return current;
     }
+    public List<?> navigationStack(Object current) {return List.copyOf((List<?>)value(current,"getNavBackStack"));}
+    public void observeNavigation(Object current) {
+        if(!available() || navigationPreferences==null)return;
+        if(homeScheduled.compareAndSet(false,true)) {
+            List<?> initialStack=List.copyOf((List<?>)value(current,"getNavBackStack"));
+            // Enabling/reloading the plugin from settings must not redirect an active page.
+            if(initialStack.size()>1 || !initialStack.isEmpty()
+                    && !Set.of("Track","MusicLibrary").contains(initialStack.getLast().getClass().getSimpleName()))return;
+            String home=navigationPreferences.initial();
+            homePending=true;
+            Runnable schedule=()->{
+                String target=home;
+                if(home.startsWith("playlist:") && nativePlaylistChoices().stream().noneMatch(p->p.id().equals(home.substring(9))))
+                    target=NavigationPreferences.TRACK;
+                String resolved=target;
+                javax.swing.SwingUtilities.invokeLater(()->{
+                    homePending=false;
+                    if(available() && navigator==current && initialStack.equals(value(current,"getNavBackStack")))
+                        openInitialHome(current,resolved);
+                });
+            };
+            if(home.startsWith("playlist:"))homeWorker.submit(schedule);
+            else javax.swing.SwingUtilities.invokeLater(schedule);
+            return;
+        }
+        if(homePending)return;
+        var stack=(List<?>)value(current,"getNavBackStack");
+        if(!stack.isEmpty()) {
+            String id=stablePage(stack.getLast());
+            if(id!=null)javax.swing.SwingUtilities.invokeLater(()->{
+                if(available() && navigator==current && !homePending) {
+                    var latest=(List<?>)value(current,"getNavBackStack");
+                    if(!latest.isEmpty() && id.equals(stablePage(latest.getLast())))navigationPreferences.remember(id);
+                }
+            });
+        }
+    }
+    private String stablePage(Object route) {
+        var platform=platform(route);if(platform!=null)return platform.name();
+        String simple=route.getClass().getSimpleName();
+        if("Track".equals(simple))return "Track";
+        if("PlaylistContent".equals(simple))return "playlist:"+value(route,"getId");
+        return null;
+    }
+    private void openInitialHome(Object current,String home) {
+        try {
+            pageBinding.requireInstalled();
+            if("BILIBILI".equals(home) || "NETEASE".equals(home)) {
+                invoke(navigate,current,routes.get(AccountPlatform.valueOf(home)));return;
+            }
+            Object route;
+            if(home.startsWith("playlist:")) {
+                String id=home.substring(9);
+                route=type(host,"com.xuncorp.voxzen.ui.navigation.ScreenRoute$PlaylistContent").getConstructor(String.class).newInstance(id);
+            } else route=type(host,"com.xuncorp.voxzen.ui.navigation.ScreenRoute$Track").getField("INSTANCE").get(null);
+            var stack=(List<?>)value(current,"getNavBackStack");
+            if(stack.isEmpty() || !route.equals(stack.getLast()))invoke(navigate,current,route);
+        } catch(Exception failure) {this.failure="home/"+failure.getClass().getSimpleName();}
+    }
     public AccountPlatform platform(Object route) {
         if (route == null || !routeConstructor.getDeclaringClass().isInstance(route)) return null;
         String id = (String)invoke(pluginIdGetter, route);
@@ -306,6 +497,7 @@ public final class SaltNativeUi implements AutoCloseable {
         return "Native UI 0.7.6: bound=" + pageBinding.isInstalled() + ", dispatch=" + dispatched.get()
                 + ", platform=" + selected.get() + ", rendered=" + rendered.get() + ", visible=" + visible
                 + ", pendingLogin=" + (pendingLogin.get() != null) + ", sidebar=" + (sidebar == null ? sidebarFailure : sidebar.diagnostics())
+                + ", sidebarSettings=" + sidebarSettingsFailure
                 + ", error=" + (failure.equals("none") ? pageBinding.failure() : failure);
     }
     public void requestLogin(AccountPlatform platform) {
@@ -345,8 +537,11 @@ public final class SaltNativeUi implements AutoCloseable {
     public void canvas(Modifier modifier, Object draw, Composer composer) { invoke(canvas, null, modifier, draw, composer, 0); }
     @Override public synchronized void close() {
         closed = true; navigator = null; sidebarStyle.setValue(null); pendingLogin.set(null); pages.clear();
+        homeWorker.shutdownNow();homePending=false;
+        if(playlistMenu!=null)playlistMenu.close();
         covers.close(); avatars.close(); pageMemory.clear();
         if (sidebar != null) { sidebar.close(); sidebar = null; }
+        if (sidebarSettings != null) {sidebarSettings.close();sidebarSettings=null;}
         pageBinding.close();
         for (int i = handles.size() - 1; i >= 0; i--) {
             try { handles.get(i).close(); }

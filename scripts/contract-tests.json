@@ -25,7 +25,9 @@
     "auth/WindowsDpapi.java",
     "auth/WindowsNeteaseWebLogin.java",
     "library/CoverSource.java",
-    "bilibili/BiliWbi.java"
+    "bilibili/BiliWbi.java",
+    "host/PlaybackStartGate.java",
+    "library/AutoSourceMatcher.java"
   ],
   "tests": [
     {
@@ -335,6 +337,46 @@
     },
     {
       "class": "io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecoveryTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "baseOnly": true,
+      "offline": true,
+      "class": "io.github.yghfv.saltneri.plugin.host.PlaybackStartGateContractTest"
+    },
+    {
+      "baseOnly": false,
+      "offline": false,
+      "class": "io.github.yghfv.saltneri.plugin.ui.SidebarSettingsContractTest"
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.PlaybackStartBindingsContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.AutoSourceMatcherContractTest",
+      "baseOnly": true,
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.AutoSourceResolverContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NavigationPreferencesContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.PlaylistMenuRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NavigationUiRenderTest",
       "baseOnly": false,
       "offline": false
     }

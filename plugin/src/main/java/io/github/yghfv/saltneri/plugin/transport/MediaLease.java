@@ -17,9 +17,14 @@ public final class MediaLease {
     private final String accountScope;
     private final Instant expiresAt;
     private final long length;
+    private final java.util.function.BooleanSupplier active;
 
     public MediaLease(Platform platform, URI uri, Map<String, String> headers,
                       String accountScope, Instant expiresAt, long length) {
+        this(platform,uri,headers,accountScope,expiresAt,length,()->true);
+    }
+    private MediaLease(Platform platform, URI uri, Map<String, String> headers,
+                      String accountScope, Instant expiresAt, long length,java.util.function.BooleanSupplier active) {
         this.platform = Objects.requireNonNull(platform);
         requireTarget(uri);
         this.uri = uri;
@@ -38,7 +43,13 @@ public final class MediaLease {
             throw new IllegalArgumentException("Invalid media bounds or scope");
         }
         this.length = length;
+        this.active=Objects.requireNonNull(active);
     }
+    /** A fallback keeps its CDN policy/cookies but is owned by the original logical account. */
+    public MediaLease bindTo(String scope,java.util.function.BooleanSupplier sourceActive) {
+        return new MediaLease(platform,uri,headers,scope,expiresAt,length,()->isActive() && sourceActive.getAsBoolean());
+    }
+    public boolean isActive() {try {return active.getAsBoolean();} catch(RuntimeException failure) {return false;}}
 
     public void requireTarget(URI target) {
         requireTarget(platform, target);
