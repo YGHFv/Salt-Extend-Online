@@ -223,6 +223,7 @@ public final class CoverLoaderContractTest {
             check(loader.request("stale", SOURCE, () -> true) == null && cancelledOpens.get() == 1);
         } finally { release.countDown(); }
         parallelCovers(fixture);
+        scrollingCovers(fixture);
         retainedCovers(fixture);
         sharedCovers(fixture);
         largeOriginal();
@@ -296,6 +297,19 @@ public final class CoverLoaderContractTest {
             loader.clear();
             loader.load(SOURCE,scope);check(opens.get()>=2+CoverLoader.PARALLEL_LOADS);
         }finally{release.countDown();}
+    }
+    private static void scrollingCovers(byte[] fixture) throws Exception {
+        var opens=new AtomicInteger();
+        try(var loader=new CoverLoader(uri->{opens.incrementAndGet();return new Response(uri,fixture);})) {
+            long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);boolean complete;
+            do {
+                complete=true;
+                for(int i=0;i<100;i++)complete &= loader.request("retained-row-"+i,URI.create("https://i0.hdslb.com/scroll-"+i+".png"),()->true)!=null;
+                if(!complete)Thread.sleep(5);
+            }while(!complete && System.nanoTime()<end);
+            check(complete && opens.get()==100);
+            check(loader.request("retained-row-0",URI.create("https://i0.hdslb.com/scroll-0.png"),()->true)!=null && opens.get()==100);
+        }
     }
     private static void sharedCovers(byte[] fixture) throws Exception {
         var opens=new AtomicInteger();var started=new CountDownLatch(1);var release=new CountDownLatch(1);

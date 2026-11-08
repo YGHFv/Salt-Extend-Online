@@ -56,6 +56,7 @@ public final class NativeDesk {
     public void playPlaylist() { check(); library.requestPlaylist(); }
     public AccountLoginController.Snapshot account(AccountPlatform platform) { check(); return accounts.apply(platform); }
     public void page(int direction) { check(); library.turn(direction); }
+    public void loadMore(AccountPlatform platform,String token) {check();library.loadMore(platform,token);}
     public void choose(String token) { check(); library.choose(token); }
     public void author(String token) { check(); library.author(token); }
     public void authorTab(boolean collections) { check(); library.authorTab(collections); }

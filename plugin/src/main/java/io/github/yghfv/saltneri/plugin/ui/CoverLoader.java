@@ -65,7 +65,14 @@ public final class CoverLoader implements AutoCloseable {
         if(cached!=null) return cached;
         Entry entry = entries.get(token);
         if (entry != null) return entry.png;
-        if (entries.size() >= MAX_ENTRIES) return null;
+        if (entries.size() >= MAX_ENTRIES) {
+            var retired=entries.entrySet().iterator();
+            while(retired.hasNext()) {
+                Entry row=retired.next().getValue();
+                if(row.future!=null && row.future.isDone()) {row.cancel();retired.remove();break;}
+            }
+            if(entries.size()>=MAX_ENTRIES)return null;
+        }
         Entry next = new Entry(valid); entries.put(token, next);
         try { next.future = worker.submit(() -> {
             try (RequestScope scope = new RequestScope(() -> !closed && next.active())) {

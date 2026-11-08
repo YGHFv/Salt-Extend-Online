@@ -117,6 +117,7 @@ public final class NativePageRenderTest {
                                          URI.create("https://p2.music.126.net/fixture.jpg"))).toList();
                          return new Catalog.Page("Synthetic playlist", items, offset + 20 < total, clock.instant().plusSeconds(300), Math.max(1,(total+19)/20));
                      })) {
+            library.pageLimit(20); // Legacy pager/layout fixtures; configurable limits have separate coverage.
             NativeDesk desk = new NativeDesk(library, player,
                     p -> new AccountLoginController.Snapshot(qr.get() == 0 ? AccountLoginController.Phase.IDLE : AccountLoginController.Phase.WAITING_SCAN,
                             qr.get() == 0 ? "Offline fixture - not logged in" : "Offline synthetic QR - do not scan",

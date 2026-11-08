@@ -107,7 +107,7 @@ public final class CatalogCacheContractTest {
         Time clock=new Time(); var calls=new AtomicInteger(); var account=new AtomicReference<AccountCredentials>(); var allowed=new AtomicBoolean(true);
         try(var library=new LibraryController(p->account.get(),allowed::get,t->{throw new AssertionError("Cache played");},()->{},clock,
                 a->(q,k,s,r)->{calls.incrementAndGet(); return page(q,clock);})) {
-            library.browse(AccountPlatform.NETEASE,View.MINE); ready(library); String old=token(library);
+            library.pageLimit(20); library.browse(AccountPlatform.NETEASE,View.MINE); ready(library); String old=token(library);
             library.turn(1); ready(library); library.turn(-1); ready(library);
             check(calls.get()==2 && !library.currentRow(old));
             library.browse(AccountPlatform.NETEASE,View.SAVED); ready(library);
@@ -135,7 +135,7 @@ public final class CatalogCacheContractTest {
                 check(library.enter(platform)); library.snapshot(platform); ready(library);
                 check(query.get().view()==View.DISCOVER && query.get().platform()==platform);
                 int before=calls.get(); for(int i=0;i<5;i++) check(!library.enter(platform)); check(calls.get()==before);
-                library.browse(platform,View.MINE); ready(library); before=calls.get();
+                library.pageLimit(20); library.browse(platform,View.MINE); ready(library); before=calls.get();
                 check(!library.enter(platform) && library.snapshot(platform).get("view").equals("MINE") && calls.get()==before);
             }
             library.invalidate(); fail.set(true); check(library.enter(AccountPlatform.BILIBILI));

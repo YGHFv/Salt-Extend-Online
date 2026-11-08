@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.*;
 import static io.github.yghfv.saltneri.plugin.library.Catalog.*;
+import io.github.yghfv.saltneri.plugin.library.CatalogPaging.Window;
 
 /** In-memory platform-local catalogs; account changes revoke every cached row capability. */
 public final class LibraryController implements AutoCloseable {
@@ -21,7 +22,7 @@ public final class LibraryController implements AutoCloseable {
         @Override public String toString() { return "Playlist[private catalog]"; }
     }
     private record Contents(String title, List<Item> items) { }
-    private record Location(Query query,String creator,String authorName,Sort sort,String filter,Contents contents) { }
+    private record Location(Query query,String creator,String authorName,Sort sort,String filter,Contents contents,Window visible,int chunks,int limit) { }
     private final Function<AccountPlatform, AccountCredentials> accounts;
     private final CoverLookup coverLookup;
     private final ItemCoverLookup neteaseCoverLookup;
@@ -30,13 +31,17 @@ public final class LibraryController implements AutoCloseable {
     private final BooleanSupplier authorized;
     private final Map<AccountPlatform, State> states = new EnumMap<>(AccountPlatform.class);
     private AccountPlatform platform = AccountPlatform.NETEASE;
+    private volatile int pageLimit=CatalogPaging.DEFAULT;
     private static final class State {
         final AccountPlatform platform;
-        PlatformResolutionController<Query, String, Page> loader;
+        PlatformResolutionController<Query, Integer, Window> loader;
         PlatformResolutionController<Query, String, Contents> complete;
         CatalogPageCache cache;
         Query query;
-        Page visible;
+        Window visible, delivered;
+        int chunks=1,visibleChunks=1;
+        boolean appending;
+        String loadToken=UUID.randomUUID().toString();
         Contents contents;
         AccountCredentials account;
         int knownPages;
@@ -77,7 +82,7 @@ public final class LibraryController implements AutoCloseable {
             // Catalog metadata has no signed audio URL; retain it until explicit refresh/account revocation.
             s.loader = new PlatformResolutionController<>("Catalog", account -> {
                 var resolver = factory.apply(account);
-                return (q,k,scope,r) -> s.cache.load(account,q,k,scope,r,resolver);
+                return (q,width,scope,r) -> CatalogPaging.load(q,width,r,next->s.cache.load(account,next,"read",scope,r,resolver));
             }, () -> accounts.apply(p), authorized, clock,
                     page -> Instant.MAX, page -> "", CatalogFailure::diagnostic);
             s.complete = new PlatformResolutionController<>("Playlist", account -> (q,k,scope,r) -> {
@@ -99,6 +104,19 @@ public final class LibraryController implements AutoCloseable {
         }
     }
     private State current() { return states.get(platform); }
+    public synchronized void pageLimit(int value) {
+        if(!Set.of(0,20,30,50,60,100).contains(value))throw new IllegalArgumentException("Invalid catalog page limit");
+        if(pageLimit==value)return;
+        pageLimit=value;
+        for(State s:states.values()) {
+            s.chunks=1;s.appending=false;s.playPending=false;s.loadToken=UUID.randomUUID().toString();
+            if(s.query==null)continue;
+            s.query=at(s.query,1);s.resultPage=1;
+            if(s.contents!=null)rebuild(s);
+            else if(!s.fullMode)load(s,s.query);
+            else {s.visible=null;s.delivered=null;s.rows.clear();}
+        }
+    }
     public synchronized boolean enter(AccountPlatform destination) {
         if (!permitted()) throw new SecurityException("Catalog unavailable");
         State s = states.get(destination); refresh(s);
@@ -122,7 +140,8 @@ public final class LibraryController implements AutoCloseable {
         State s = current(); if (s.query == null) throw new IllegalStateException("No current catalog");
         s.cache.clear();
         s.resolvedCovers.clear();
-        s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.rows.clear();
+        s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.delivered=null; s.rows.clear();
+        s.chunks=1;s.appending=false;s.loadToken=UUID.randomUUID().toString();
         s.playPending = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
         if (s.fullMode) {
             navigation.run(); s.resultPage=s.query.page(); s.account = accounts.apply(s.platform); s.complete.start(allQuery(s.query),"all");
@@ -132,19 +151,28 @@ public final class LibraryController implements AutoCloseable {
         s.complete.invalidate(""); s.contents = null; s.fullMode = false; s.playPending = false;
         s.knownPages = 0; s.totalCount = -1; s.creator = ""; s.filter = ""; s.sort = Sort.DEFAULT; s.error = ""; s.title="";
         s.completedPages=0; s.requestedPages=0;
+        s.chunks=1;s.visibleChunks=1;s.appending=false;s.delivered=null;s.loadToken=UUID.randomUUID().toString();
     }
     private void load(State s, Query next) {
-        navigation.run(); s.rows.clear(); s.visible = null; s.error = ""; s.query = next; s.account=accounts.apply(s.platform); s.loader.start(next,"read");
+        navigation.run(); s.rows.clear(); s.visible = null; s.delivered=null; s.appending=false; s.chunks=1;s.visibleChunks=1;
+        s.loadToken=UUID.randomUUID().toString();s.error = ""; s.query = next; s.account=accounts.apply(s.platform); s.loader.start(next,CatalogPaging.width(pageLimit));
     }
     private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword(),q.reverse(),q.order()); }
     private static Query allQuery(Query q) {return new Query(q.platform(),q.view(),q.folder(),1,q.owner(),q.keyword());}
     public synchronized void turn(int direction) {
         State s = current(); refresh(s);
+        if(pageLimit==0)throw new IllegalStateException("Continuous catalog has no page buttons");
         if(s.fullMode && s.contents==null) return;
         if (s.visible == null || direction != -1 && direction != 1) throw new IllegalStateException("No current page");
         if (direction == 1 && !s.visible.hasMore() || direction == -1 && s.query.page() == 1) throw new IllegalArgumentException("No more pages");
         Query next = at(s.query,s.query.page()+direction);
         if (s.fullMode) { s.query = next; rebuild(s); } else load(s,next);
+    }
+    public synchronized void loadMore(AccountPlatform destination,String token) {
+        State s=states.get(destination);refresh(s);
+        if(pageLimit!=0 || !s.loadToken.equals(token) || s.visible==null || !s.visible.hasMore() || s.appending || s.fullMode && s.contents==null)return;
+        if(s.fullMode) {s.chunks++;rebuild(s,true);}
+        else {s.appending=true;s.error="";s.loader.start(at(s.query,s.chunks+1),CatalogPaging.CHUNK);}
     }
     public synchronized void choose(String token) {
         State s = stateFor(token); if (s == null) throw new IllegalStateException("Stale row"); refresh(s);
@@ -158,7 +186,7 @@ public final class LibraryController implements AutoCloseable {
         if(s.query==null) return;
         if(s.history.size()>=16) s.history.removeFirst();
         s.history.addLast(new Location(s.query,s.creator,s.authorName,s.contents==null?(s.query.reverse()?Sort.REVERSE:s.query.order()):s.sort,
-                s.contents==null?"":s.filter,s.contents));
+                s.contents==null?"":s.filter,s.contents,s.visible,s.visibleChunks,pageLimit));
     }
     public synchronized void author(String token) {
         State s=stateFor(token); if(s==null) throw new IllegalStateException("Stale author"); refresh(s);
@@ -180,7 +208,12 @@ public final class LibraryController implements AutoCloseable {
         platform=destination;
         Location previous=s.history.removeLast(); navigation.run(); reset(s); s.creator=previous.creator(); s.authorName=previous.authorName();
         s.sort=previous.sort(); s.filter=previous.filter(); s.query=previous.query();
+        if(previous.limit()==pageLimit) {s.chunks=previous.chunks();s.visibleChunks=s.chunks;}
         if(previous.contents()!=null) {s.contents=previous.contents();s.fullMode=true;rebuild(s);}
+        else if(pageLimit==0 && previous.limit()==0 && previous.visible()!=null) {
+            s.loader.invalidate("");s.account=accounts.apply(s.platform);s.visible=previous.visible();
+            s.title=s.visible.title();s.totalCount=s.visible.totalCount();s.knownPages=s.visible.totalPages();publish(s,s.visible.items());
+        }
         else load(s,s.query);
         return true;
     }
@@ -195,30 +228,46 @@ public final class LibraryController implements AutoCloseable {
             if (all.failed()) {
                 s.playPending = false;
                 // Bulk failure must not strand a preserved, otherwise usable paginated catalog.
-                if(s.visible!=null) { s.fullMode=false; s.sort=s.query.reverse()?Sort.REVERSE:Sort.DEFAULT; s.filter=""; s.error=all.status(); s.complete.invalidate(""); }
+                if(s.visible!=null) { s.fullMode=false;s.chunks=s.visibleChunks; s.sort=s.query.reverse()?Sort.REVERSE:Sort.DEFAULT; s.filter=""; s.error=all.status(); s.complete.invalidate(""); }
             }
             return all;
         }
-        Page page = raw.resolved();
-        if (page != s.visible) {
+        Window page = raw.resolved();
+        if(s.appending && raw.failed())s.appending=false;
+        if (page != null && page != s.delivered) {
             if (page != null && page.totalPages() > 0 && s.query.page() > page.totalPages()) {
                 // A refreshed catalog can shrink; fetch its last page rather than publishing 2/1.
                 load(s,at(s.query,page.totalPages())); return s.loader.snapshot();
             }
-            s.visible = page; s.rows.clear();
+            boolean append=s.appending;s.delivered=page;s.appending=false;
+            if(append) {
+                var joined=new ArrayList<>(s.visible.items());joined.addAll(page.items());s.chunks++;
+                s.visible=new Window(page.title(),joined,page.hasMore(),page.totalPages(),page.totalCount());
+            } else s.visible=page;
+            s.visibleChunks=s.chunks;
+            s.loadToken=UUID.randomUUID().toString();
             if (page != null) {
                 s.title=page.title();
                 if (page.totalPages() > 0) s.knownPages = page.totalPages();
                 else if (!page.hasMore()) s.knownPages = s.query.page();
                 if (page.totalCount() >= 0) s.totalCount = page.totalCount();
-                publish(s,page.items());
+                publish(s,s.visible.items(),append);
             }
         }
         return raw;
     }
     private boolean permitted() { try { return authorized.getAsBoolean(); } catch (RuntimeException error) { return false; } }
     private void publish(State s, List<Item> items) {
-        s.rows.clear(); for (Item item : items) if (item.enabled()) s.rows.put(UUID.randomUUID().toString(),item);
+        publish(s,items,false);
+    }
+    private void publish(State s,List<Item> items,boolean retainPrefix) {
+        var old=new ArrayList<>(s.rows.entrySet());s.rows.clear();int index=0;
+        for(Item item:items)if(item.enabled()) {
+            if(retainPrefix && index<old.size() && old.get(index).getValue().equals(item)) {
+                var row=old.get(index);s.rows.put(row.getKey(),row.getValue());
+            } else s.rows.put(UUID.randomUUID().toString(),item);
+            index++;
+        }
     }
     private List<Item> ordered(State s, boolean filter) {
         List<Item> items = new ArrayList<>(s.contents.items().stream().map(i->withAuthor(s,i)).toList());
@@ -239,10 +288,15 @@ public final class LibraryController implements AutoCloseable {
         return new Item(item.kind(),item.target(),item.title(),s.creator,item.count(),item.enabled(),item.cover(),item.owner(),item.playCount(),item.updatedAt());
     }
     private void rebuild(State s) {
-        List<Item> items=ordered(s,true); s.knownPages=Math.max(1,(items.size()+19)/20); int page=Math.min(s.query.page(),s.knownPages);
-        s.query=at(s.query,page); int from=(page-1)*20;
-        s.visible=new Page(s.contents.title(),items.subList(from,Math.min(from+20,items.size())),page<s.knownPages,Instant.MAX,s.knownPages,s.contents.items().size());
-        s.title=s.contents.title(); if(s.totalCount<0) s.totalCount=s.contents.items().size(); publish(s,s.visible.items());
+        rebuild(s,false);
+    }
+    private void rebuild(State s,boolean append) {
+        List<Item> items=ordered(s,true);int width=CatalogPaging.width(pageLimit);
+        s.knownPages=Math.max(1,(items.size()+width-1)/width); int page=pageLimit==0?1:Math.min(s.query.page(),s.knownPages);
+        s.query=at(s.query,page); int from=(page-1)*width,to=Math.min(pageLimit==0?s.chunks*width:from+width,items.size());
+        s.visible=new Window(s.contents.title(),items.subList(from,to),to<items.size(),s.knownPages,s.contents.items().size());
+        s.visibleChunks=s.chunks;
+        s.loadToken=UUID.randomUUID().toString();s.title=s.contents.title(); if(s.totalCount<0) s.totalCount=s.contents.items().size(); publish(s,s.visible.items(),append);
     }
     private void requireFolder(State s) {
         refresh(s); if (s.query == null || s.query.view()!=View.FOLDER && s.query.view()!=View.COLLECTION) throw new IllegalStateException("Open a playlist first");
@@ -255,13 +309,13 @@ public final class LibraryController implements AutoCloseable {
             s.contents=new Contents(s.title,List.copyOf(items));
             s.fullMode=true; return;
         }
-        if (!s.fullMode) { s.fullMode=true; s.resultPage=1; s.completedPages=0; s.requestedPages=0; s.complete.start(allQuery(s.query),"all"); }
+        if (!s.fullMode) { s.loader.invalidate("");s.appending=false;s.fullMode=true; s.resultPage=1; s.completedPages=0; s.requestedPages=0; s.complete.start(allQuery(s.query),"all"); }
         else if (s.complete.snapshot().failed()) s.complete.start(allQuery(s.query),"all");
     }
     public synchronized void filter(String keyword) {
         State s=current(); requireFolder(s); String value=keyword.strip();
         if (value.length()>100 || value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("Invalid filter");
-        s.filter=value; complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
+        s.filter=value;s.chunks=1; complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
     public synchronized void sort(Sort order) {
         State s=current(); refresh(s); Objects.requireNonNull(order);
@@ -275,6 +329,7 @@ public final class LibraryController implements AutoCloseable {
         requireFolder(s);
         if(s.sort==order && s.error.isEmpty() && !s.complete.snapshot().failed()) return;
         s.sort=order;
+        s.chunks=1;
         if(s.platform==AccountPlatform.BILIBILI && s.query.view()==View.COLLECTION && s.contents==null && s.filter.isEmpty()
                 && (order==Sort.DEFAULT || order==Sort.REVERSE)) {
             s.complete.invalidate("");s.fullMode=false;s.playPending=false;
@@ -309,6 +364,8 @@ public final class LibraryController implements AutoCloseable {
         result.put("loaded",s.visible!=null); result.put("totalPages",s.knownPages); result.put("totalCount",s.totalCount); result.put("filter",s.filter); result.put("sort",s.sort.name());
         result.put("loadingAll",s.fullMode && s.contents==null && !status.failed());
         result.put("loadProgress",s.completedPages+"/"+(s.requestedPages>0?s.requestedPages:"?"));
+        result.put("pageLimit",pageLimit);result.put("infinite",pageLimit==0);result.put("loadingMore",s.appending);
+        result.put("loadToken",s.loadToken);
         result.put("back",!s.history.isEmpty()); result.put("authorName",s.authorName); return Map.copyOf(result);
     }
     public synchronized java.net.URI cover(String token) {

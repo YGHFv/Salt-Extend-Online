@@ -65,6 +65,7 @@ import io.github.yghfv.saltneri.plugin.auth.AccountLoginController
 import io.github.yghfv.saltneri.plugin.library.Catalog
 import io.nayuki.qrcodegen.QrCode
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 
 /** Compiled with the host Kotlin/Compose ABI; only private bindings use reflection. */
 class SaltNativeContent(private val ui: SaltNativeUi) : ComposableHook() {
@@ -202,6 +203,9 @@ private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mo
     }
 }
 
+// Salt's 48px search asset has a 3px outline, equivalent to 1.25dp in its 20dp toolbar slot.
+private const val BUTTON_ICON_STROKE = 1.25f
+
 private enum class HeaderGlyph { SEARCH, ACCOUNT, PLAY, SORT, REFRESH, LAYOUT, BACK, CLOSE, DISCOVER, FAVORITES, SUBSCRIPTIONS }
 
 @Composable
@@ -223,55 +227,56 @@ private fun HeaderGlyphContent(ui: SaltNativeUi, label: String, glyph: HeaderGly
     val color = Color(ui.palette(currentComposer).text().toULong())
     val play = remember { PathParser().parsePathString("M 7 3 L 21 12 L 7 21 Z").toPath() }
     val draw: (DrawScope) -> Unit = { scope -> with(scope) {
+        val line = BUTTON_ICON_STROKE.dp.toPx()
         val center = Offset(size.width * 0.43f, size.height * 0.43f)
         when (glyph) {
         HeaderGlyph.SEARCH -> {
-            drawCircle(color, size.width * 0.25f, center, style = Stroke(2.dp.toPx()))
-            drawLine(color, Offset(size.width * 0.62f, size.height * 0.62f), Offset(size.width * 0.88f, size.height * 0.88f), 2.dp.toPx())
+            drawCircle(color, size.width * 0.25f, center, style = Stroke(line))
+            drawLine(color, Offset(size.width * 0.62f, size.height * 0.62f), Offset(size.width * 0.88f, size.height * 0.88f), line)
         }
         HeaderGlyph.ACCOUNT -> {
-            drawCircle(color, size.width * 0.16f, Offset(size.width / 2, size.height * 0.3f), style = Stroke(2.dp.toPx()))
-            drawArc(color, 180f, 180f, false, Offset(size.width * 0.15f, size.height * 0.55f), Size(size.width * 0.7f, size.height * 0.7f), style = Stroke(2.dp.toPx()))
+            drawCircle(color, size.width * 0.16f, Offset(size.width / 2, size.height * 0.3f), style = Stroke(line))
+            drawArc(color, 180f, 180f, false, Offset(size.width * 0.15f, size.height * 0.55f), Size(size.width * 0.7f, size.height * 0.7f), style = Stroke(line))
         }
         HeaderGlyph.PLAY -> scale(size.width / 24f, size.height / 24f, Offset.Zero) { drawPath(play, color) }
         HeaderGlyph.SORT -> {
             for (i in 0..2) {
                 val y = size.height * (0.23f + i * 0.27f)
-                drawLine(color, Offset(size.width * 0.1f, y), Offset(size.width * (0.58f - i * 0.12f), y), 2.dp.toPx())
+                drawLine(color, Offset(size.width * 0.1f, y), Offset(size.width * (0.58f - i * 0.12f), y), line)
             }
-            drawLine(color, Offset(size.width * 0.78f, size.height * 0.15f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
-            drawLine(color, Offset(size.width * 0.61f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
-            drawLine(color, Offset(size.width * 0.95f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), 2.dp.toPx())
+            drawLine(color, Offset(size.width * 0.78f, size.height * 0.15f), Offset(size.width * 0.78f, size.height * 0.85f), line)
+            drawLine(color, Offset(size.width * 0.61f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), line)
+            drawLine(color, Offset(size.width * 0.95f, size.height * 0.66f), Offset(size.width * 0.78f, size.height * 0.85f), line)
         }
         HeaderGlyph.BACK -> {
-            drawLine(color,Offset(size.width*0.85f,size.height*0.5f),Offset(size.width*0.15f,size.height*0.5f),2.dp.toPx())
-            drawLine(color,Offset(size.width*0.15f,size.height*0.5f),Offset(size.width*0.5f,size.height*0.15f),2.dp.toPx())
-            drawLine(color,Offset(size.width*0.15f,size.height*0.5f),Offset(size.width*0.5f,size.height*0.85f),2.dp.toPx())
+            drawLine(color,Offset(size.width*0.85f,size.height*0.5f),Offset(size.width*0.15f,size.height*0.5f),line)
+            drawLine(color,Offset(size.width*0.15f,size.height*0.5f),Offset(size.width*0.5f,size.height*0.15f),line)
+            drawLine(color,Offset(size.width*0.15f,size.height*0.5f),Offset(size.width*0.5f,size.height*0.85f),line)
         }
         HeaderGlyph.CLOSE -> {
-            drawLine(color,Offset(size.width*0.25f,size.height*0.25f),Offset(size.width*0.75f,size.height*0.75f),2.dp.toPx())
-            drawLine(color,Offset(size.width*0.75f,size.height*0.25f),Offset(size.width*0.25f,size.height*0.75f),2.dp.toPx())
+            drawLine(color,Offset(size.width*0.25f,size.height*0.25f),Offset(size.width*0.75f,size.height*0.75f),line)
+            drawLine(color,Offset(size.width*0.75f,size.height*0.25f),Offset(size.width*0.25f,size.height*0.75f),line)
         }
         HeaderGlyph.LAYOUT -> {
-            for(x in 0..1) for(y in 0..1) drawRect(color,Offset(size.width*(0.1f+x*0.5f),size.height*(0.1f+y*0.5f)),Size(size.width*0.3f,size.height*0.3f),style=Stroke(1.5.dp.toPx()))
+            for(x in 0..1) for(y in 0..1) drawRect(color,Offset(size.width*(0.1f+x*0.5f),size.height*(0.1f+y*0.5f)),Size(size.width*0.3f,size.height*0.3f),style=Stroke(line))
         }
         HeaderGlyph.REFRESH -> {
-            drawArc(color, 40f, 285f, false, Offset(size.width * 0.16f, size.height * 0.16f), Size(size.width * 0.68f, size.height * 0.68f), style = Stroke(2.dp.toPx()))
-            drawLine(color, Offset(size.width * 0.79f, size.height * 0.13f), Offset(size.width * 0.79f, size.height * 0.36f), 2.dp.toPx())
-            drawLine(color, Offset(size.width * 0.57f, size.height * 0.36f), Offset(size.width * 0.79f, size.height * 0.36f), 2.dp.toPx())
+            drawArc(color, 40f, 285f, false, Offset(size.width * 0.16f, size.height * 0.16f), Size(size.width * 0.68f, size.height * 0.68f), style = Stroke(line))
+            drawLine(color, Offset(size.width * 0.79f, size.height * 0.13f), Offset(size.width * 0.79f, size.height * 0.36f), line)
+            drawLine(color, Offset(size.width * 0.57f, size.height * 0.36f), Offset(size.width * 0.79f, size.height * 0.36f), line)
         }
         HeaderGlyph.DISCOVER -> {
-            drawCircle(color,size.width*0.4f,style=Stroke(1.6.dp.toPx()))
+            drawCircle(color,size.width*0.4f,style=Stroke(line))
             val compass=PathParser().parsePathString("M 15 5 L 12 12 L 5 15 L 8 8 Z").toPath()
-            scale(size.width/20f,size.height/20f,Offset.Zero) {drawPath(compass,color,style=Stroke(1.6f))}
+            scale(size.width/20f,size.height/20f,Offset.Zero) {drawPath(compass,color,style=Stroke(BUTTON_ICON_STROKE))}
         }
         HeaderGlyph.FAVORITES -> {
             val heart=PathParser().parsePathString("M 10 17 L 3 10 C -2 4 5 -1 10 5 C 15 -1 22 4 17 10 Z").toPath()
-            scale(size.width/20f,size.height/20f,Offset.Zero) {drawPath(heart,color,style=Stroke(1.6f))}
+            scale(size.width/20f,size.height/20f,Offset.Zero) {drawPath(heart,color,style=Stroke(BUTTON_ICON_STROKE))}
         }
         HeaderGlyph.SUBSCRIPTIONS -> {
             val bookmark=PathParser().parsePathString("M 5 3 L 15 3 L 15 18 L 10 14 L 5 18 Z").toPath()
-            scale(size.width/20f,size.height/20f,Offset.Zero) {drawPath(bookmark,color,style=Stroke(1.6f))}
+            scale(size.width/20f,size.height/20f,Offset.Zero) {drawPath(bookmark,color,style=Stroke(BUTTON_ICON_STROKE))}
         }
         }
     } }
@@ -283,7 +288,7 @@ private fun MenuIcon(ui: SaltNativeUi, label: String, vector: String) {
     val color = Color(ui.palette(currentComposer).text().toULong())
     val path = remember(vector) { PathParser().parsePathString(vector).toPath() }
     val draw: (DrawScope) -> Unit = { scope -> with(scope) {
-        scale(size.width / 24f, size.height / 24f, Offset.Zero) { drawPath(path,color,style=Stroke(2f)) }
+        scale(size.width / 24f, size.height / 24f, Offset.Zero) { drawPath(path,color,style=Stroke(BUTTON_ICON_STROKE * 24f / 20f)) }
     } }
     ui.canvas(Modifier.size(20.dp).semantics { contentDescription = label }, draw, currentComposer)
 }
@@ -595,17 +600,34 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     val login = state?.login()
     val rows = catalog?.get("items") as? List<*>
     val coverTokens=rows.orEmpty().mapNotNull { (it as? Map<*,*>)?.get("token") as? String }
-    LaunchedEffect(ui,coverTokens) { ui.prefetchCovers(coverTokens) }
+    val prefetchTokens=if(catalog?.get("infinite")==true) coverTokens.takeLast(30) else coverTokens
+    LaunchedEffect(ui,prefetchTokens) { ui.prefetchCovers(prefetchTokens) }
     val middleLabel=when(catalog?.get("view")) {
         "FOLDER","COLLECTION" -> ""
         "AUTHOR_VIDEOS" -> "\u66f4\u65b0\u65f6\u95f4"
         else -> if(rows?.any { ((it as? Map<*,*>)?.get("collection") as? String).orEmpty().isNotBlank() }==true) "\u5408\u96c6" else ""
     }
     val listState = memory.list
-    val location=listOf(catalog?.get("view"),catalog?.get("page"),catalog?.get("title"),catalog?.get("filter"),catalog?.get("sort"))
+    val location=listOf(catalog?.get("view"),catalog?.get("page"),catalog?.get("title"),catalog?.get("filter"),catalog?.get("sort"),catalog?.get("pageLimit"))
     LaunchedEffect(location) {
         // Schedule the next layout rather than forcing remeasure while LazyColumn applies new items.
         if(memory.location!=location) { memory.location=location; listState.requestScrollToItem(0) }
+    }
+    var downScroll by remember(ui,platform) { mutableIntStateOf(0) }
+    val infinite=catalog?.get("infinite")==true
+    val loadToken=(catalog?.get("loadToken") as? String).orEmpty()
+    LaunchedEffect(ui,platform,loadToken,infinite,catalog?.get("loadingMore"),catalog?.get("loadingAll")) {
+        if(infinite && catalog?.get("more")==true && catalog["loadingMore"]!=true && catalog["loadingAll"]!=true && (catalog["error"] as? String).isNullOrEmpty()) {
+            var previous=Triple(listState.firstVisibleItemIndex,listState.firstVisibleItemScrollOffset,downScroll)
+            snapshotFlow {Triple(listState.firstVisibleItemIndex,listState.firstVisibleItemScrollOffset,downScroll)}.collect { position ->
+                val forward=position.first>previous.first || position.first==previous.first && position.second>previous.second || position.third>previous.third
+                previous=position
+                val layout=listState.layoutInfo
+                if(forward && (layout.visibleItemsInfo.lastOrNull()?.index ?: -1)>=layout.totalItemsCount-3) {
+                    action {ui.desk().loadMore(platform,loadToken)}
+                }
+            }
+        }
     }
     // Salt paints the window backdrop below navigation; an opaque page would hide its effects.
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -614,7 +636,9 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         val columns=when(memory.layout) {ListLayout.SINGLE -> 1; ListLayout.DOUBLE -> if(maxWidth>=600.dp) 2 else 1; ListLayout.CARDS -> (maxWidth.value/210f).toInt().coerceIn(1,6)}
         Column(Modifier.fillMaxSize()) {
         AccountHeader(ui, platform, login, action, memory, narrowHeader, catalog, enabled)
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), state = listState,
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp).onPointerEvent(PointerEventType.Scroll) {
+            if(it.changes.any {change -> change.scrollDelta.y>0f}) downScroll++
+        }, state = listState,
             contentPadding = PaddingValues(bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (!enabled) {
                 item { NativeText(ui, "\u539f\u751f\u9875\u9762\u5df2\u505c\u7528\uff0c\u8bf7\u8fd4\u56de\u5e76\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u3002") }
@@ -695,7 +719,12 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 val total = (catalog?.get("totalPages") as? Number)?.toInt() ?: 0
                 val previous = page > 1
                 val next = catalog?.get("more") == true
-                if (previous || next) item(key = "pagination") {
+                if(infinite && next) item(key="load-more") {
+                    PageButton(ui,if(catalog?.get("loadingMore")==true) "\u6b63\u5728\u52a0\u8f7d" else if((catalog?.get("error") as? String).isNullOrEmpty()) "\u52a0\u8f7d\u66f4\u591a" else "\u91cd\u8bd5\u52a0\u8f7d",
+                        enabled=catalog?.get("loadingMore")!=true && catalog?.get("loadingAll")!=true,
+                        click={action {ui.desk().loadMore(platform,loadToken)}})
+                }
+                if (!infinite && (previous || next)) item(key = "pagination") {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.weight(1f)) { PageButton(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
                             click = { action { ui.desk().page(-1) } }) }

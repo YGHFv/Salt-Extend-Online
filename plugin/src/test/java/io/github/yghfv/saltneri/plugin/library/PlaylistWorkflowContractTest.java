@@ -27,7 +27,7 @@ public final class PlaylistWorkflowContractTest {
                     i==1 || i==3 ? -1 : i==2 ? 0 : i>=44 ? 9000000000L : i));
             return new Page("Collection",items,q.page()<3,Instant.now().plusSeconds(300),3,45);
         })) {
-            library.browse(AccountPlatform.BILIBILI,View.MINE); ready(library);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI,View.MINE); ready(library);
             library.choose((String)rows(library).getFirst().get("token")); ready(library);
             String token=(String)rows(library).getFirst().get("token");
             check(library.snapshot().get("totalCount").equals(45L));
@@ -85,7 +85,7 @@ public final class PlaylistWorkflowContractTest {
             for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) items.add(new Item(Kind.TRACK,""+i,"Track "+i,"Author",0,true));
             return new Page("Folder",items,q.page()==1,Instant.MAX,2,21);
         })) {
-            library.browse(AccountPlatform.NETEASE,View.MINE); ready(library);
+            library.pageLimit(20); library.browse(AccountPlatform.NETEASE,View.MINE); ready(library);
             library.choose((String)rows(library).getFirst().get("token")); ready(library);
             fail.set(true); library.requestPlaylist();
             long until=System.nanoTime()+3_000_000_000L;
@@ -116,7 +116,7 @@ public final class PlaylistWorkflowContractTest {
                     : fixture.netSearch.replace("\"songCount\":21","\"songCount\":1");
             return new CatalogClient(null,CatalogContractTest.CLOCK,fixture).load(q,r);
         })) {
-            library.browse(AccountPlatform.BILIBILI,View.MINE); ready(library); String biliToken=(String)rows(library).getFirst().get("token");
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI,View.MINE); ready(library); String biliToken=(String)rows(library).getFirst().get("token");
             library.search(AccountPlatform.NETEASE,"music"); ready(library);
             check(queried.get().platform()==AccountPlatform.NETEASE && queried.get().keyword().equals("music"));
             check(rows(library).size()==1 && rows(library).getFirst().get("title").equals("Free"));

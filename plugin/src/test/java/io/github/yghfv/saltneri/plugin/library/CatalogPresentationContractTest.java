@@ -53,7 +53,7 @@ public final class CatalogPresentationContractTest {
             if(k.equals("all")) throw new AssertionError("Author order fetched whole catalog");
             return new Page("Videos",List.of(new Item(Kind.TRACK,"BV17x411w7KC","Video","Uploader",125000,true,null,99,12345,1700000000)),true,Instant.MAX,3,45);
         })) {
-            library.browse(AccountPlatform.BILIBILI,View.DISCOVER);ready(library);library.author((String)rows(library).getFirst().get("token"));ready(library);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI,View.DISCOVER);ready(library);library.author((String)rows(library).getFirst().get("token"));ready(library);
             library.sort(Sort.PLAY_COUNT);ready(library);check(queries.getLast().order()==Sort.PLAY_COUNT);
             library.turn(1);ready(library);check(queries.getLast().page()==2 && queries.getLast().order()==Sort.PLAY_COUNT);
             library.sort(Sort.REVERSE);ready(library);check(queries.getLast().reverse() && library.snapshot().get("loadingAll").equals(false));
@@ -68,7 +68,7 @@ public final class CatalogPresentationContractTest {
             if(q.view()!=View.COLLECTION) return new Page("Sets",List.of(new Item(Kind.COLLECTION,"30","Set","Uploader",606,true,null,99)),false,Instant.MAX,1,1);
             return new Page("Set",List.of(new Item(Kind.TRACK,"BV17x411w7KC",q.reverse()?"Last":"First","Uploader",125000,true,null,99)),true,Instant.MAX,31,606);
         })) {
-            library.browse(AccountPlatform.BILIBILI,View.SAVED);ready(library);library.choose((String)rows(library).getFirst().get("token"));ready(library);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI,View.SAVED);ready(library);library.choose((String)rows(library).getFirst().get("token"));ready(library);
             int before=queries.size();library.sort(Sort.REVERSE);ready(library);
             check(queries.size()==before+1 && queries.getLast().reverse() && rows(library).getFirst().get("title").equals("Last"));
             library.turn(1);ready(library);check(queries.getLast().page()==2 && queries.getLast().reverse());
@@ -134,7 +134,7 @@ public final class CatalogPresentationContractTest {
                     :new Item(Kind.FOLDER,"10","Folder","Uploader",1,true);
             return new Page("Fixture",List.of(item),false,Instant.MAX,1,1);
         })) {
-            library.browse(AccountPlatform.BILIBILI,View.MINE);ready(library);library.choose((String)rows(library).getFirst().get("token"));ready(library);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI,View.MINE);ready(library);library.choose((String)rows(library).getFirst().get("token"));ready(library);
             int before=requests.get(); library.sort(Sort.DEFAULT);library.sort(Sort.TITLE);ready(library);check(requests.get()==before);
             var row=rows(library).getFirst(); check(row.get("duration").equals("02:05") && row.get("author").equals(true) && row.get("collection").equals(""));
             String old=(String)row.get("token"); library.author(old);ready(library);

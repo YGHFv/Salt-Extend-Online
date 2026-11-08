@@ -29,7 +29,7 @@ public final class LibraryWorkflowContractTest {
         try (LibraryController library = new LibraryController(p -> accounts.get(), () -> true, selections::add, navigation::incrementAndGet, CatalogContractTest.CLOCK,
                 a -> (q,k,s,r) -> new Page(q.view().name() + q.page(), q.view() == View.FOLDER ? List.of(new Item(Kind.TRACK,"123","Song","Artist",120000,true))
                         : List.of(new Item(Kind.FOLDER,"10","Playlist","Mine",20,true)), true, CatalogContractTest.CLOCK.instant().plusSeconds(300)))) {
-            library.browse(AccountPlatform.NETEASE, View.MINE); waitFor(() -> !rows(library).isEmpty());
+            library.pageLimit(20); library.browse(AccountPlatform.NETEASE, View.MINE); waitFor(() -> !rows(library).isEmpty());
             String folderToken = (String)rows(library).getFirst().get("token"); library.choose(folderToken); waitFor(() -> library.snapshot().get("title").equals("FOLDER1"));
             CatalogContractTest.fails(() -> library.choose(folderToken));
             String trackToken = (String)rows(library).getFirst().get("token"); library.choose(trackToken); check(selections.size() == 1 && selections.getFirst().id().equals("123"));
@@ -47,7 +47,7 @@ public final class LibraryWorkflowContractTest {
         try (LibraryController library = new LibraryController(p -> bili, () -> true, biliSelections::add, () -> { }, CatalogContractTest.CLOCK,
                 a -> (q,k,s,r) -> new CatalogClient(a, CatalogContractTest.CLOCK, fixture).load(q,r),
                 (a,q,r) -> new CatalogClient(a, CatalogContractTest.CLOCK, fixture).collectionCover(q,r))) {
-            library.browse(AccountPlatform.BILIBILI, View.MINE); waitFor(() -> rows(library).size() == 1);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI, View.MINE); waitFor(() -> rows(library).size() == 1);
             check(Boolean.TRUE.equals(rows(library).getFirst().get("enabled")));
             check(!library.snapshot().toString().contains("Collection"));
             library.choose((String)rows(library).getFirst().get("token")); waitFor(() -> library.snapshot().get("view").equals("FOLDER") && rows(library).size() == 1);
@@ -108,7 +108,7 @@ public final class LibraryWorkflowContractTest {
                         new Item(Kind.FOLDER,"40","Deleted","",0,false)), true, CatalogContractTest.CLOCK.instant().plusSeconds(300)),
                 (a,q,r) -> { coverLookups.incrementAndGet(); lookupEntered.countDown(); try { lookupRelease.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                     return URI.create("https://i0.hdslb.com/late.jpg"); })) {
-            library.browse(AccountPlatform.BILIBILI, View.SAVED); waitFor(() -> rows(library).size()==1);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI, View.SAVED); waitFor(() -> rows(library).size()==1);
             check(coverLookups.get()==0 && Boolean.TRUE.equals(library.snapshot().get("more")));
             String row=(String)rows(library).getFirst().get("token");
             var task = new java.util.concurrent.FutureTask<URI>(() -> { try(var request=new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> true)) { return library.resolveCover(row,request); } });
@@ -118,14 +118,14 @@ public final class LibraryWorkflowContractTest {
         } finally { lookupRelease.countDown(); }
         try (LibraryController library = new LibraryController(p -> null, () -> true, t -> { throw new AssertionError("Failure must not prepare"); }, () -> { },
                 CatalogContractTest.CLOCK, a -> (q,k,s,r) -> { throw new java.io.IOException("COOKIE_SECRET https://example.invalid/UID_SECRET"); })) {
-            library.browse(AccountPlatform.NETEASE, View.DISCOVER);
+            library.pageLimit(20); library.browse(AccountPlatform.NETEASE, View.DISCOVER);
             waitFor(() -> library.snapshot().get("status").toString().contains("UNKNOWN/RESPONSE"));
             check(rows(library).isEmpty() && !library.snapshot().toString().contains("SECRET") && !library.snapshot().toString().contains("https:"));
         }
         try (LibraryController library = new LibraryController(p -> null, () -> true, t -> { throw new AssertionError("No login must not prepare"); }, () -> { },
                 CatalogContractTest.CLOCK, a -> (q,k,s,r) -> new CatalogClient(null, CatalogContractTest.CLOCK,
                         (u,f) -> { throw new AssertionError("No login must not request"); }).load(q,r))) {
-            library.browse(AccountPlatform.BILIBILI, View.MINE);
+            library.pageLimit(20); library.browse(AccountPlatform.BILIBILI, View.MINE);
             waitFor(() -> library.snapshot().get("status").toString().contains("BILI_CREATED/LOGIN_REQUIRED"));
             check(rows(library).isEmpty() && library.snapshot().get("status").toString().contains("\u8bf7\u5148\u626b\u7801\u767b\u5f55"));
         }
@@ -173,7 +173,7 @@ public final class LibraryWorkflowContractTest {
                             "30","Collection","Artist",1,true,missing?null:original,99)),false,java.time.Instant.MAX),
                     (a,q,r)->{lookups.incrementAndGet();return alternate;},(a,i,r)->{lookups.incrementAndGet();return alternate;});
                 var request=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {
-                library.browse(platform,View.SAVED);waitFor(()->!rows(library).isEmpty());
+                library.pageLimit(20); library.browse(platform,View.SAVED);waitFor(()->!rows(library).isEmpty());
                 String old=(String)rows(library).getFirst().get("token");
                 check(library.resolveCover(old,request,!missing).equals(alternate) && lookups.get()==1);
                 check(library.cover(old).equals(alternate));

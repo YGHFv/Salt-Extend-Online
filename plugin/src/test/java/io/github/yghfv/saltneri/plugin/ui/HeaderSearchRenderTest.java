@@ -96,6 +96,26 @@ public final class HeaderSearchRenderTest {
             check(!node.getConfig().contains(SemanticsProperties.INSTANCE.getText())); right=bounds.getRight();
         }
         check(searchBounds.getTop()<56 && searchBounds.getRight()<=width);
+        if(!searching) strokeStyle(scene);
+    }
+    private static void strokeStyle(ImageComposeScene scene) {
+        var root=scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
+        var nativeIcon=find(root,"\u641c\u7d22B\u7ad9\u5b98\u65b9\u56fe\u6807",null);
+        var customIcon=find(root,"\u8ba2\u9605\u56fe\u6807",null);
+        check(nativeIcon!=null && customIcon!=null);
+        try(var image=scene.render(System.nanoTime());var png=image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
+            var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png.getBytes()));
+            double nativeStroke=outlineCoverage(pixels,nativeIcon.getBoundsInRoot());
+            double customStroke=outlineCoverage(pixels,customIcon.getBoundsInRoot());
+            if(customStroke<1.05 || customStroke>1.45 || Math.abs(customStroke-nativeStroke)>0.25)
+                throw new AssertionError("Toolbar outline mismatch: native="+nativeStroke+", custom="+customStroke);
+            checks++;
+        }catch(java.io.IOException error){throw new AssertionError(error);}
+    }
+    private static double outlineCoverage(java.awt.image.BufferedImage image,androidx.compose.ui.geometry.Rect bounds) {
+        double alpha=0;int y=Math.round(bounds.getTop()+bounds.getHeight()*0.42f);
+        for(int x=Math.round(bounds.getLeft());x<Math.round(bounds.getLeft()+bounds.getWidth()/2);x++)alpha+=(image.getRGB(x,y)>>>24)/255.0;
+        return alpha*20/bounds.getWidth();
     }
     private static void accountIcons(ImageComposeScene scene) throws Exception {
         menuIcons(scene,List.of("\u5207\u6362\u8d26\u6237","\u9000\u51fa\u767b\u5f55"));
@@ -155,6 +175,7 @@ public final class HeaderSearchRenderTest {
                         boolean net=query.platform()==AccountPlatform.NETEASE;
                         return new Catalog.Page("Search results",List.of(new Catalog.Item(Catalog.Kind.TRACK,net ? "123" : "BV17x411w7KC","Search hit","Artist",120000,true)),net && query.page()==1,clock.instant().plusSeconds(300),net ? 2 : 1);
                     })) {
+            library.pageLimit(20); // This search fixture asserts the legacy two-page protocol explicitly.
             NativeDesk desk=new NativeDesk(library,player,p->login.get(),(p,action)->{
                 lastAction.set(action);
                 if(action==NativeDesk.Action.WEB_LOGIN) login.set(new AccountLoginController.Snapshot(AccountLoginController.Phase.WEB_LOGIN,"Official web login fixture",null,""));

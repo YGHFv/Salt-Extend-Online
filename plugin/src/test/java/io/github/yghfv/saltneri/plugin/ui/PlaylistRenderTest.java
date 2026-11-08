@@ -105,6 +105,7 @@ public final class PlaylistRenderTest {
                 else for(int i=(q.page()-1)*20+1;i<=Math.min(q.page()*20,21);i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,String.format("Song %02d",i)+(i==2?" - longer title to verify two-line card height and single-line list ellipsis":""),"Uploader",1000,true,null,99,i==20?9000000000L:i,1700000000));
                 return new Catalog.Page(q.view()==Catalog.View.FOLDER?"My collection":"Catalog",rows,q.view()==Catalog.View.FOLDER && q.page()==1,Instant.now().plusSeconds(300),q.view()==Catalog.View.FOLDER?2:1,q.view()==Catalog.View.FOLDER?21:1);
             })) {
+            library.pageLimit(20); // Legacy pager/layout fixtures; configurable limits have separate coverage.
             var desk=new NativeDesk(library,player,p->new AccountLoginController.Snapshot(AccountLoginController.Phase.LOGGED_IN,"",null,"42"),(p,a)->{},()->true);
             check(desk.layout(AccountPlatform.BILIBILI).equals("CARDS") && desk.layout(AccountPlatform.NETEASE).equals("CARDS"));
             desk.layout(AccountPlatform.BILIBILI,"SINGLE");

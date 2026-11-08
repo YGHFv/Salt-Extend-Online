@@ -88,6 +88,15 @@
           "default_value": "fit"
         },
         {
+          "key": "catalog.pageLimit",
+          "type": "list",
+          "title": "单页上限",
+          "summary": "Bilibili 与网易云共用，默认 30。无上限先显示前 30 项，向下滚动时继续加载；搜索、排序和全部播放仍覆盖完整合集。修改后当前列表回到开头，保留搜索与排序。",
+          "entries": ["20", "30（默认）", "50", "60", "100", "无上限"],
+          "entry_values": ["20", "30", "50", "60", "100", "0"],
+          "default_value": "30"
+        },
+        {
           "key": "cache.limitMiB",
           "type": "list",
           "title": "音频缓存上限",

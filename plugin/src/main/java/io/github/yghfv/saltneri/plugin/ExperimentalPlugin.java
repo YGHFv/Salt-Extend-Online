@@ -52,6 +52,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private void applySettings(ConfigHelper config) {
         settings=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
+        LibraryController catalog=library; if(catalog!=null) catalog.pageLimit(CatalogPaging.parse(config.get("catalog.pageLimit","30")));
     }
 
     public ExperimentalPlugin(PluginContext context) { super(context); }
@@ -91,6 +92,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         OnlinePlaybackController startedOnline = online;
         library = new LibraryController(this::credentials, this::granted, startedOnline::prepare,
                 () -> startedOnline.invalidate("\u5217\u8868\u5df2\u5207\u6362\uff0c\u8bf7\u9009\u62e9\u66f2\u76ee\u51c6\u5907\u97f3\u8f68\uff08\u672a\u64ad\u653e\uff09"));
+        library.pageLimit(CatalogPaging.parse(initialConfig.get("catalog.pageLimit","30")));
         desk = new NativeDesk(library, online, platform -> login(platform).snapshot(), (platform, operation) -> {
             try { nativeAction(platform, operation); }
             catch (RuntimeException failure) { throw failure; }

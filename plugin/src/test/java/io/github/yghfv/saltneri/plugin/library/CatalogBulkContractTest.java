@@ -70,7 +70,7 @@ public final class CatalogBulkContractTest {
             if(k.equals("all")) { entered.countDown(); hold.await(3,TimeUnit.SECONDS); r.check(); }
             return new Page("Fixture",List.of(new Item(Kind.TRACK,""+q.page(),"Song","Artist",1000,true)),q.page()==1,Instant.MAX,2,40);
         })) {
-            library.browse(AccountPlatform.NETEASE,View.SAVED); await(()->library.snapshot().get("loaded").equals(true));
+            library.pageLimit(20); library.browse(AccountPlatform.NETEASE,View.SAVED); await(()->library.snapshot().get("loaded").equals(true));
             List<?> folders=(List<?>)library.snapshot().get("items"); library.choose((String)((Map<?,?>)folders.getFirst()).get("token"));
             await(()->library.snapshot().get("loaded").equals(true)); var original=library.snapshot();
             library.requestPlaylist(); check(entered.await(3,TimeUnit.SECONDS));
