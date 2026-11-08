@@ -8,6 +8,7 @@ public interface StreamBinding extends AutoCloseable {
     void register(String path, URI localUri);
     default void registerDeferred(String path, Deferred source) { throw new UnsupportedOperationException("Deferred streams unavailable"); }
     void unregister(String path);
+    default void revoke(URI localUri) { }
     ReversibleInterceptorLists attach(Object engine) throws ReflectiveOperationException;
     boolean isAttached();
     @Override void close();

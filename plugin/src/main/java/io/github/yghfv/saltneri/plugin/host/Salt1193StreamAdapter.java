@@ -1,7 +1,6 @@
 package io.github.yghfv.saltneri.plugin.host;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.URI;
@@ -23,6 +22,8 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     public interface StreamFactory {
         /** Raw Kotlin Result<Int> representation from HttpRangeBassStream, not a boxed Result. */
         Object create(URI localUri, int flags) throws Exception;
+        default void revoke(URI localUri) { }
+        default void close() { }
     }
 
     private final Map<String, URI> paths = new ConcurrentHashMap<>();
@@ -30,6 +31,7 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     private final Map<Object, ReversibleInterceptorLists> attachments = new IdentityHashMap<>();
     private ReversibleInterceptorLists currentAttachment;
     private final BooleanSupplier authorized;
+    private final StreamFactory factory;
     private final Object interceptor;
     private volatile boolean closed;
 
@@ -37,7 +39,7 @@ public final class Salt1193StreamAdapter implements StreamBinding {
                                 BooleanSupplier authorized, StreamFactory factory) throws ReflectiveOperationException {
         if (!profile.matched()) throw new IllegalArgumentException("Host profile not verified");
         this.authorized = Objects.requireNonNull(authorized);
-        Objects.requireNonNull(factory);
+        this.factory = Objects.requireNonNull(factory);
         Class<?> contract = Class.forName("androidx.compose.ui.\u015b", false, loader);
         Method pathGetter = Class.forName("com.xuncorp.pisces.PiscesMediaItem", false, loader).getMethod("\u052c");
         Method idGetter = Class.forName("com.xuncorp.pisces.PiscesMediaItem", false, loader).getMethod("\u037f");
@@ -99,6 +101,7 @@ public final class Salt1193StreamAdapter implements StreamBinding {
         if (paths.containsKey(path) || deferred.putIfAbsent(path,Objects.requireNonNull(source)) != null) throw new IllegalStateException("Duplicate deferred path");
     }
     public void unregister(String path) { paths.remove(path); deferred.remove(path); }
+    @Override public void revoke(URI localUri) { factory.revoke(localUri); }
     public Object interceptor() { return interceptor; }
     public synchronized boolean isAttached() {
         return !closed && currentAttachment != null && currentAttachment.isInstalled();
@@ -127,19 +130,10 @@ public final class Salt1193StreamAdapter implements StreamBinding {
 
     /** Resolves the host singleton lazily, only when this factory is actually asked to open a stream. */
     public static StreamFactory nativeFactory(ClassLoader loader) {
-        return (localUri, flags) -> {
-            Class<?> stream = Class.forName("com.xuncorp.voxzen.cast.HttpRangeBassStream", true, loader);
-            Class<?> owner = Class.forName("com.xuncorp.voxzen.cast.HttpRangeStreamOwner", true, loader);
-            Object unspecified = owner.getField("Unspecified").get(null);
-            try {
-                return stream.getMethod("create-0E7RQCE", String.class, int.class, owner)
-                        .invoke(stream.getField("INSTANCE").get(null), localUri.toString(), flags, unspecified);
-            } catch (InvocationTargetException failure) {
-                if (failure.getCause() instanceof Exception exception) throw exception;
-                throw failure;
-            }
-            // Never call abortActiveStreams(Unspecified): it would include other mods' streams.
-        };
+        return new ScopedNativeStreams(loader);
+    }
+    public static StreamFactory nativeFactory(ClassLoader loader, java.util.function.Consumer<URI> failed) {
+        return new ScopedNativeStreams(loader, null, failed);
     }
 
     private static Object read(Object owner, Field field) throws IllegalAccessException {
@@ -150,6 +144,7 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     @Override public synchronized void close() {
         if (closed) return;
         closed = true;
+        factory.close();
         paths.clear();
         deferred.clear();
         RuntimeException failure = null;

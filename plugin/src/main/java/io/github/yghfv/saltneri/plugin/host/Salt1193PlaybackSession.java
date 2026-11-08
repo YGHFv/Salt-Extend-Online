@@ -218,7 +218,7 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         synchronized(track.resolveLock) {
             synchronized(this) {
                 requireTrack(track);
-                if(track.localUri!=null && Objects.equals(track.qualityRevision,track.renewer.revision()) && transport.now().plusSeconds(10).isBefore(track.expiresAt)) {
+                if(transport.isAvailable(track.localUri) && Objects.equals(track.qualityRevision,track.renewer.revision()) && transport.now().plusSeconds(10).isBefore(track.expiresAt)) {
                     cached.get(track); return track.localUri;
                 }
                 cached.remove(track); releaseLease(track);

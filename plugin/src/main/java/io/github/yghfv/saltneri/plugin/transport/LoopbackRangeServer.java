@@ -57,6 +57,10 @@ public final class LoopbackRangeServer implements AutoCloseable {
     private final Map<String, Entry> leases = new ConcurrentHashMap<>();
     private final Set<Request> requests = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private volatile java.util.function.Consumer<URI> onRevoke = uri -> { };
+
+    /** Fast notification only: observers must not wait for a native callback to drain. */
+    public void onRevoke(java.util.function.Consumer<URI> observer) { onRevoke = Objects.requireNonNull(observer); }
 
     private static final class Entry {
         final MediaLease lease;
@@ -195,11 +199,23 @@ public final class LoopbackRangeServer implements AutoCloseable {
         if (entry != null) revoke(token, entry);
     }
 
+    public boolean isAvailable(URI uri) {
+        if (uri == null || !"http".equals(uri.getScheme()) || !"127.0.0.1".equals(uri.getHost())
+                || uri.getPort() != listener.getLocalPort() || uri.getRawUserInfo() != null
+                || uri.getRawQuery() != null || uri.getRawFragment() != null || uri.getRawPath() == null
+                || !uri.getRawPath().matches("/media/[0-9a-f]{64}")) return false;
+        Entry entry = leases.get(uri.getRawPath().substring(7));
+        return entry != null && valid(entry);
+    }
+
     private void revoke(String token, Entry entry) {
-        entry.revoked.set(true);
-        leases.remove(token, entry);
-        requests.forEach(request -> { if (request.entry == entry) request.close(); });
-        cache.revoke(entry);
+        if (!entry.revoked.compareAndSet(false, true)) return;
+        try { onRevoke.accept(URI.create("http://127.0.0.1:" + listener.getLocalPort() + "/media/" + token)); }
+        finally {
+            leases.remove(token, entry);
+            requests.forEach(request -> { if (request.entry == entry) request.close(); });
+            cache.revoke(entry);
+        }
     }
 
     private void expire() {
@@ -419,8 +435,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
     @Override
     public synchronized void close() {
         if (!closed.compareAndSet(false, true)) return;
-        try { listener.close(); } catch (IOException ignored) { }
         leases.forEach(this::revoke);
+        try { listener.close(); } catch (IOException ignored) { }
         requests.forEach(Request::close);
         // Queued workers removed by shutdownNow never run their per-request finally block.
         requests.clear();

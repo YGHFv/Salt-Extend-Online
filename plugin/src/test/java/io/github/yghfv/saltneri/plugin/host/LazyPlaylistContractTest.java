@@ -87,6 +87,9 @@ public final class LazyPlaylistContractTest {
             time.set(time.get().plusSeconds(1764)); // Still valid for 36s, but cannot finish the track.
             URI renewed=pending.resolve(); check(count.get()==2 && !renewed.equals(first));
             time.set(time.get().plusSeconds(400)); check(pending.resolve().equals(renewed) && count.get()==2);
+            server.revoke(renewed);
+            check(!server.isAvailable(renewed));
+            URI recovered=pending.resolve(); check(count.get()==3 && !recovered.equals(renewed) && server.isAvailable(recovered));
         }
     }
 }

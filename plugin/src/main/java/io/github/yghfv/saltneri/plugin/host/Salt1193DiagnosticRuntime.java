@@ -44,7 +44,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         LoopbackRangeServer transport = new LoopbackRangeServer(authorized);
         Salt1193StreamAdapter adapter = null;
         try {
-            adapter = new Salt1193StreamAdapter(loader, profile, authorized, Salt1193StreamAdapter.nativeFactory(loader));
+            adapter = new Salt1193StreamAdapter(loader, profile, authorized, Salt1193StreamAdapter.nativeFactory(loader, transport::revoke));
             return new Salt1193DiagnosticRuntime(profile, adapter, transport,
                     Salt1193EngineLink.nativeHost(loader, profile), Salt1193EngineLink.hooks(registrar),
                     Salt1193PlaybackSession.nativeQueue(loader, profile, authorized), authorized);
@@ -63,6 +63,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         this.profile = profile; this.media = profile.mediaFactory();
         this.adapter = Objects.requireNonNull(adapter);
         this.transport = Objects.requireNonNull(transport);
+        transport.onRevoke(adapter::revoke);
         this.queue = Objects.requireNonNull(queue);
         this.authorized = Objects.requireNonNull(authorized);
         this.engine = new Salt1193EngineLink(profile, adapter, host, authorized);

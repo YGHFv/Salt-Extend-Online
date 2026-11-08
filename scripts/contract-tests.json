@@ -29,6 +29,11 @@
   ],
   "tests": [
     {
+      "class": "io.github.yghfv.saltneri.plugin.host.NativeStreamLifecycleTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.host.HostProfileSmokeTest",
       "baseOnly": false,
       "offline": false

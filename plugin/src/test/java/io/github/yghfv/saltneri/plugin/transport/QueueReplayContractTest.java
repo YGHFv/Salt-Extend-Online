@@ -93,6 +93,8 @@ public final class QueueReplayContractTest {
                 // Logical queue entries must not consume one live URL each or hit the former 64-lease limit.
                 for(int i=0;i<70;i++) { var next=audio(key,"account-A",clock,null); session.prepare(key,next.metadata(),next.lease(),null,r->audio(key,"account-A",clock,null)); }
                 check(open(adapter,queue.getFirst()).equals(321) && renewals.get()==3);
+                URI failedUri=opened.get(); server.revoke(failedUri);
+                check(open(adapter,queue.getFirst()).equals(321) && renewals.get()==4 && !failedUri.equals(opened.get()));
                 var failure=audio(key,"account-A",clock,null); AtomicBoolean wrong=new AtomicBoolean(true); AtomicInteger attempts=new AtomicInteger();
                 var bad=session.prepare(key,failure.metadata(),failure.lease(),null,r->{attempts.incrementAndGet();return audio(key,wrong.get()?"other-account":"account-A",clock,null);});
                 clock.advance(61); rejected(adapter,bad.mediaItem()); check(attempts.get()==1);
