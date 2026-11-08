@@ -24,6 +24,9 @@ public final class CoverLoader implements AutoCloseable {
     private final Opener opener;
     private final ThreadPoolExecutor worker;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
+    private record Thumbnail(byte[] png,long until) { }
+    private final LinkedHashMap<URI,Thumbnail> thumbnails=new LinkedHashMap<>(32,0.75f,true);
+    private long thumbnailBytes, revision;
     private volatile boolean closed;
     private static final class Entry {
         final BooleanSupplier valid;
@@ -75,8 +78,25 @@ public final class CoverLoader implements AutoCloseable {
         return null;
     }
     public byte[] load(URI source, RequestScope scope) throws IOException {
-        // Fetch the same original image as playback, but keep the smaller decoded list thumbnail.
-        return load(source, scope, LIST_EDGE, 8 * MAX_BYTES);
+        URI original=CoverSource.original(source); if(original==null) throw invalid(); scope.check();
+        long captured;
+        synchronized(this) {
+            if(closed) throw invalid(); captured=revision;
+            var hit=thumbnails.get(original);
+            if(hit!=null && System.nanoTime()<hit.until()) return hit.png();
+        }
+        // Public, cookie-free thumbnails survive row-token changes when revisiting a page.
+        byte[] png=load(original, scope, LIST_EDGE, 8 * MAX_BYTES); scope.check();
+        synchronized(this) {
+            if(!closed && captured==revision) {
+                var previous=thumbnails.put(original,new Thumbnail(png,System.nanoTime()+TimeUnit.MINUTES.toNanos(5)));
+                thumbnailBytes+=png.length-(previous==null?0:previous.png().length);
+                while(thumbnails.size()>96 || thumbnailBytes>24L*MAX_BYTES) {
+                    var eldest=thumbnails.pollFirstEntry(); thumbnailBytes-=eldest.getValue().png().length;
+                }
+            }
+        }
+        return png;
     }
     public byte[] loadPlayback(URI source, RequestScope scope) throws IOException {
         URI original = CoverSource.original(source);
@@ -161,6 +181,6 @@ public final class CoverLoader implements AutoCloseable {
         } catch (RuntimeException | LinkageError failure) { throw invalid(); }
     }
     private static IOException invalid() { return new IOException("Cover unavailable"); }
-    public synchronized void clear() { entries.values().forEach(Entry::cancel); entries.clear(); worker.purge(); }
+    public synchronized void clear() { revision++; thumbnails.clear(); thumbnailBytes=0; entries.values().forEach(Entry::cancel); entries.clear(); worker.purge(); }
     @Override public synchronized void close() { closed = true; clear(); worker.shutdownNow(); }
 }

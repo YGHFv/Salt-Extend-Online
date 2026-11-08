@@ -74,7 +74,34 @@ public final class CatalogCacheContractTest {
         } finally { release.countDown(); }
         controller();
         autoDiscover();
+        sessions();
         System.out.println("PASS: "+checks+" catalog cache TTL/LRU/account/refresh/failure/cancellation/navigation checks; no network or audio");
+    }
+    private static void sessions() throws Exception {
+        for(AccountPlatform platform:AccountPlatform.values()) {
+            var clock=new Time(); var cache=new CatalogPageCache(clock); var fixture=new CatalogContractTest.Fixture();
+            var account=CatalogContractTest.account(platform);
+            try(var request=new RequestScope(()->true)) {
+                var client=new CatalogClient(account,clock,fixture,cache.discovery,cache.sessions);
+                client.load(new Query(platform,View.MINE,0,1),request);
+                int first=fixture.requests.size();
+                client.load(new Query(platform,View.MINE,0,2),request);
+                check(fixture.requests.size()==first+1); // No repeated login verification / NetEase CSRF warmup.
+                if(platform==AccountPlatform.BILIBILI) {
+                    client.load(new Query(platform,View.SEARCH,0,1,0,"fixture"),request);
+                    check(fixture.requests.size()==first+2); // Cached WBI mixin is still used for signing.
+                }
+                clock.now=clock.now.plusSeconds(120); int before=fixture.requests.size();
+                client.load(new Query(platform,View.MINE,0,3),request);
+                check(fixture.requests.size()>before+1);
+                cache.clear(); before=fixture.requests.size();
+                client.load(new Query(platform,View.MINE,0,4),request); check(fixture.requests.size()>before+1);
+                before=fixture.requests.size(); account.retire();
+                try {client.load(new Query(platform,View.MINE,0,5),request);throw new AssertionError("Retired session cache used");}
+                catch(CancellationException | CatalogFailure expected) {checks++;}
+                check(fixture.requests.size()==before);
+            } finally {account.retire();}
+        }
     }
     private static void controller() throws Exception {
         Time clock=new Time(); var calls=new AtomicInteger(); var account=new AtomicReference<AccountCredentials>(); var allowed=new AtomicBoolean(true);

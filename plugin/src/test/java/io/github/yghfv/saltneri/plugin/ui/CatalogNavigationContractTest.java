@@ -38,12 +38,12 @@ public final class CatalogNavigationContractTest {
     public static void main(String[] args) throws Exception {
         Path path=Files.createTempDirectory("salt-layout-fixture").resolve("catalog-ui.properties");
         Config config=new Config(path); CatalogPreferences prefs=new CatalogPreferences(config);
-        check(prefs.layout(AccountPlatform.BILIBILI).equals("SINGLE"));
+        check(prefs.layout(AccountPlatform.BILIBILI).equals("CARDS"));
         prefs.layout(AccountPlatform.BILIBILI,"CARDS"); prefs.layout(AccountPlatform.NETEASE,"DOUBLE");
         prefs=new CatalogPreferences(new Config(path));
         check(prefs.layout(AccountPlatform.BILIBILI).equals("CARDS") && prefs.layout(AccountPlatform.NETEASE).equals("DOUBLE"));
-        config.set("layout.bilibili","bad"); check(new CatalogPreferences(config).layout(AccountPlatform.BILIBILI).equals("SINGLE"));
-        config.set("layout.bilibili",true); check(new CatalogPreferences(config).layout(AccountPlatform.BILIBILI).equals("SINGLE"));
+        config.set("layout.bilibili","bad"); check(new CatalogPreferences(config).layout(AccountPlatform.BILIBILI).equals("CARDS"));
+        config.set("layout.bilibili",true); check(new CatalogPreferences(config).layout(AccountPlatform.BILIBILI).equals("CARDS"));
         config.fail=true;
         try {new CatalogPreferences(config).layout(AccountPlatform.NETEASE,"CARDS");throw new AssertionError("Failed save accepted");}catch(IllegalStateException expected){checks++;}
         check(new CatalogPreferences(config).layout(AccountPlatform.NETEASE).equals("DOUBLE"));

@@ -129,7 +129,7 @@ public class BiliClient {
             try {
                 MediaRangeProbe.Result probe;
                 try { probe = MediaRangeProbe.probe(MediaLease.Platform.BILIBILI, candidate, HEADERS, 0,
-                        clock.instant().plusSeconds(300), clock, opener::open, scope, () -> check(scope)); }
+                        clock.instant().plusSeconds(1800), clock, opener::open, scope, () -> check(scope)); }
                 catch (MediaRangeProbe.Rejected denied) { throw new PlatformRejected(denied.status()); }
                 check(scope);
                 MediaLease lease = new MediaLease(MediaLease.Platform.BILIBILI, probe.uri(), HEADERS,

@@ -56,6 +56,18 @@ public final class CoverLoaderContractTest {
             check(CoverSource.parse(AccountPlatform.NETEASE, input) == null);
         }
         byte[] fixture = png(); Response response = new Response(SOURCE, fixture);
+        var loads=new AtomicInteger();
+        try(var loader=new CoverLoader(uri->{loads.incrementAndGet();return new Response(uri,fixture);});var scope=new RequestScope(()->true)) {
+            byte[] first=loader.load(SOURCE,scope);
+            check(Arrays.equals(first,loader.load(URI.create(SOURCE+"@96w.webp"),scope)) && loads.get()==1);
+            loader.clear(); loader.load(SOURCE,scope); check(loads.get()==2);
+            for(int i=0;i<97;i++) loader.load(URI.create("https://i0.hdslb.com/"+i+".png"),scope);
+            int before=loads.get(); loader.load(SOURCE,scope); check(loads.get()==before+1);
+            try(var cancelled=new RequestScope(()->true)) {
+                cancelled.close(); try {loader.load(SOURCE,cancelled);throw new AssertionError("Cancelled thumbnail reused");}
+                catch(CancellationException expected){checks++;}
+            }
+        }
         for(CoverMode mode:CoverMode.values()) {
             try(var loader=new CoverLoader(uri->new Response(uri,fixture)); var scope=new RequestScope(()->true)) {
                 var image=ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(SOURCE,scope,mode)));
@@ -227,13 +239,13 @@ public final class CoverLoaderContractTest {
             finally { running.decrementAndGet(); }
             return new Response(uri,fixture);
         })) {
-            for(int i=0;i<20;i++) loader.request("parallel-"+i,SOURCE,()->true);
+            for(int i=0;i<20;i++) loader.request("parallel-"+i,URI.create("https://i0.hdslb.com/parallel-"+i+".png"),()->true);
             check(started.await(2,TimeUnit.SECONDS)); check(peak.get()==3 && opens.get()==3);
             release.countDown(); long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
             boolean complete;
             do {
                 complete=true;
-                for(int i=0;i<20;i++) complete &= loader.request("parallel-"+i,SOURCE,()->true)!=null;
+                for(int i=0;i<20;i++) complete &= loader.request("parallel-"+i,URI.create("https://i0.hdslb.com/parallel-"+i+".png"),()->true)!=null;
                 if(!complete) Thread.sleep(5);
             } while(!complete && System.nanoTime()<end);
             check(complete && opens.get()==20 && peak.get()<=3);

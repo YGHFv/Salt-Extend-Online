@@ -36,6 +36,7 @@ public final class TransportContractTest {
         lifetime();
         diagnostic();
         cancellation();
+        recovery();
         System.out.println("PASS: " + checks + " transport contract checks (offline fake upstream, real loopback HTTP)");
     }
 
@@ -165,9 +166,38 @@ public final class TransportContractTest {
         })) {
             URI local = server.register(lease("a", NOW.plusSeconds(60), 100));
             Response truncated = call(local, "GET", "Range: bytes=0-9\r\n", "");
-            eq(206, truncated.code());
-            eq("10", truncated.header("Content-Length"));
+            eq(502, truncated.code());
+            eq("0", truncated.header("Content-Length"));
             eq(0, truncated.body().length);
+        }
+    }
+    private static void recovery() throws Exception {
+        for(int mode=0;mode<4;mode++) {
+            int selected=mode; var opened=new java.util.concurrent.atomic.AtomicInteger();
+            try(var server=server(uri->{
+                int attempt=opened.incrementAndGet();
+                if(selected==0 && attempt==1) throw new java.net.SocketTimeoutException("Synthetic connect stall");
+                var connection=new FakeConnection(uri,100) {
+                    @Override public InputStream getInputStream() {
+                        InputStream bytes=super.getInputStream();
+                        if(selected!=1 || attempt>1) return bytes;
+                        return new java.io.FilterInputStream(bytes) {
+                            int read;
+                            @Override public int read(byte[] b,int off,int len) throws IOException {
+                                if(read>=3) throw new java.net.SocketException("Synthetic mid-range disconnect");
+                                int n=super.read(b,off,Math.min(len,3-read)); if(n>0)read+=n; return n;
+                            }
+                        };
+                    }
+                };
+                if(selected==2 && attempt==1) connection.code=503;
+                if(selected==3) connection.code=403;
+                return connection;
+            })) {
+                var response=call(server.register(lease("retry",NOW.plusSeconds(60),100)),"GET","Range: bytes=10-19\r\n","");
+                eq(selected==3?502:206,response.code()); eq(selected==3?1:2,opened.get());
+                if(selected!=3) { eq(10,response.body().length); for(int i=0;i<10;i++)eq((byte)(10+i),response.body()[i]); }
+            }
         }
     }
 
@@ -220,7 +250,7 @@ public final class TransportContractTest {
                 server.revokeAccount("a");
                 check(cancelled.await(1, TimeUnit.SECONDS), "Revocation did not cancel upstream");
                 String response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.US_ASCII);
-                check(response.endsWith("\r\n\r\n"), "Cancelled range published body bytes");
+                check(response.isEmpty() || response.endsWith("\r\n\r\n"), "Cancelled range published body bytes");
             }
         }
     }

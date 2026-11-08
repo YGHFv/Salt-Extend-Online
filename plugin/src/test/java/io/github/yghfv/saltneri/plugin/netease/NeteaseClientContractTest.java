@@ -181,7 +181,7 @@ public final class NeteaseClientContractTest {
         rejectAudio(AUDIO.replace("\"size\":4096", "\"size\":2147483649"));
         rejectAudio(AUDIO.replace("\"time\":120000", "\"time\":117999"));
         Fixture durationBoundary = new Fixture(); durationBoundary.audio = AUDIO.replace("\"time\":120000", "\"time\":118000"); check(resolve(durationBoundary, null).durationMillis() == 118000);
-        Fixture longLease = new Fixture(); longLease.audio = AUDIO.replace("\"expi\":120", "\"expi\":3600"); check(resolve(longLease, null).expiresAt().equals(CLOCK.instant().plusSeconds(300)));
+        Fixture longLease = new Fixture(); longLease.audio = AUDIO.replace("\"expi\":120", "\"expi\":3600"); check(resolve(longLease, null).expiresAt().equals(CLOCK.instant().plusSeconds(1800)));
         Fixture freeLow = new Fixture(); freeLow.detail = DETAIL.replace("\"fee\":0", "\"fee\":8"); freeLow.audio = AUDIO.replace("\"fee\":0", "\"fee\":8");
         check(resolve(freeLow, null).lease().length() == 4096);
         Fixture highQuality = new Fixture(); highQuality.audio = AUDIO.replace("\"level\":\"standard\"", "\"level\":\"exhigh\"").replace("\"br\":128000", "\"br\":320000");

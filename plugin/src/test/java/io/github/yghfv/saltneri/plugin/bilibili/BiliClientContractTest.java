@@ -124,7 +124,7 @@ public final class BiliClientContractTest {
         check(result.durationMillis() == 120000 && result.bitrateKbps() == 192 && result.codec().equals("mp4a.40.2"));
         check(result.coverCandidate().getScheme().equals("https"));
         check(result.lease().length() == 4096 && result.lease().belongsTo("fixture-anonymous"));
-        check(result.expiresAt().equals(NOW.plusSeconds(300)));
+        check(result.expiresAt().equals(NOW.plusSeconds(1800)));
         check(!result.toString().contains("SECRET") && !result.lease().toString().contains("SECRET"));
         check(fixture.requests.size() == 4 && fixture.requests.stream().allMatch(r -> r.disconnected));
         check(fixture.requests.get(2).getURL().getQuery().contains("cid=20"));

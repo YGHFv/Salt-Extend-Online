@@ -106,6 +106,8 @@ public final class PlaylistRenderTest {
                 return new Catalog.Page(q.view()==Catalog.View.FOLDER?"My collection":"Catalog",rows,q.view()==Catalog.View.FOLDER && q.page()==1,Instant.now().plusSeconds(300),q.view()==Catalog.View.FOLDER?2:1,q.view()==Catalog.View.FOLDER?21:1);
             })) {
             var desk=new NativeDesk(library,player,p->new AccountLoginController.Snapshot(AccountLoginController.Phase.LOGGED_IN,"",null,"42"),(p,a)->{},()->true);
+            check(desk.layout(AccountPlatform.BILIBILI).equals("CARDS") && desk.layout(AccountPlatform.NETEASE).equals("CARDS"));
+            desk.layout(AccountPlatform.BILIBILI,"SINGLE");
             desk.playlistPlayer(submitted::set);
             ClassLoader host=PlaylistRenderTest.class.getClassLoader();
             try(var ui=new SaltNativeUi(host,new NativePageRenderTest.Hooks(),desk,()->true)) {
@@ -128,7 +130,8 @@ public final class PlaylistRenderTest {
                             click(scene,"My collection (21)");
                             int beforeLayout=requests.get();
                             for(String layout:List.of("\u53cc\u5217\u5217\u8868","\u5361\u7247\u5217\u8868","\u5355\u5217\u5217\u8868")) {
-                                click(scene,"\u5207\u6362\u5217\u8868");click(scene,layout);render(scene);
+                                click(scene,"\u5207\u6362\u5217\u8868");render(scene);
+                                check(scene.getSemanticsOwners().size()==1 && unmerged(scene,layout,SemanticsActions.INSTANCE.getOnClick())==null);
                                 var a=unmerged(scene,"Song 01",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
                                 var b=unmerged(scene,"Song 02",SemanticsActions.INSTANCE.getGetTextLayoutResult()).getBoundsInRoot();
                                 boolean multiple=layout.equals("\u5361\u7247\u5217\u8868") || layout.equals("\u53cc\u5217\u5217\u8868") && logicalWidth>=600;
@@ -207,7 +210,7 @@ public final class PlaylistRenderTest {
                             var layoutButton=find(scene,"\u5207\u6362\u5217\u8868",SemanticsActions.INSTANCE.getOnClick());
                             check(layoutButton!=null && layoutButton.getBoundsInRoot().getRight()<=find(scene,"\u6392\u5e8f",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getLeft());
                             for(String layout:List.of("\u53cc\u5217\u5217\u8868","\u5361\u7247\u5217\u8868","\u5355\u5217\u5217\u8868")) {
-                                click(scene,"\u5207\u6362\u5217\u8868"); click(scene,layout); render(scene);
+                                click(scene,"\u5207\u6362\u5217\u8868"); render(scene);
                                 check(find(scene,"Song 21",null)!=null && find(scene,"00:01",null)!=null && requests.get()==layoutRequests);
                             }
                             int before=requests.get(); scene.close();

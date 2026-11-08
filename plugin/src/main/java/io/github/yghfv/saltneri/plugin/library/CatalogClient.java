@@ -20,10 +20,14 @@ public final class CatalogClient {
     private final Clock clock;
     private final CatalogHttp.Opener opener;
     private final BiliDiscovery.Cache discovery;
+    private final CatalogHttp.SessionCache sessions;
     public CatalogClient(AccountCredentials account) { this(account, Clock.systemUTC(), CatalogHttp::openPinned); }
     public CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener) { this(account,clock,opener,new BiliDiscovery.Cache(clock)); }
     CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery) {
-        this.account = account; this.clock = clock; this.opener = opener; this.discovery = discovery;
+        this(account,clock,opener,discovery,null);
+    }
+    CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery,CatalogHttp.SessionCache sessions) {
+        this.account = account; this.clock = clock; this.opener = opener; this.discovery = discovery; this.sessions=sessions;
     }
     public Page load(Query query, RequestScope request) throws IOException {
         boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL;
@@ -34,7 +38,7 @@ public final class CatalogClient {
                     : Stage.NET_PLAYLISTS;
             throw CatalogFailure.of(stage, Reason.LOGIN_REQUIRED);
         }
-        try (CatalogHttp http = new CatalogHttp(query.platform(), discover ? null : account, clock, opener)) {
+        try (CatalogHttp http = new CatalogHttp(query.platform(), discover ? null : account, clock, opener,sessions)) {
             try {
                 if (!discover && account != null) http.verify(request);
                 return query.platform() == AccountPlatform.BILIBILI ? bili(query, http, request) : netease(query, http, request);
@@ -53,7 +57,7 @@ public final class CatalogClient {
         if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
         if(account!=null && account.platform()!=query.platform() || query.platform()==AccountPlatform.BILIBILI && account==null)
             throw CatalogFailure.of(Stage.SESSION,Reason.LOGIN_REQUIRED);
-        try(CatalogHttp http=new CatalogHttp(query.platform(),account,clock,opener)) {
+        try(CatalogHttp http=new CatalogHttp(query.platform(),account,clock,opener,sessions)) {
             if(account!=null) http.verify(request);
             if(query.platform()==AccountPlatform.NETEASE) return neteaseFolder(query,http,request,true);
             var worker=java.util.concurrent.Executors.newFixedThreadPool(3,r->{var t=new Thread(r,"salt-bili-catalog-batch");t.setDaemon(true);return t;});

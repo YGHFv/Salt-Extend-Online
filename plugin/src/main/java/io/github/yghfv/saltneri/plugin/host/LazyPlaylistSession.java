@@ -85,7 +85,10 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private URI resolve(Entry entry,BooleanSupplier valid) throws Exception {
         synchronized(entry) {
             check(); if(!valid.getAsBoolean()) throw new java.util.concurrent.CancellationException("Prefetch superseded");
-            synchronized(cache) { Cached old=cache.get(entry); if(old!=null && Objects.equals(old.revision(),resolver.revision()) && transport.now().plusSeconds(10).isBefore(old.expiry())) return old.uri(); }
+            // A prefetched URL must cover the track, not merely its first seconds. Otherwise a
+            // valid-at-open lease can be revoked mid-song and leave the host waiting for bytes.
+            long runway=Math.max(30,Math.min(1800,entry.row.count()/1000+30));
+            synchronized(cache) { Cached old=cache.get(entry); if(old!=null && Objects.equals(old.revision(),resolver.revision()) && transport.now().plusSeconds(runway).isBefore(old.expiry())) return old.uri(); }
             try(RequestScope request=new RequestScope(()->!closed && active.getAsBoolean() && valid.getAsBoolean())) {
                 Object revision=resolver.revision();
                 requests.add(request); request.check(); var audio=resolver.resolve(entry.row,scope,request); request.check(); check();

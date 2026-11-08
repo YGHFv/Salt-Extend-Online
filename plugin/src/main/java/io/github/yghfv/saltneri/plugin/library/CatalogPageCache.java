@@ -19,8 +19,9 @@ final class CatalogPageCache {
     private AccountCredentials account;
     private long revision;
     final BiliDiscovery.Cache discovery;
+    final CatalogHttp.SessionCache sessions=new CatalogHttp.SessionCache();
     CatalogPageCache(Clock clock) { this.clock = clock; discovery = new BiliDiscovery.Cache(clock); }
-    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); }
+    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); sessions.clear(); }
     @FunctionalInterface interface FullLoader { CatalogClient.CollectionContents load() throws Exception; }
     CatalogClient.CollectionContents all(AccountCredentials owner,Query query,RequestScope request,FullLoader loader) throws Exception {
         long captured;

@@ -52,7 +52,7 @@ public final class BiliResolutionContractTest {
         try { stopped.start(TARGET, BiliAudioSelector.Quality.HIGH); throw new AssertionError("Closed controller accepted work"); }
         catch (IllegalStateException expected) { checks++; }
         try (BiliResolutionController expired = new BiliResolutionController((t,q,s,r) -> resolved, () -> true,
-                Clock.fixed(Instant.parse("2026-11-06T00:06:00Z"), ZoneOffset.UTC))) {
+                Clock.fixed(resolved.expiresAt().plusSeconds(1), ZoneOffset.UTC))) {
             expired.start(TARGET, BiliAudioSelector.Quality.HIGH);
             waitFor(() -> expired.snapshot().status().contains("expired")); check(expired.snapshot().resolved() == null);
         }

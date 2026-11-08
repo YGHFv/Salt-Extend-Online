@@ -65,6 +65,28 @@ public final class LazyPlaylistContractTest {
             }
         }
         check(binding.pending.isEmpty());
+        runway(profile);
         System.out.println("PASS: "+checks+" lazy 100-track native queue, bounded URL cache, first-track failure and account revocation checks; no audio/network");
+    }
+    private static void runway(Salt1193Probe.Result profile) throws Exception {
+        var time=new AtomicReference<>(Instant.now());
+        var clock=new java.time.Clock() {
+            public Instant instant(){return time.get();} public java.time.ZoneId getZone(){return java.time.ZoneOffset.UTC;}
+            public java.time.Clock withZone(java.time.ZoneId zone){return this;}
+        };
+        var binding=new Binding(); var queue=new Queue(); var count=new AtomicInteger();
+        var row=new Catalog.Item(Catalog.Kind.TRACK,"1","Four minute song","Artist",284000,true);
+        try(var server=TransportContractTest.offlineServer(clock,()->true);
+            var session=new LazyPlaylistSession(profile,binding,server,queue,List.of(row),"runway",()->true,(item,scope,request)->{
+                count.incrementAndGet(); var expiry=time.get().plusSeconds(1800);
+                return new OnlinePlaybackController.Audio(TrackKey.netease("1"),new Salt1193PlaybackSession.Metadata("Song","Artist","",""),
+                    new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/fixture"),Map.of(),scope,expiry,4096),expiry);
+            })) {
+            session.play(); var pending=binding.pending.get(profile.mediaFactory().read(queue.items.getFirst())[5]);
+            URI first=pending.resolve(); check(count.get()==1);
+            time.set(time.get().plusSeconds(1764)); // Still valid for 36s, but cannot finish the track.
+            URI renewed=pending.resolve(); check(count.get()==2 && !renewed.equals(first));
+            time.set(time.get().plusSeconds(400)); check(pending.resolve().equals(renewed) && count.get()==2);
+        }
     }
 }

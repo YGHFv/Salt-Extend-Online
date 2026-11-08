@@ -133,7 +133,7 @@ public final class NeteaseClient {
             default -> throw invalid();
         };
         URI media = media(data.get("url")); long seconds = positive(data.get("expi"));
-        Instant expiry = clock.instant().plusSeconds(Math.min(300, seconds)); check(scope);
+        Instant expiry = clock.instant().plusSeconds(Math.min(1800, seconds)); check(scope);
         MediaRangeProbe.Result probe;
         try { probe = MediaRangeProbe.probe(MediaLease.Platform.NETEASE, media, HEADERS, size, expiry, clock,
                 uri -> opener.open(uri, null), scope, () -> check(scope)); }

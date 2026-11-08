@@ -72,7 +72,7 @@ public final class LibraryController implements AutoCloseable {
             State s = new State(p); states.put(p,s);
             s.cache = new CatalogPageCache(clock);
             Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> factory = account ->
-                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery).load(q,r) : testLoader.apply(account);
+                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions).load(q,r) : testLoader.apply(account);
             // Catalog metadata has no signed audio URL; retain it until explicit refresh/account revocation.
             s.loader = new PlatformResolutionController<>("Catalog", account -> {
                 var resolver = factory.apply(account);
@@ -81,7 +81,7 @@ public final class LibraryController implements AutoCloseable {
                     page -> Instant.MAX, page -> "", CatalogFailure::diagnostic);
             s.complete = new PlatformResolutionController<>("Playlist", account -> (q,k,scope,r) -> {
                 if(testLoader==null) {
-                    var result=s.cache.all(account,q,r,()->new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery)
+                    var result=s.cache.all(account,q,r,()->new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions)
                             .loadAll(q,r,s.cache,(done,total)->{s.completedPages=done;s.requestedPages=total;}));
                     return new Contents(result.title(),result.items().stream().filter(i->i.enabled() && i.kind()==Kind.TRACK).toList());
                 }

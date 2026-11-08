@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -160,10 +161,22 @@ private fun NativeButtons(ui: SaltNativeUi, buttons: List<NativeButton>) {
 }
 
 @Composable
+private fun PageButton(ui: SaltNativeUi,label: String,enabled: Boolean,click: () -> Unit) {
+    val palette=ui.palette(currentComposer)
+    Box(Modifier.fillMaxWidth().heightIn(min=40.dp).clip(palette.shape())
+        .clickable(enabled=enabled,role=Role.Button,onClick=click),contentAlignment=Alignment.Center) {
+        ui.text(label,Modifier.padding(horizontal=12.dp,vertical=10.dp),palette.main().copy(
+            color=Color((if(enabled) palette.text() else palette.secondary()).toULong()).copy(alpha=if(enabled) 1f else 0.38f),
+            textAlign=TextAlign.Center),currentComposer)
+    }
+}
+
+@Composable
 private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mode: CoverMode, card: Boolean = false, stats: Map<*,*>? = null) {
     var png by remember(token) { mutableStateOf<ByteArray?>(null) }
     LaunchedEffect(ui, token) {
-        while (true) { png = ui.cover(token); if (png != null) break; delay(350) }
+        var attempts=0
+        while (true) { png = ui.cover(token); if (png != null) break; delay(if(attempts++<10) 100 else 500) }
     }
     val thumbnail = remember(png) { png?.let { try { ui.thumbnail(it) } catch (_: Exception) { null } } }
     DisposableEffect(thumbnail) { onDispose { thumbnail?.close() } }
@@ -420,7 +433,7 @@ private fun CatalogTitle(ui: SaltNativeUi, platform: AccountPlatform, title: Str
             SearchControl(ui,memory.localField,memory.localSearch,{memory.localSearch=it},true,"\u641c\u7d22\u5408\u96c6") { keyword -> action {ui.desk().filter(keyword)} }
             HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) { action {ui.desk().playPlaylist()} }
         }
-        LayoutMenu(ui,memory,action)
+        LayoutSwitch(ui,memory,action)
         if(folder || author) SortMenu(ui,platform,selectedSort,author,action)
     }
 }
@@ -455,19 +468,13 @@ private fun SortMenu(ui: SaltNativeUi, platform: AccountPlatform, selectedSort: 
 }
 
 @Composable
-private fun LayoutMenu(ui: SaltNativeUi,memory: PageMemory,action: (() -> Unit) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val palette=ui.palette(currentComposer)
-    val offset=with(LocalDensity.current) {40.dp.roundToPx()}
-    Box {
-        HeaderIcon(ui,"\u5207\u6362\u5217\u8868",HeaderGlyph.LAYOUT) {open=!open}
-        if(open) Popup(alignment=Alignment.TopEnd,offset=IntOffset(0,offset),onDismissRequest={open=false},properties=PopupProperties(focusable=true)) {
-            Column(Modifier.width(190.dp).background(Color(palette.pageBackground().toULong()).copy(alpha=1f),palette.shape()).padding(8.dp)) {
-                listOf(ListLayout.SINGLE to "\u5355\u5217\u5217\u8868",ListLayout.DOUBLE to "\u53cc\u5217\u5217\u8868",ListLayout.CARDS to "\u5361\u7247\u5217\u8868").forEach { (layout,label) ->
-                    NativeRow(ui,label,selected=memory.layout==layout,click={action {ui.desk().layout(memory.platform,layout.name);memory.layout=layout};open=false}) {
-                        MenuIcon(ui,label+"\u56fe\u6807",if(memory.layout==layout) "M 4 12 L 9 17 L 20 6" else "M 4 5 L 20 5 L 20 19 L 4 19 Z")
-                    }
-                }
+private fun LayoutSwitch(ui: SaltNativeUi,memory: PageMemory,action: (() -> Unit) -> Unit) {
+    val label=when(memory.layout) {ListLayout.SINGLE->"\u5355\u5217\u5217\u8868";ListLayout.DOUBLE->"\u53cc\u5217\u5217\u8868";ListLayout.CARDS->"\u5361\u7247\u5217\u8868"}
+    Box(Modifier.semantics {stateDescription=label}) {
+        HeaderIcon(ui,"\u5207\u6362\u5217\u8868",HeaderGlyph.LAYOUT) {
+            action {
+                val next=when(memory.layout) {ListLayout.SINGLE->ListLayout.DOUBLE;ListLayout.DOUBLE->ListLayout.CARDS;ListLayout.CARDS->ListLayout.SINGLE}
+                ui.desk().layout(memory.platform,next.name);memory.layout=next
             }
         }
     }
@@ -543,7 +550,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 if (ui.desk().enter(platform)) { memory.view=Catalog.View.DISCOVER; memory.localSearch=false; memory.localText="" }
                 ui.desk().snapshot(platform)
             } catch (_: Exception) { null } else null
-            delay(350)
+            delay(100)
         }
     }
     DisposableEffect(ui, platform) {
@@ -660,10 +667,10 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 val next = catalog?.get("more") == true
                 if (previous || next) item(key = "pagination") {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
+                        Box(Modifier.weight(1f)) { PageButton(ui, "\u4e0a\u4e00\u9875", enabled = previous && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
                             click = { action { ui.desk().page(-1) } }) }
                         NativeText(ui, "$page/${if (total > 0) total.toString() else "?"}", modifier = Modifier.padding(horizontal = 16.dp))
-                        Box(Modifier.weight(1f)) { NativeRow(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
+                        Box(Modifier.weight(1f)) { PageButton(ui, "\u4e0b\u4e00\u9875", enabled = next && catalog?.get("loaded") == true && catalog["loadingAll"] != true,
                             click = { action { ui.desk().page(1) } }) }
                     }
                 }

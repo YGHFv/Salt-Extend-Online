@@ -120,6 +120,8 @@ public final class NativePageRenderTest {
                             qr.get() == 0 ? null : URI.create("https://example.invalid/offline-render-fixture"), ""),
                     (p,a) -> { actions.incrementAndGet(); if (a == NativeDesk.Action.ARM) armed.set(true); }, () -> true);
             byte[] fixture = CoverLoaderContractTest.jpeg();
+            // This suite exercises long single-column scrolling; card/double layouts have their own render suite.
+            for(AccountPlatform p:AccountPlatform.values()) desk.layout(p,"SINGLE");
             try (SaltNativeUi ui = new SaltNativeUi(host, new Hooks(), desk, () -> true, new CoverLoader(uri -> {
                 var response = new CoverLoaderContractTest.Response(uri, fixture); response.type = "image/jpg"; return response;
             }))) {
@@ -290,6 +292,7 @@ public final class NativePageRenderTest {
                 check((findText(root,"\u4e0b\u4e00\u9875") != null) == expected);
                 if (expected) {
                     boolean first = library.snapshot().get("page").equals(1);
+                    pagerStyle(scene,first);
                     var target = findText(root, first ? "\u4e0b\u4e00\u9875" : "\u4e0a\u4e00\u9875");
                     var counter = findText(root, first ? "1/2" : "2/2"); check(counter != null);
                     check(counter.getBoundsInRoot().getLeft() > findText(root,"\u4e0a\u4e00\u9875").getBoundsInRoot().getLeft());
@@ -310,6 +313,26 @@ public final class NativePageRenderTest {
             } catch (Exception error) { throw new AssertionError(error);
             } finally { scene.close(); }
         });
+    }
+    private static void pagerStyle(ImageComposeScene scene,boolean first) throws Exception {
+        var actions=androidx.compose.ui.semantics.SemanticsActions.INSTANCE;
+        for(String label:List.of("\u4e0a\u4e00\u9875","\u4e0b\u4e00\u9875")) {
+            var button=HeaderSearchRenderTest.find(scene,label,actions.getOnClick());
+            var text=HeaderSearchRenderTest.find(scene,label,actions.getGetTextLayoutResult());
+            check(button!=null && text!=null);
+            var a=button.getBoundsInRoot(); var b=text.getBoundsInRoot();
+            check(Math.abs(a.getLeft()+a.getRight()-b.getLeft()-b.getRight())<2);
+            check(Math.abs(a.getTop()+a.getBottom()-b.getTop()-b.getBottom())<2);
+            boolean disabled=label.equals("\u4e0a\u4e00\u9875")==first;
+            check(button.getConfig().contains(androidx.compose.ui.semantics.SemanticsProperties.INSTANCE.getDisabled())==disabled);
+            var layouts=new ArrayList<androidx.compose.ui.text.TextLayoutResult>();
+            text.getConfig().get(actions.getGetTextLayoutResult()).getAction().invoke(layouts);
+            var style=layouts.getFirst().getLayoutInput().getStyle();
+            var colorMethod=Arrays.stream(style.getClass().getMethods()).filter(m->m.getName().startsWith("getColor-") && m.getParameterCount()==0).findFirst().orElseThrow();
+            long color=(long)colorMethod.invoke(style);
+            float alpha=(float)androidx.compose.ui.graphics.Color.class.getMethod("getAlpha-impl",long.class).invoke(null,color);
+            check(disabled?alpha<0.5f:alpha>0.9f);
+        }
     }
     private static androidx.compose.ui.semantics.SemanticsNode findAction(androidx.compose.ui.semantics.SemanticsNode node, androidx.compose.ui.semantics.SemanticsPropertyKey<?> key) {
         if (node.getConfig().contains(key)) return node;

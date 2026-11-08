@@ -4,7 +4,6 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -84,6 +83,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         synchronized void detach(HttpURLConnection connection) {
             if (upstream == connection) { upstream = null; connection.disconnect(); }
         }
+        synchronized void check() throws IOException { if(closed) throw new IOException("Request cancelled"); }
         @Override
         public synchronized void close() {
             if (closed) return;
@@ -294,6 +294,28 @@ public final class LoopbackRangeServer implements AutoCloseable {
             reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
             ensureValid(entry); request.socket.getOutputStream().write(hit); return;
         }
+        byte[] data=null;
+        for(int attempt=0;attempt<3;attempt++) {
+            ensureValid(entry); request.check();
+            try { data=readRange(request,entry,range); break; }
+            catch(InvalidRange rejected) { throw rejected; }
+            catch(IOException transientFailure) {
+                ensureValid(entry); request.check();
+                if(attempt==2) throw transientFailure;
+            }
+        }
+        ensureValid(entry); request.check();
+        // Buffer at most one bounded range (host: 512 KiB, protocol cap: 4 MiB). Do not
+        // publish a successful 206 until all bytes are verified; a short 206 can stall Salt.
+        reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
+        request.socket.getOutputStream().write(data); request.socket.getOutputStream().flush();
+        cache.put(entry,range,data,revision,()->valid(entry));
+    }
+
+    private static final class InvalidRange extends IOException {
+        InvalidRange() { super("Upstream range rejected"); }
+    }
+    private byte[] readRange(Request request,Entry entry,ByteRange range) throws IOException {
         URI uri = entry.lease.uri();
         for (int redirect = 0; redirect <= 3; redirect++) {
             ensureValid(entry);
@@ -313,45 +335,37 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 ensureValid(entry);
                 if (List.of(301, 302, 303, 307, 308).contains(code)) {
                     String location = connection.getHeaderField("Location");
-                    if (location == null) throw new IOException("Invalid media redirect");
+                    if (location == null) throw new InvalidRange();
                     URI target = uri.resolve(location);
                     entry.lease.requireTarget(target);
                     // Credentials are never forwarded across hosts, even to another platform CDN.
-                    if (!uri.getHost().equalsIgnoreCase(target.getHost())) throw new IOException("Cross-host redirect rejected");
+                    if (!uri.getHost().equalsIgnoreCase(target.getHost())) throw new InvalidRange();
                     uri = target;
                     continue;
                 }
+                if(code==500 || code==502 || code==503 || code==504) throw new IOException("Temporary media upstream failure");
                 String encoding = connection.getHeaderField("Content-Encoding");
                 if (code != 206 || !range.contentHeader(entry.lease.length()).equals(connection.getHeaderField("Content-Range"))
                         || connection.getContentLengthLong() != range.length()
                         || (encoding != null && !encoding.equalsIgnoreCase("identity"))) {
-                    throw new IOException("Invalid upstream byte range response");
+                    throw new InvalidRange();
                 }
                 try (InputStream body = connection.getInputStream()) {
-                    reply(request, 206, Map.of("Content-Length", Long.toString(range.length()),
-                            "Content-Range", range.contentHeader(entry.lease.length()), "Accept-Ranges", "bytes"));
-                    OutputStream output = request.socket.getOutputStream();
-                    byte[] buffer = new byte[32 * 1024];
-                    long remaining = range.length();
-                    ByteArrayOutputStream cached=range.length()<=cache.limitBytes()?new ByteArrayOutputStream((int)range.length()):null;
-                    while (remaining > 0) {
-                        ensureValid(entry);
-                        int read = body.read(buffer, 0, (int)Math.min(remaining, buffer.length));
+                    byte[] result=new byte[Math.toIntExact(range.length())]; int offset=0;
+                    while (offset < result.length) {
+                        ensureValid(entry); request.check();
+                        int read = body.read(result,offset,result.length-offset);
                         if (read < 0) throw new IOException("Truncated media range");
                         if (read == 0) continue;
                         ensureValid(entry);
-                        output.write(buffer, 0, read);
-                        if(cached!=null) cached.write(buffer,0,read);
-                        remaining -= read;
+                        offset += read;
                     }
-                    output.flush();
-                    if(cached!=null) cache.put(entry,range,cached.toByteArray(),revision,()->valid(entry));
                     // Never read past the declared range or buffer an entire track.
-                    return;
+                    return result;
                 }
             } finally { request.detach(connection); }
         }
-        throw new IOException("Too many media redirects");
+        throw new InvalidRange();
     }
 
     private boolean valid(Entry entry) {

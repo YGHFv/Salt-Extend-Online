@@ -13,8 +13,8 @@ public final class CatalogPreferences {
     private static String key(AccountPlatform platform) { return "layout."+platform.name().toLowerCase(Locale.ROOT); }
     private static boolean valid(String value) { return Set.of("SINGLE","DOUBLE","CARDS").contains(value); }
     public synchronized String layout(AccountPlatform platform) {
-        Object raw=config==null?memory.getOrDefault(platform,"SINGLE"):config.get(key(platform),(Object)"SINGLE");
-        return raw instanceof String value && valid(value)?value:"SINGLE";
+        Object raw=config==null?memory.getOrDefault(platform,"CARDS"):config.get(key(platform),(Object)"CARDS");
+        return raw instanceof String value && valid(value)?value:"CARDS";
     }
     public synchronized void layout(AccountPlatform platform,String value) {
         if(value==null || !valid(value)) throw new IllegalArgumentException("Invalid catalog layout");
