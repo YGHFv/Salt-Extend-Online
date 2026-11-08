@@ -33,10 +33,24 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     public long cacheBytes() { return transport.cacheBytes(); }
     private LazyPlaylistSession playlist;
     private SavedTrackSession savedTracks;
+    private SavedTrackStore savedStore;
+    private SavedTrackSession.Resolver savedResolver;
     public synchronized void savedTracks(SavedTrackStore store,SavedTrackSession.Resolver resolver) {
         if(closed || !permitted()) throw new IllegalStateException("Adapter unavailable");
-        if(savedTracks==null) savedTracks=new SavedTrackSession(adapter,transport,()->!closed && permitted(),resolver);
+        if(savedTracks==null) {savedResolver=resolver;savedStore=store;savedTracks=new SavedTrackSession(adapter,transport,()->!closed && permitted(),resolver);}
         store.entries().forEach(savedTracks::register);
+    }
+    public synchronized void submitOnline(io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio audio,
+                                         BooleanSupplier accountActive,io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws Exception {
+        if(closed || !permitted() || !accountActive.getAsBoolean() || savedTracks==null) throw new IllegalStateException("Persistent playback unavailable");
+        engine.ensureAttached();
+        var entry=savedStore.save(audio.target(),new io.github.yghfv.saltneri.plugin.library.Catalog.Item(
+                io.github.yghfv.saltneri.plugin.library.Catalog.Kind.TRACK,audio.target().id(),audio.metadata().title(),audio.metadata().artist(),0,true));
+        if(!accountActive.getAsBoolean()) throw new SecurityException("Account changed");
+        savedTracks.prime(entry,audio,savedResolver.revision(entry.target().platform()));
+        Object item=media.create(entry.trackId(),audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),entry.path());
+        if(!accountActive.getAsBoolean()) throw new SecurityException("Account changed");
+        if(action==io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.PLAY) queue.addToPlay(item);else queue.insert(item,action);
     }
     private MediaLease.Platform playlistPlatform;
     private final java.util.Map<String, Salt1193PlaybackSession> sessions = new java.util.HashMap<>();
@@ -162,7 +176,11 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
                     }
                 },
                 item -> list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE
-                        ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(list.account()).load(Long.parseLong(item.target()),request) : null);
+                        ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(list.account()).load(Long.parseLong(item.target()),request) : null,
+                savedTracks,item->{
+                    try {return savedStore.save(new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),item);}
+                    catch(IOException failure) {throw new java.io.UncheckedIOException(failure);}
+                });
         try {
             next.play();
             synchronized(this) { if(closed || !accountActive.getAsBoolean()) throw new SecurityException("Account retired"); if(playlist!=null) playlist.close(); playlist=next; playlistPlatform=MediaLease.Platform.valueOf(list.platform().name()); }

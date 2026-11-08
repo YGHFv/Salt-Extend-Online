@@ -93,12 +93,66 @@ public final class SavedPlaylistContractTest {
                 check(open(adapter,item).equals(321) && calls.get()==before+3,"Account change lost saved binding");
                 check(OnlineLyrics.load(entry.trackId(),entry.path()).contains("Fixture lyrics"),"Saved song lyrics missing");
             }
+            var queue=new ArrayList<Object>();var rows=new ArrayList<Catalog.Item>();
+            for(int i=200;i<212;i++) rows.add(new Catalog.Item(Catalog.Kind.TRACK,""+i,"Queue "+i,"Artist",1000,true));
+            var sink=new Salt1193PlaybackSession.QueueSink() {
+                public void addToPlay(Object item) {throw new AssertionError("Unexpected single play");}
+                public int firstIndex(int size) {return 3;}
+                public void replace(List<Object> items,int index) {check(index==3,"Native random index lost");queue.addAll(items);}
+            };
+            int beforeQueue=calls.get();
+            try(var list=new LazyPlaylistSession(profile,new Binding(adapter),server,sink,rows,"fixture",active::get,
+                    (row,scope,request)->{throw new AssertionError("Temporary playlist resolver used");},row->null,session,row->{
+                        try{return store.save(new Target(AccountPlatform.NETEASE,row.target()),row);}catch(java.io.IOException failure){throw new java.io.UncheckedIOException(failure);}
+                    })) {
+                check(calls.get()==beforeQueue,"Building queue fetched all audio");list.play();
+                check(queue.size()==12 && calls.get()==beforeQueue+1,"Persistent playlist is not lazy");
+                for(Object item:queue) check(open(adapter,item).equals(321),"Persistent queue open failed");
+            }
+            check(open(adapter,queue.getFirst()).equals(321),"Leaving playlist retired a saved queue binding");
+            String[] queueFields=profile.mediaFactory().read(queue.getFirst());
+            check(store.owns(queueFields[0],queueFields[5]) && !store.owns(queueFields[0],"foreign"),"Queue did not publish a restorable owned identity");
+            Object restored=profile.mediaFactory().create(queueFields[0],queueFields[1],queueFields[2],queueFields[3],queueFields[4],queueFields[5]);
+            check(open(adapter,restored).equals(321),"Native persisted media roundtrip failed");
             int before=streams.get(); active.set(false);
             try {var e=store.entries().getFirst();kotlin.ResultKt.throwOnFailure(open(adapter,profile.mediaFactory().create(e.trackId(),e.title(),e.artist(),"","",e.path())));throw new AssertionError("Permission bypass");}
             catch(IllegalStateException expected) {checks++;}
             check(streams.get()==before,"Revoked stream opened");
         }
         check(paths.stream().allMatch(p->Files.isRegularFile(Path.of(p))),"Revocation deleted native playlist files");
+        runtime(profile);
         System.out.println("PASS: "+checks+" durable native playlist identity, restart, lease renewal, cover, lyrics and permission checks; no real playlists/network/playback");
+    }
+    private static void runtime(Salt1193Probe.Result profile) throws Exception {
+        Path root=Files.createTempDirectory("salt-restart-runtime-").toRealPath();
+        var queue=new ArrayList<Object>();var actions=new ArrayList<QueueAction>();var resolves=new AtomicInteger();
+        var target=new Target(AccountPlatform.NETEASE,"987");var expiry=Instant.now().plusSeconds(600);
+        var audio=new Audio(TrackKey.netease("987"),new Salt1193PlaybackSession.Metadata("Fixture","Artist","Album","Artist"),
+                new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/fixture"),Map.of(),"fixture",expiry,100),expiry,target);
+        for(int launch=0;launch<2;launch++) {
+            int pass=launch;
+            var server=new LoopbackRangeServer(Clock.systemUTC(),uri->{throw new AssertionError("No upstream");},()->true);
+            var adapter=new Salt1193StreamAdapter(SavedPlaylistContractTest.class.getClassLoader(),profile,()->true,(uri,flags)->321);
+            try(var store=new SavedTrackStore(root);var runtime=new Salt1193DiagnosticRuntime(profile,new Binding(adapter),server,
+                    new EngineLinkContractTest.FakeHost(),new EngineLinkContractTest.Hooks(),new Salt1193PlaybackSession.QueueSink() {
+                        public void addToPlay(Object item) {queue.add(item);actions.add(QueueAction.PLAY);}
+                        public void insert(Object item,QueueAction action) {queue.add(item);actions.add(action);}
+                    },()->true)) {
+                runtime.savedTracks(store,new SavedTrackSession.Resolver() {
+                    public Object revision(AccountPlatform platform) {return "fixture";}
+                    public Audio resolve(SavedTrackStore.Entry entry,io.github.yghfv.saltneri.plugin.net.RequestScope request) {resolves.incrementAndGet();return audio;}
+                });
+                if(pass==0) {
+                    for(var action:QueueAction.values()) runtime.submitOnline(audio,()->true,action);
+                    check(actions.equals(List.of(QueueAction.values())),"Single play/insertion native dispatch changed");
+                    check(open(adapter,queue.getFirst()).equals(321) && resolves.get()==0,"Primed playback redundantly resolved");
+                    String[] fields=profile.mediaFactory().read(queue.getFirst());check(store.owns(fields[0],fields[5]),"Single play retained temporary path");
+                    try {runtime.submitOnline(audio,()->false,QueueAction.PLAY);throw new AssertionError("Revoked submit");}catch(IllegalStateException expected){checks++;}
+                } else {
+                    check(actions.size()==4 && resolves.get()==0,"Startup fetched audio or changed queue");
+                    check(open(adapter,queue.getFirst()).equals(321) && resolves.get()==1,"Fresh runtime failed to open restored native queue item");
+                }
+            }
+        }
     }
 }

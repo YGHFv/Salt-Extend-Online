@@ -302,6 +302,11 @@
       "class": "io.github.yghfv.saltneri.plugin.host.NativeSavedRepositoryTest",
       "baseOnly": false,
       "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecoveryTest",
+      "baseOnly": false,
+      "offline": false
     }
   ]
 }

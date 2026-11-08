@@ -37,7 +37,7 @@ public final class SavedTrackSession implements AutoCloseable {
     public synchronized void register(SavedTrackStore.Entry entry) {
         check(); if(bindings.containsKey(entry.path())) return;
         Binding binding=new Binding(entry);
-        adapter.registerDeferred(entry.path(),()->resolve(binding));
+        adapter.registerDeferred(entry.path(),()->{synchronized(this){opened=binding;}return resolve(binding,()->true);});
         bindLyrics(binding);
         bindings.put(entry.path(),binding);
     }
@@ -46,29 +46,47 @@ public final class SavedTrackSession implements AutoCloseable {
         if(lyrics!=null) binding.lyrics=OnlineLyrics.bind(binding.entry.trackId(),binding.entry.path(),()->!closed && active.getAsBoolean(),lyrics);
     }
     private void check() { if(closed || !active.getAsBoolean()) throw new java.util.concurrent.CancellationException("Saved playback unavailable"); }
-    private URI resolve(Binding binding) throws Exception {
+    public URI warm(SavedTrackStore.Entry entry,BooleanSupplier valid) throws Exception {
+        Binding binding;
+        synchronized(this) {register(entry);binding=bindings.get(entry.path());}
+        return resolve(binding,valid);
+    }
+    public synchronized void prime(SavedTrackStore.Entry entry,Audio audio,Object revision) {
+        register(entry);validate(entry,audio);
+        Binding binding=bindings.get(entry.path());
+        // Never revoke an already decoding copy merely because the user inserts it again.
+        if(binding==opened && cache.containsKey(binding)) return;
+        retire(cache.remove(binding));publish(binding,audio,revision);
+    }
+    private void validate(SavedTrackStore.Entry entry,Audio audio) {
+        if(!audio.key().platform().name().equals(entry.target().platform().name())
+                || !audio.lease().platform().name().equals(entry.target().platform().name())
+                || !SavedTrackStore.matches(entry,audio.target()) || !transport.now().isBefore(audio.expiresAt())) throw new SecurityException("Saved target mismatch or expiry");
+    }
+    private URI publish(Binding binding,Audio audio,Object revision) {
+        URI uri=transport.register(audio.lease());
+        if(audio.metadata().coverPng()!=null) try {binding.entry.cover().replace(audio.metadata().coverPng());} catch(java.io.IOException ignored) { }
+        cache.put(binding,new Cached(uri,audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt(),revision));
+        while(cache.size()>8) retire(cache.remove(cache.keySet().stream().filter(b->b!=opened).findFirst().orElseThrow()));
+        return uri;
+    }
+    private URI resolve(Binding binding,BooleanSupplier selectionValid) throws Exception {
         synchronized(binding) {
             long generation; Object revision=resolver.revision(binding.entry.target().platform());
             synchronized(this) {
-                check(); opened=binding; generation=binding.generation;
+                check(); if(!selectionValid.getAsBoolean()) throw new java.util.concurrent.CancellationException(); generation=binding.generation;
                 Cached cached=cache.get(binding);
                 if(cached!=null && Objects.equals(revision,cached.revision()) && transport.isAvailable(cached.uri())
                         && transport.now().plusSeconds(Math.max(30,binding.entry.duration()/1000+30)).isBefore(cached.expiry())) return cached.uri();
                 retire(cache.remove(binding));
             }
-            try(RequestScope request=new RequestScope(()->active.getAsBoolean() && valid(binding,generation,revision))) {
+            try(RequestScope request=new RequestScope(()->active.getAsBoolean() && selectionValid.getAsBoolean() && valid(binding,generation,revision))) {
                 synchronized(this) { check(); binding.request=request; }
                 request.check(); Audio audio=resolver.resolve(binding.entry,request); request.check();
-                if(!audio.key().platform().name().equals(binding.entry.target().platform().name())
-                        || !audio.lease().platform().name().equals(binding.entry.target().platform().name())
-                        || !binding.entry.target().equals(audio.target()) || !transport.now().isBefore(audio.expiresAt())) throw new SecurityException("Saved target mismatch or expiry");
+                validate(binding.entry,audio);
                 synchronized(this) {
                     check(); request.check();
-                    URI uri=transport.register(audio.lease());
-                    if(audio.metadata().coverPng()!=null) try {binding.entry.cover().replace(audio.metadata().coverPng());} catch(java.io.IOException ignored) { }
-                    cache.put(binding,new Cached(uri,audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt(),revision));
-                    while(cache.size()>8) retire(cache.remove(cache.keySet().stream().filter(b->b!=opened).findFirst().orElseThrow()));
-                    return uri;
+                    return publish(binding,audio,revision);
                 }
             } finally { synchronized(this) {binding.request=null;} }
         }

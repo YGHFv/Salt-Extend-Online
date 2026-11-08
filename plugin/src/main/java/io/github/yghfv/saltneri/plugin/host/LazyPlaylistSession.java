@@ -21,6 +21,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private final Salt1193PlaybackSession.QueueSink queue;
     private final BooleanSupplier active;
     private final Resolver resolver;
+    private final SavedTrackSession persistent;
     private final String scope;
     private final List<Entry> entries = new ArrayList<>();
     private final Map<String,Entry> byId = new HashMap<>();
@@ -39,8 +40,14 @@ public final class LazyPlaylistSession implements AutoCloseable {
         OnlineLyrics.Binding lyrics;
         PlaybackCoverFile cover;
         io.github.yghfv.saltneri.core.TrackKey key;
+        final SavedTrackStore.Entry saved;
         Entry(Catalog.Item row) {
-            this.row=row; String nonce=UUID.randomUUID().toString(); id="saltneri:queue:"+nonce;
+            this(row,null);
+        }
+        Entry(Catalog.Item row,SavedTrackStore.Entry saved) {
+            this.row=row; this.saved=saved;
+            if(saved!=null) {id=saved.trackId();path=saved.path();return;}
+            String nonce=UUID.randomUUID().toString(); id="saltneri:queue:"+nonce;
             try { cover=PlaybackCoverFile.reserve(); } catch(java.io.IOException ignored) { }
             path=cover==null?"saltneri://queue/"+nonce:cover.path();
         }
@@ -54,14 +61,23 @@ public final class LazyPlaylistSession implements AutoCloseable {
                                Salt1193PlaybackSession.QueueSink queue, List<Catalog.Item> items, String scope,
                                BooleanSupplier active, Resolver resolver, java.util.function.Function<Catalog.Item,OnlineLyrics.Source> lyrics)
             throws ReflectiveOperationException {
+        this(profile,adapter,transport,queue,items,scope,active,resolver,lyrics,null,null);
+    }
+    public LazyPlaylistSession(Salt1193Probe.Result profile, StreamBinding adapter, LoopbackRangeServer transport,
+                               Salt1193PlaybackSession.QueueSink queue, List<Catalog.Item> items, String scope,
+                               BooleanSupplier active, Resolver resolver, java.util.function.Function<Catalog.Item,OnlineLyrics.Source> lyrics,
+                               SavedTrackSession persistent,java.util.function.Function<Catalog.Item,SavedTrackStore.Entry> identities)
+            throws ReflectiveOperationException {
         if (!profile.matched() || items.isEmpty() || items.size()>10000) throw new IllegalArgumentException("Invalid playlist");
         this.media=profile.mediaFactory(); this.adapter=adapter; this.transport=transport; this.queue=queue;
         this.scope=scope; this.active=active; this.resolver=resolver;
+        this.persistent=persistent;
         try {
             for (Catalog.Item row:items) {
                 if(!row.enabled() || row.kind()!=Catalog.Kind.TRACK) throw new IllegalArgumentException("Unplayable queue item");
-                check(); Entry entry=new Entry(row); entries.add(entry); byId.put(entry.id,entry);
+                check(); Entry entry=new Entry(row,persistent==null?null:identities.apply(row)); entries.add(entry); byId.put(entry.id,entry);
                 entry.media=media.create(entry.id,row.title(),row.subtitle(),"","",entry.path);
+                if(persistent!=null) {persistent.register(entry.saved);continue;}
                 var source=lyrics.apply(row);
                 if(source!=null) entry.lyrics=OnlineLyrics.bind(entry.id,entry.path,()->!closed && active.getAsBoolean(),source);
                 adapter.registerDeferred(entry.path,()->{ opened=entry; openRevision.incrementAndGet(); return resolve(entry,()->true); });
@@ -83,6 +99,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
         }
     }
     private URI resolve(Entry entry,BooleanSupplier valid) throws Exception {
+        if(persistent!=null) {check();return persistent.warm(entry.saved,()->!closed && active.getAsBoolean() && valid.getAsBoolean());}
         synchronized(entry) {
             check(); if(!valid.getAsBoolean()) throw new java.util.concurrent.CancellationException("Prefetch superseded");
             // A prefetched URL must cover the track, not merely its first seconds. Otherwise a
@@ -130,11 +147,11 @@ public final class LazyPlaylistSession implements AutoCloseable {
     }
     private void preload() {
         try {
-            check(); NativePlaylistOrder.Plan plan=plan(); Entry current=opened;
+            check(); NativePlaylistOrder.Plan plan=plan(); Entry current=persistent==null?opened:byId.get(plan.current());
             if(current==null || !current.id.equals(plan.current())) return;
             long revision=openRevision.get(); Object quality=resolver.revision(); Object key=List.of(plan,quality==null?"":quality,revision);
             if(key.equals(lastWarmPlan)) return; lastWarmPlan=key;
-            BooleanSupplier valid=()->!closed && active.getAsBoolean() && opened==current && revision==openRevision.get()
+            BooleanSupplier valid=()->!closed && active.getAsBoolean() && (persistent!=null || opened==current) && revision==openRevision.get()
                     && Objects.equals(quality,resolver.revision()) && plan.equals(plan());
             for(String id:plan.next()) {
                 Entry next=byId.get(id); if(next==null || next==current || !valid.getAsBoolean()) continue;
@@ -151,7 +168,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private void retire(Cached cached) { transport.revoke(cached.uri()); if(cached.entry().cover!=null) cached.entry().cover.clear(); }
     @Override public void close() {
         closed=true; requests.forEach(RequestScope::close); requests.clear();
-        for(Entry entry:entries) { if(entry.lyrics!=null) entry.lyrics.close(); adapter.unregister(entry.path); }
+        for(Entry entry:entries) { if(entry.lyrics!=null) entry.lyrics.close(); if(persistent==null) adapter.unregister(entry.path); }
         synchronized(cache) {
             if(preloader!=null) preloader.shutdownNow();
             cache.values().forEach(c->transport.revoke(c.uri())); cache.clear();

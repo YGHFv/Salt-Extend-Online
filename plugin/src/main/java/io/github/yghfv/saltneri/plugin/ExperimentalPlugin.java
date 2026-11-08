@@ -45,6 +45,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
     private SavedPlaylistController savedPlaylists;
     private java.util.concurrent.ScheduledExecutorService savedRestore;
+    private io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery savedRecovery;
     private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
     private volatile String mediaIdentityStatus="not registered";
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
@@ -84,20 +85,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             private void submit(OnlinePlaybackController.Audio audio, java.util.function.BooleanSupplier activeAccount, OnlinePlaybackController.QueueAction action) throws Exception {
             Salt1193DiagnosticRuntime current = runtime;
             if (current == null || current.isClosed()) throw new IllegalStateException("Arm the adapter first");
-            AccountPlatform platform=AccountPlatform.valueOf(audio.key().platform().name());
-            AccountCredentials account=credentials(platform);
-            OnlinePlaybackController.Target target=audio.target();
-            if(target==null) throw new IllegalStateException("Missing replay identity");
-            String scope=audio.lease().scope(), remoteId=audio.key().remoteId();
-            current.submitTrack(audio.key(), audio.metadata(), audio.lease(), activeAccount,
-                    audio.key().platform()==io.github.yghfv.saltneri.core.TrackKey.Platform.NETEASE
-                    ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(account).load(Long.parseLong(remoteId),request) : null,
-                    new io.github.yghfv.saltneri.plugin.host.Salt1193PlaybackSession.Renewer() {
-                        public Object revision() { return settings.qualityKey(); }
-                        public OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
-                            return OnlinePlaybackController.resolveAudio(account,target,scope,request,settings);
-                        }
-                    }, action);
+            current.submitOnline(audio,activeAccount,action);
             }
         },()->settings);
         OnlinePlaybackController startedOnline = online;
@@ -152,6 +140,14 @@ public final class ExperimentalPlugin extends SpwPlugin {
         profile = Salt1193Probe.inspect(WorkshopApi.class.getClassLoader(),
                 getPluginContext().getSpwVersion(), getPluginContext().getSpwChannel().name());
         status = profile.detail();
+        if(savedTracks!=null && profile.matched() && granted()) try {
+            savedRecovery=new io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery(
+                    io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery.nativeHost(WorkshopApi.class.getClassLoader(),profile),
+                    io.github.yghfv.saltneri.plugin.host.Salt1193EngineLink.hooks(WorkshopApi.hookRegistrar()),
+                    ()->generation==started && granted(),savedTracks::owns,()->{
+                        if(!adapterArmed()) try {arm();} catch(Exception failure) {throw new IllegalStateException("Playback adapter unavailable");}
+                    });
+        } catch(ReflectiveOperationException | RuntimeException failure) {status="Saved playback recovery unavailable";}
         if (granted()) {
             try {
                 mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install();
@@ -288,6 +284,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
         if(savedRestore!=null) {savedRestore.shutdownNow();savedRestore=null;}
         if(savedPlaylists!=null) {savedPlaylists.close();savedPlaylists=null;}
         if(mediaIdentity!=null) { mediaIdentity.close(); mediaIdentity=null; }

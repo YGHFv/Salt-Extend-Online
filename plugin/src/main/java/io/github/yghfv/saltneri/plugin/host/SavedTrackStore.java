@@ -37,6 +37,11 @@ public final class SavedTrackStore implements AutoCloseable {
         }
     }
     public synchronized List<Entry> entries() { return List.copyOf(entries.values()); }
+    public synchronized boolean owns(String trackId,String path) {
+        if(closed || trackId==null || !trackId.startsWith("saltneri:saved:")) return false;
+        Entry entry=entries.get(trackId.substring("saltneri:saved:".length()));
+        return entry!=null && entry.path().equals(path);
+    }
     public synchronized Entry save(Target input, Catalog.Item row) throws IOException {
         if(closed) throw new IOException("Saved tracks closed");
         if(row.kind()!=Catalog.Kind.TRACK || !row.enabled()) throw new IllegalArgumentException("Unplayable row");
@@ -68,6 +73,7 @@ public final class SavedTrackStore implements AutoCloseable {
         var bili=io.github.yghfv.saltneri.plugin.bilibili.BiliTarget.parse(target.id());
         return new Target(AccountPlatform.BILIBILI,bili.page()==1?bili.id():"https://www.bilibili.com/video/"+bili.id()+"?p="+bili.page());
     }
+    static boolean matches(Entry entry,Target target) {return target!=null && entry.target().equals(canonical(target));}
     private static String id(Target target) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((target.platform().name()+":"+target.id()).getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
         catch(java.security.NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
