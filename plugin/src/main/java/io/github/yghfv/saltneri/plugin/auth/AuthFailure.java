@@ -7,8 +7,8 @@ import javax.net.ssl.SSLException;
 
 /** Only fixed stages/reasons and numeric status codes may reach login UI diagnostics. */
 public final class AuthFailure extends IOException {
-    public enum Stage { NET_CREATE, NET_POLL, NET_VERIFY, NET_WEB, BILI_CREATE, BILI_POLL, BILI_VERIFY, UNKNOWN }
-    public enum Reason { HTTP, API, RESPONSE, COOKIE, CREDENTIAL, IDENTITY, DNS, TLS, TIMEOUT, NETWORK, BROWSER_MISSING, CANCELLED }
+    public enum Stage { NET_CREATE, NET_POLL, NET_VERIFY, NET_WEB, NET_DEVICE, BILI_CREATE, BILI_POLL, BILI_VERIFY, UNKNOWN }
+    public enum Reason { HTTP, API, RESPONSE, COOKIE, CREDENTIAL, IDENTITY, DNS, TLS, TIMEOUT, NETWORK, BROWSER_MISSING, CANCELLED, DEVICE }
     private final Stage stage;
     private final Reason reason;
     private final Long code;
@@ -18,6 +18,7 @@ public final class AuthFailure extends IOException {
     public static AuthFailure of(Stage stage, Reason reason) { return new AuthFailure(stage,reason,null); }
     public static AuthFailure code(Stage stage, Reason reason, long code) { return new AuthFailure(stage,reason,code); }
     public boolean requiresWebVerification() {
+        if (stage == Stage.NET_DEVICE) return true;
         return (stage==Stage.NET_CREATE || stage==Stage.NET_POLL || stage==Stage.NET_VERIFY) && reason==Reason.API
             && (Long.valueOf(8821).equals(code) || Long.valueOf(-462).equals(code));
     }
@@ -38,6 +39,7 @@ public final class AuthFailure extends IOException {
     }
     public static String diagnostic(Throwable error) {
         AuthFailure safe=error instanceof AuthFailure known?known:of(Stage.UNKNOWN,Reason.RESPONSE);
+        if (safe.stage == Stage.NET_DEVICE) return "\u65e0\u6cd5\u51c6\u5907\u7f51\u6613\u4e91\u626b\u7801\u5b89\u5168\u73af\u5883 ["+safe.getMessage()+"]\uff1b\u8bf7\u786e\u8ba4 Microsoft Edge \u5df2\u5b89\u88c5\u4e14\u53ef\u8bbf\u95ee\u7f51\u6613\u4e91\uff0c\u6216\u70b9\u51fb\u201c\u5b98\u65b9\u7f51\u9875\u767b\u5f55\u201d\u3002\u672a\u4f7f\u7528\u7a7a\u8bbe\u5907\u4ee4\u724c\u91cd\u8bd5";
         if(safe.requiresWebVerification()) return "\u7f51\u6613\u4e91\u8981\u6c42\u5b89\u5168\u9a8c\u8bc1 ["+safe.getMessage()+"]\uff1b\u8bf7\u70b9\u51fb\u201c\u5b98\u65b9\u7f51\u9875\u767b\u5f55\u201d\uff0c\u5728\u7f51\u6613\u4e91\u9875\u9762\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u548c\u767b\u5f55";
         if(safe.stage==Stage.NET_WEB) return "\u7f51\u9875\u767b\u5f55\u672a\u5b8c\u6210 ["+safe.getMessage()+"]\uff1b"+
             (safe.reason==Reason.BROWSER_MISSING ? "\u9700\u8981\u5df2\u5b89\u88c5 Microsoft Edge" : "\u53ef\u518d\u6b21\u70b9\u51fb\u201c\u5b98\u65b9\u7f51\u9875\u767b\u5f55\u201d\uff1b\u672a\u5bfc\u5165\u672a\u9a8c\u8bc1\u8d26\u53f7");

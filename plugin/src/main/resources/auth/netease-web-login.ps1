@@ -85,6 +85,58 @@ function Stop-IsolatedEdge {
     if ($script:PipeOutput) { $script:PipeOutput.Dispose() }
 }
 
+# Official createNEFingerprint/getToken mapping adapted from NeriPlayer's
+# NeteaseYdDeviceTokenProvider (GPL-3.0-or-later). No downloaded script injection,
+# fake device identifiers, automation concealment, or empty-token fallback.
+function Get-NeteaseDeviceScript {
+    return @'
+(async function() {
+    if (location.origin !== 'https://music.163.com') return {error: 'DEVICE_ORIGIN'};
+    if (typeof createNEFingerprint !== 'function') return {pending: true};
+    try {
+        const instance = createNEFingerprint({appId: '9d0ef7e0905d422cba1ecf7e73d77e67', timeout: 6000});
+        const result = await Promise.race([
+            instance.getToken(),
+            new Promise(resolve => setTimeout(() => resolve(null), 7000))
+        ]);
+        if (location.origin !== 'https://music.163.com' || !result ||
+            typeof result.token !== 'string' || !/^[\x21-\x7e]{1,4096}$/.test(result.token)) return {error: 'DEVICE_TOKEN'};
+        return {token: result.token, userAgent: navigator.userAgent};
+    } catch (_) { return {error: 'DEVICE_FAILED'}; }
+})()
+'@
+}
+
+function Invoke-NeteaseDeviceSnapshot {
+    $root = [Console]::ReadLine()
+    $result = @{ error = 'DEVICE_FAILED' }
+    try {
+        if (-not [IO.Path]::IsPathRooted($root) -or -not (Test-Path -LiteralPath $root -PathType Container)) { throw 'Invalid workspace' }
+        Start-IsolatedEdge $root $true
+        $page = (Send-Cdp 'Target.getTargets' @{}).targetInfos | Where-Object { $_.type -eq 'page' -and $_.url -eq 'about:blank' } | Select-Object -First 1
+        if (-not $page) { throw 'Invalid initial page' }
+        $session = (Send-Cdp 'Target.attachToTarget' @{ targetId = $page.targetId; flatten = $true }).sessionId
+        Send-Cdp 'Page.navigate' @{ url = 'https://music.163.com/' } $session | Out-Null
+        $deadline = [DateTime]::UtcNow.AddSeconds(25)
+        while ([DateTime]::UtcNow -lt $deadline) {
+            $evaluation = Send-Cdp 'Runtime.evaluate' @{ expression = (Get-NeteaseDeviceScript); returnByValue = $true; awaitPromise = $true } $session
+            if ($evaluation.exceptionDetails -or -not $evaluation.result.value) { throw 'Invalid device response' }
+            $value = $evaluation.result.value
+            if ($value.pending) { Start-Sleep -Milliseconds 400; continue }
+            if ($value.error -or -not $value.token) { throw 'Device unavailable' }
+            $cookies = @((Send-Cdp 'Network.getCookies' @{ urls = @('https://music.163.com/') } $session).cookies)
+            if ($cookies.Count -gt 64 -or ($cookies | Where-Object { $_.name -eq 'MUSIC_U' })) { throw 'Unexpected account context' }
+            $deviceCookies = @($cookies | Where-Object { $_.name -eq 'sDeviceId' -and $_.value.Length -gt 0 })
+            if ($deviceCookies.Count -ne 1) { throw 'Device cookie unavailable' }
+            $result = @{ token = $value.token; deviceId = $deviceCookies[0].value; userAgent = $value.userAgent; cookies = $cookies }
+            break
+        }
+    } catch { $result = @{ error = 'DEVICE_FAILED' } }
+    finally { Stop-IsolatedEdge }
+    # Only the parent pipe receives the context. Profile, token and cookies are not cached.
+    [Console]::WriteLine(($result | ConvertTo-Json -Depth 12 -Compress))
+}
+
 function Invoke-NeteaseWebLogin {
     $root = [Console]::ReadLine()
     $result = @{ error = 'WEB_FAILED' }

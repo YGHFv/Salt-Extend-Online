@@ -179,7 +179,7 @@ Resolver 在时长未知时另按 `requireDurationMatch` 判断，不能遗漏�
 
 另已新增B站匿名nav/WBI、view分P、playurl DASH映射／音质选择移植，细节见 `BILIBILI_PROGRESS.md`。
 使用同一固定commit的可执行策略（特别是bandwidth/1000），不宣称ticket／progressive／全部CDN对等。
-双端QR/WEAPI会话已移植，额外强制账号验证、可选DPAPI与本机QR页，未移植Android设备快照/网页登录/完整账号恢复后备；见 `LOGIN_PROGRESS.md`。
+双端QR/WEAPI会话已移植，额外强制账号验证与可选DPAPI；0.8.17 在原生二维码 UI 中补齐独立 Edge 官方设备上下文，保留显式官方网页登录，不移植 Android WebView 或未验证账号后备；见 `NETEASE_QR_SECURITY_0.8.17.md` 与历史记录 `LOGIN_PROGRESS.md`。
 网易云详情GET／EAPI取址与响应映射新增移植，严格免费／非试听／完整时长门禁，见 `NETEASE_PROGRESS.md`。双平台共用JSON读取、CDN探测与账号发布生命周期。
 B站152项本地协议fixture与15项后台检查、一次公网单字节探测，只证明解析边界，不证明Salt实播或词图一致；网易云当前仅离线协议／真实宿主reader证据。
 

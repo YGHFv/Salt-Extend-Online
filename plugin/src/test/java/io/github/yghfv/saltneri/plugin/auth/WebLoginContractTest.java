@@ -52,7 +52,7 @@ public final class WebLoginContractTest {
         java.util.function.Supplier<QrAuthClient> clients=()->new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->{
             if(uri.getPath().endsWith("unikey")) return new AuthProtocolContractTest.Response(uri,"{\"code\":200,\"unikey\":\"abcdefghijklmnop1234567890abcdef\"}",List.of(),null);
             polls.incrementAndGet(); return new AuthProtocolContractTest.Response(uri,"{\"code\":8821,\"message\":\"COOKIE_SECRET\",\"data\":{\"url\":\"https://secret.invalid\"}}",List.of(),null);
-        }));
+        }), AuthProtocolContractTest::device);
         try(var controller=new AccountLoginController(AccountPlatform.NETEASE,clients,()->true,null,()->{},CLOCK,10)) {
             controller.start(false);
             waitFor(()->controller.snapshot().phase()==AccountLoginController.Phase.VERIFICATION_REQUIRED);

@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: Validate metadata, core, HTTP and cache contracts
+      - name: Validate metadata, core, QR security, HTTP and cache contracts
         shell: pwsh
         run: ./scripts/test-offline.ps1 -JdkHome $env:JAVA_HOME
       - name: Check patch whitespace

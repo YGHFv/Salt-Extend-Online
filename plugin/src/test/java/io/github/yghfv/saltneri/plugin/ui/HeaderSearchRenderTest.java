@@ -194,6 +194,11 @@ public final class HeaderSearchRenderTest {
                             check(find(scene,"\u5b98\u65b9\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
                             click(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55"); check(lastAction.get()==NativeDesk.Action.CANCEL_LOGIN);
                             check(find(scene,"\u53d6\u6d88\u7f51\u9875\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
+                            login.set(new AccountLoginController.Snapshot(AccountLoginController.Phase.CREATING,"Preparing fixture device context",null,"")); render(scene);
+                            check(find(scene,"\u53d6\u6d88\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())!=null);
+                            check(find(scene,"\u5b98\u65b9 App \u767b\u5f55\u4e8c\u7ef4\u7801",null)==null);
+                            click(scene,"\u53d6\u6d88\u767b\u5f55"); check(lastAction.get()==NativeDesk.Action.CANCEL_LOGIN);
+                            check(find(scene,"\u53d6\u6d88\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
                             queried.set(null);
                             var setText=SemanticsActions.INSTANCE.getSetText();
                             if(find(scene,null,setText)!=null) click(scene,"\u641c\u7d22\u7f51\u6613\u4e91");

@@ -31,6 +31,10 @@ public final class AuthProtocolContractTest {
         cookies.accept(URI.create("https://" + platform.domain() + "/"), List.of(platform.loginCookie() + "=COOKIE_SECRET; Domain=." + platform.domain() + "; Path=/; Secure; Max-Age=3600"));
         return new AccountCredentials(platform, "42", cookies.snapshot(), CLOCK);
     }
+    static NeteaseDeviceSnapshot device(RequestScope request) {
+        request.check(); return new NeteaseDeviceSnapshot("SYNTHETIC_DEVICE_TOKEN", "fixture-device", AuthHttp.DEFAULT_USER_AGENT,
+                List.of(new ScopedCookies.Entry("sDeviceId", "fixture-device", "music.163.com", "/", false, true, CLOCK.instant().plusSeconds(300))));
+    }
     static final class Response extends HttpURLConnection {
         final String json; final List<String> cookies; final String refresh; boolean disconnected;
         int status=200; String contentType="application/json";
@@ -110,7 +114,7 @@ public final class AuthProtocolContractTest {
             else json="{\"code\":200,\"account\":{\"id\":42},\"profile\":{\"userId\":42}}";
             Response response=new Response(uri,json,List.of(),refresh); netRequests.add(response); return response;
         });
-        try (NeteaseQrClient client = new NeteaseQrClient(CLOCK, netHttp); RequestScope scope=new RequestScope(() -> true)) {
+        try (NeteaseQrClient client = new NeteaseQrClient(CLOCK, netHttp, AuthProtocolContractTest::device); RequestScope scope=new RequestScope(() -> true)) {
             var session=client.create(scope); check(session.qrContent().getHost().equals("music.163.com"));
             check(client.poll(session,scope).state()==QrAuthClient.State.WAITING_SCAN);
             check(client.poll(session,scope).state()==QrAuthClient.State.WAITING_CONFIRMATION);
@@ -156,7 +160,7 @@ public final class AuthProtocolContractTest {
                 }
             }
         }
-        try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->new Response(uri,"{\"code\":-462,\"message\":\"COOKIE_SECRET\"}",List.of(),null)));var request=new RequestScope(()->true)) {
+        try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->new Response(uri,"{\"code\":-462,\"message\":\"COOKIE_SECRET\"}",List.of(),null)), AuthProtocolContractTest::device);var request=new RequestScope(()->true)) {
             try { client.create(request); throw new AssertionError("Expected API failure"); }
             catch(AuthFailure expected) { check(expected.getMessage().equals("NET_CREATE/API=-462")); }
         }

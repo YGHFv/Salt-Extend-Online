@@ -3,7 +3,7 @@
 ## 单一入口
 
 - `plugin.properties`：插件 ID、名称、提供者、实验版和被动检查版版本。PowerShell、Gradle、包验证器共用。
-- `scripts/contract-tests.json`：48 个自动插件回归入口。`baseOnly` 表示额外验证只需 `java.base`，`offline` 表示完全不需要 Salt 类。
+- `scripts/contract-tests.json`：51 个自动插件回归入口，其中 8 个纳入公共无宿主回归。`baseOnly` 表示额外验证只需 `java.base`，`offline` 表示完全不需要 Salt 类。
 - `scripts/verify-project.py`：检查版本格式、稳定 ID、设置 JSON、测试重复／漏项和离线源文件清单。
 
 本地完整构建先验证项目、第三方源码、class-file 检查器和核心策略，再编译 Java / Kotlin、校验实际宿主 ABI、运行插件测试，最后验证包隔离。
@@ -18,9 +18,9 @@ Windows、PowerShell、Python 3、JDK 25：
 ./scripts/test-offline.ps1 -JdkHome 'C:\path\to\jdk25'
 ```
 
-包括 JDK 17 目标的核心策略、Python 检查器测试、受限 JSON、HTTPS 固定目标、真实本机 Range HTTP 和磁盘缓存。HTTP 上游使用 fixture，不需要账号、不访问平台媒体、不启动播放器。
+包括 JDK 17 目标的核心策略、Python 检查器测试、二维码协议与设备上下文安全、账号生命周期、网页登录风险停止、受限 JSON、HTTPS 固定目标、真实本机 Range HTTP 和磁盘缓存。HTTP 上游使用 fixture，不需要账号、不访问平台媒体、不启动播放器或浏览器。
 
-这套回归不能替代原生 UI、Hook、账号流程与宿主队列测试。
+这套回归不能替代原生 UI、Hook、真实账号扫码与宿主队列测试。
 
 ## 完整构建
 

@@ -71,14 +71,16 @@ public final class AccountLoginController implements AutoCloseable {
         if (!permitted()) throw new SecurityException("Experimental permission required");
         discardOperation(); retireAccount(); worker.purge();
         current = new Operation(clients.get()); phase = Phase.CREATING;
-        status = "Preparing explicit QR login in background. No audio or queue changes."; return current;
+        status = platform == AccountPlatform.NETEASE
+                ? "\u6b63\u5728\u901a\u8fc7\u72ec\u7acb\u4e34\u65f6 Edge \u51c6\u5907\u7f51\u6613\u4e91\u626b\u7801\u5b89\u5168\u73af\u5883\uff0c\u4e0d\u8bfb\u53d6\u6d4f\u89c8\u5668\u5df2\u6709\u8d26\u53f7\u3002"
+                : "Preparing explicit QR login in background. No audio or queue changes."; return current;
     }
     public void start(boolean remember) {
         Operation operation;
         synchronized (this) { rememberEnabled = remember; startupAttempted = true; operation = begin(); }
         changed();
         submit(operation, () -> {
-            try (RequestScope request = request(operation)) {
+            try (RequestScope request = request(operation, platform == AccountPlatform.NETEASE ? 70000 : 30000)) {
                 QrAuthClient.Session session = operation.client.create(request); request.check();
                 synchronized (this) {
                     if (!valid(operation)) return; operation.session = session; phase = Phase.WAITING_SCAN;
@@ -146,7 +148,10 @@ public final class AccountLoginController implements AutoCloseable {
         }
     }
     private RequestScope request(Operation operation) {
-        RequestScope request = new RequestScope(() -> operation.active.get() && permitted()); operation.request = request; request.check(); return request;
+        return request(operation, 30000);
+    }
+    private RequestScope request(Operation operation, long deadlineMillis) {
+        RequestScope request = new RequestScope(() -> operation.active.get() && permitted(), deadlineMillis); operation.request = request; request.check(); return request;
     }
     private synchronized boolean valid(Operation operation) { return !closed && current == operation && operation.active.get(); }
     private void schedule(Operation operation) {

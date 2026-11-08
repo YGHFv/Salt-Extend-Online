@@ -9,7 +9,23 @@
     "net/RequestScope.java",
     "net/PinnedHttpsConnection.java",
     "net/BoundedJson.java",
-    "net/JsonResponse.java"
+    "net/JsonResponse.java",
+    "auth/AccountCredentials.java",
+    "auth/AccountLoginController.java",
+    "auth/AccountPlatform.java",
+    "auth/AuthFailure.java",
+    "auth/AuthHttp.java",
+    "auth/BiliQrClient.java",
+    "auth/EncryptedAccountStore.java",
+    "auth/NeteaseDeviceSnapshot.java",
+    "auth/NeteaseQrClient.java",
+    "auth/NeteaseWeapi.java",
+    "auth/QrAuthClient.java",
+    "auth/ScopedCookies.java",
+    "auth/WindowsDpapi.java",
+    "auth/WindowsNeteaseWebLogin.java",
+    "library/CoverSource.java",
+    "bilibili/BiliWbi.java"
   ],
   "tests": [
     {
@@ -20,17 +36,22 @@
     {
       "class": "io.github.yghfv.saltneri.plugin.auth.AuthProtocolContractTest",
       "baseOnly": true,
-      "offline": false
+      "offline": true
     },
     {
       "class": "io.github.yghfv.saltneri.plugin.auth.AuthLifecycleContractTest",
       "baseOnly": true,
-      "offline": false
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.auth.NeteaseQrSecurityContractTest",
+      "baseOnly": true,
+      "offline": true
     },
     {
       "class": "io.github.yghfv.saltneri.plugin.auth.WebLoginContractTest",
       "baseOnly": true,
-      "offline": false
+      "offline": true
     },
     {
       "class": "io.github.yghfv.saltneri.plugin.auth.WindowsDpapiContractTest",

@@ -8,7 +8,7 @@ public final class AuthLiveProbe {
         if(args.length!=2||!(args[0].equals("--explicit-create-only") || args[0].equals("--explicit-session-check"))){System.err.println("Requires explicit create-only or session-check platform argument.");System.exit(2);return;}
         try {
             AccountPlatform platform=AccountPlatform.valueOf(args[1]);
-            try(QrAuthClient client=platform==AccountPlatform.BILIBILI?new BiliQrClient():new NeteaseQrClient();RequestScope scope=new RequestScope(()->true)){
+            try(QrAuthClient client=platform==AccountPlatform.BILIBILI?new BiliQrClient():new NeteaseQrClient();RequestScope scope=new RequestScope(()->true, platform==AccountPlatform.NETEASE?70000:30000)){
                 var session=client.create(scope);
                 var qr=io.nayuki.qrcodegen.QrCode.encodeText(session.qrContent().toASCIIString(), io.nayuki.qrcodegen.QrCode.Ecc.MEDIUM);
                 if(qr.size<21)throw new IllegalStateException("Local QR generation failed");
@@ -19,7 +19,7 @@ public final class AuthLiveProbe {
                     if(result.state()!=QrAuthClient.State.WAITING_SCAN) throw new IllegalStateException("Unexpected fresh unscanned QR state");
                     System.out.println("PASS: one fresh unscanned status check returned WAITING_SCAN; no automatic loop.");
                 }
-                System.out.println("No QR key/URL printed, browser opened, confirmation performed, real account saved or Salt queue touched.");
+                System.out.println("No QR key/URL printed, visible browser opened, confirmation performed, real account saved or Salt queue touched. NetEase prepares its device context in isolated headless Edge.");
             }
         } catch(Exception error){
             if(error instanceof AuthFailure) { System.err.println("STOP: "+AuthFailure.diagnostic(error)); System.exit(3); return; }

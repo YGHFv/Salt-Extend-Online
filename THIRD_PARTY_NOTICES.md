@@ -28,6 +28,7 @@ The following Java files are ports or adaptations, not independent claims of aut
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/bilibili/BiliClient.java` | View/playurl and DASH mapping branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/bilibili/api/client/BiliClient.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/BiliQrClient.java` | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/bilibili/api/auth/BiliQrLoginClient.kt`; related QR auth model files |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseQrClient.java` | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/auth/NeteaseQrLoginClient.kt`; related QR auth model files |
+| `plugin/src/main/resources/auth/netease-web-login.ps1` (device script), `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseDeviceSnapshot.java` | Official `createNEFingerprint/getToken` parameters and device snapshot mapping from `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/auth/NeteaseYdDeviceTokenProvider.kt`. Windows isolation, origin checks and fail-closed validation are plugin-specific. |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseWeapi.java` | WEAPI AES/RSA branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/crypto/NeteaseCrypto.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseEapi.java` | EAPI framing/AES/MD5 branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/crypto/NeteaseCrypto.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseClient.java` | Song detail/audio parameters of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/client/NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteaseSongMapping.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/playback/parser/NeteasePlaybackResponseParser.kt` |
@@ -51,7 +52,7 @@ bounded responses and pull-only single-byte length probes. It preserves the upst
 it does not store real credentials, signed CDN addresses, or fetched response bodies.
 
 QR authentication intentionally omits upstream credential/body logging, network retry policies,
-Android/WebView device token acquisition, legacy-account migration, and best-effort unverified
+Android/WebView integration, legacy-account migration, and best-effort unverified
 credential acceptance. Confirmation must pass a separate account identity check. Optional persistence
 uses Windows CurrentUser DPAPI, never a plaintext fallback; restoration is explicit.
 The current Bilibili `account.bilibili.com/h5/account-h5/auth/scan-web` QR payload route was observed

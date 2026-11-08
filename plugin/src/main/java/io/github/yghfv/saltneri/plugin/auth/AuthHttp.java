@@ -12,6 +12,7 @@ import java.util.Set;
 
 /** Isolated login HTTP. Redirects, risk retries and unsupported encodings are never followed. */
 public final class AuthHttp {
+    static final String DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36";
     @FunctionalInterface public interface Opener { HttpURLConnection open(URI uri, byte[] form) throws IOException; }
     public record Response(Map<String, Object> json, String refreshToken) {
         @Override public String toString() { return "AuthResponse[redacted]"; }
@@ -20,12 +21,22 @@ public final class AuthHttp {
     public AuthHttp() { this((uri, form) -> form == null ? new PinnedHttpsConnection(uri) : PinnedHttpsConnection.neteaseFormPost(uri, form)); }
     public AuthHttp(Opener opener) { this.opener = opener; }
     public Response exchange(URI uri, byte[] form, ScopedCookies cookies, Map<String, String> extras, RequestScope scope) throws IOException {
+        return exchange(uri, form, cookies, extras, DEFAULT_USER_AGENT, scope);
+    }
+    Response exchange(URI uri, byte[] form, ScopedCookies cookies, Map<String, String> extras, String userAgent, RequestScope scope) throws IOException {
         boolean bili = "passport.bilibili.com".equals(uri.getHost()) && Set.of("/x/passport-login/web/qrcode/generate", "/x/passport-login/web/qrcode/poll").contains(uri.getPath());
         boolean nav = "api.bilibili.com".equals(uri.getHost()) && "/x/web-interface/nav".equals(uri.getPath());
         boolean netease = "music.163.com".equals(uri.getHost()) && Set.of("/weapi/login/qrcode/unikey", "/weapi/login/qrcode/client/login", "/weapi/w/nuser/account/get").contains(uri.getPath());
         if (!"https".equals(uri.getScheme()) || (uri.getPort() != -1 && uri.getPort() != 443) || uri.getRawUserInfo() != null || uri.getRawFragment() != null
                 || !(bili || nav || netease) || (form == null) == netease) throw new IOException("Invalid login API target");
         var stage = AuthFailure.stage(uri.getPath());
+        if (!validUserAgent(userAgent)) throw AuthFailure.of(stage, AuthFailure.Reason.RESPONSE);
+        for (var header : extras.entrySet()) {
+            String name = header.getKey().toLowerCase(Locale.ROOT), value = header.getValue();
+            if (!netease || value == null || !(name.equals("x-loginmethod") && value.equals("QrCode")
+                    || name.equals("x-login-chain-id") && value.matches("[a-zA-Z0-9_-]{1,256}")))
+                throw AuthFailure.of(stage, AuthFailure.Reason.RESPONSE);
+        }
         scope.check(); HttpURLConnection connection;
         try { connection = opener.open(uri, form); }
         catch (IOException error) { throw AuthFailure.wrap(stage, AuthFailure.Reason.NETWORK, error); }
@@ -33,7 +44,7 @@ public final class AuthHttp {
         try {
             connection.setInstanceFollowRedirects(false); connection.setUseCaches(false); connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
             connection.setRequestMethod(form == null ? "GET" : "POST");
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/132.0.0.0 Safari/537.36");
+            connection.setRequestProperty("User-Agent", userAgent);
             connection.setRequestProperty("Referer", netease ? "https://music.163.com/" : "https://passport.bilibili.com/login");
             connection.setRequestProperty("Accept", "application/json"); connection.setRequestProperty("Accept-Encoding", "identity");
             if (netease) {
@@ -44,7 +55,6 @@ public final class AuthHttp {
             }
             String cookie = cookies.header(uri); if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
             for (var header : extras.entrySet()) {
-                if (!Set.of("x-loginmethod", "x-login-chain-id").contains(header.getKey().toLowerCase(Locale.ROOT))) throw new IOException("Invalid login API header");
                 connection.setRequestProperty(header.getKey(), header.getValue());
             }
             int status = connection.getResponseCode(); scope.check();
@@ -59,5 +69,9 @@ public final class AuthHttp {
             return new Response(json, refresh == null ? "" : refresh);
         } catch (IOException error) { throw AuthFailure.wrap(stage, AuthFailure.Reason.NETWORK, error); }
         finally { scope.release(connection); }
+    }
+    static boolean validUserAgent(String value) {
+        return value != null && value.startsWith("Mozilla/5.0 ") && value.length() <= 512
+                && value.chars().allMatch(c -> c >= 32 && c <= 126);
     }
 }

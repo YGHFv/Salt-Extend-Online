@@ -23,6 +23,9 @@ public final class WindowsNeteaseWebLogin {
         finally { Arrays.fill(output,(byte)0); }
     }
     static List<ScopedCookies.Entry> readCookies(byte[] output, Clock clock) throws IOException {
+        return readCookies(output, clock, true);
+    }
+    static List<ScopedCookies.Entry> readCookies(byte[] output, Clock clock, boolean requireCredential) throws IOException {
         if(output.length>65536) throw failure(AuthFailure.Reason.RESPONSE);
         var root=BoundedJson.object(BoundedJson.parse(output));
         if(root.get("error")!=null) {
@@ -55,7 +58,7 @@ public final class WindowsNeteaseWebLogin {
         var jar=new ScopedCookies(AccountPlatform.NETEASE,clock);
         try {
             jar.restore(entries);
-            if(jar.value(java.net.URI.create("https://music.163.com/"),"MUSIC_U").isEmpty()) throw failure(AuthFailure.Reason.CREDENTIAL);
+            if(requireCredential && jar.value(java.net.URI.create("https://music.163.com/"),"MUSIC_U").isEmpty()) throw failure(AuthFailure.Reason.CREDENTIAL);
             return jar.snapshot();
         } finally { jar.clear(); }
     }
@@ -63,6 +66,9 @@ public final class WindowsNeteaseWebLogin {
         return runHelper(request,"Invoke-NeteaseWebLogin");
     }
     static byte[] runHelper(RequestScope request, String entryPoint) throws IOException {
+        return runHelper(request, entryPoint, 290000);
+    }
+    static byte[] runHelper(RequestScope request, String entryPoint, long timeoutMillis) throws IOException {
         request.check();
         if(!System.getProperty("os.name","").startsWith("Windows")) throw failure(AuthFailure.Reason.BROWSER_MISSING);
         String system=System.getenv("SystemRoot");
@@ -93,7 +99,7 @@ public final class WindowsNeteaseWebLogin {
                 try { request.check(); if(owner.isInterrupted()) throw new CancellationException(); }
                 catch(CancellationException stopped) { children.forEach(ProcessHandle::destroyForcibly); running.destroyForcibly(); }
             },0,100,TimeUnit.MILLISECONDS);
-            watchdog.schedule(()->{children.forEach(ProcessHandle::destroyForcibly);running.destroyForcibly();},290,TimeUnit.SECONDS);
+            watchdog.schedule(()->{children.forEach(ProcessHandle::destroyForcibly);running.destroyForcibly();},timeoutMillis,TimeUnit.MILLISECONDS);
             try(var input=process.getOutputStream()) { input.write((root+"\n").getBytes(StandardCharsets.UTF_8)); }
             byte[] output=process.getInputStream().readNBytes(65537);
             request.check();

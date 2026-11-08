@@ -503,8 +503,9 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         if (platform == AccountPlatform.NETEASE && login?.phase()?.name in listOf("VERIFICATION_REQUIRED", "ERROR", "EXPIRED")) {
                             NativeRow(ui, "\u5b98\u65b9\u7f51\u9875\u767b\u5f55", click = { action { ui.desk().action(platform, NativeDesk.Action.WEB_LOGIN) } })
                         }
-                        if (login?.phase() == AccountLoginController.Phase.WEB_LOGIN) {
-                            NativeRow(ui, "\u53d6\u6d88\u7f51\u9875\u767b\u5f55", click = { action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) } })
+                        if (login?.phase() in listOf(AccountLoginController.Phase.CREATING, AccountLoginController.Phase.WEB_LOGIN)) {
+                            val cancelLabel = if (login?.phase() == AccountLoginController.Phase.WEB_LOGIN) "\u53d6\u6d88\u7f51\u9875\u767b\u5f55" else "\u53d6\u6d88\u767b\u5f55"
+                            NativeRow(ui, cancelLabel, click = { action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) } })
                         }
                         login?.qrContent()?.let { uri ->
                             Qr(ui, uri.toASCIIString())
