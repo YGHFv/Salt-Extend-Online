@@ -35,6 +35,7 @@ public final class SaltNativeUi implements AutoCloseable {
     private final CoverLoader covers;
     private final CoverLoader avatars;
     private final SaltToolbarBindings toolbar;
+    private final SaltSearchBindings search;
     private final BooleanSupplier permitted;
     private final List<HookHandle> handles = new ArrayList<>();
     private final Method routeGetter, pluginIdGetter, nativeRow, text, canvas;
@@ -71,6 +72,10 @@ public final class SaltNativeUi implements AutoCloseable {
         try { optionalToolbar = new SaltToolbarBindings(host); }
         catch (ReflectiveOperationException | LinkageError unsupported) { optionalToolbar = null; }
         toolbar = optionalToolbar;
+        SaltSearchBindings optionalSearch;
+        try { optionalSearch = new SaltSearchBindings(host); }
+        catch (ReflectiveOperationException | RuntimeException | LinkageError unsupported) { optionalSearch = null; }
+        search = optionalSearch;
         Class<?> item = type(host, ROUTE_ITEM), modRoute = type(host, MOD_ROUTE);
         type(host, SIDEBAR).getMethod("\u037f", item, Composer.class, int.class);
         routeGetter = item.getMethod("\u0528"); pluginIdGetter = modRoute.getMethod("getPluginId");
@@ -166,6 +171,14 @@ public final class SaltNativeUi implements AutoCloseable {
         toolbar.button(label, modifier, click, content, composer);
     }
     public void toolbarIcon(boolean sorting, Composer composer) { toolbar.icon(sorting, composer); }
+    public boolean nativeSearchAvailable() { return search != null; }
+    public androidx.compose.foundation.text.input.TextFieldDecorator searchDecorator(
+            androidx.compose.foundation.text.input.TextFieldState state, androidx.compose.runtime.State<Boolean> hasText,
+            androidx.compose.ui.focus.FocusRequester focus) { return search.decorator(state, hasText, focus); }
+    public androidx.compose.animation.ContentTransform searchTransition(androidx.compose.animation.AnimatedContentTransitionScope<Boolean> scope) {
+        return search.transition(scope);
+    }
+    public void searchClose(Modifier modifier, Function0<kotlin.Unit> action, Composer composer) { search.close(modifier, action, composer); }
     public byte[] cover(String token) {
         if (!available()) return null;
         return covers.requestSource(token, scope -> desk.resolveCover(token, scope), scope -> desk.fallbackCover(token, scope),

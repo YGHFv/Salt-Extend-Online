@@ -84,6 +84,15 @@ public final class NativeUiContractTest {
             NativeDesk desk = new NativeDesk(library, player,
                     p -> new AccountLoginController.Snapshot(AccountLoginController.Phase.IDLE, "Not logged in", null, ""),
                     (p,a) -> actions.incrementAndGet(), permitted::get);
+            var noSearch=new ClassLoader(host) {
+                @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+                    if(name.equals("com.xuncorp.voxzen.ui.component.\u078f$\u037f")) throw new ClassNotFoundException("Fixture missing optional search visuals");
+                    return super.loadClass(name,resolve);
+                }
+            };
+            try(var fallbackUi=new SaltNativeUi(noSearch,new Hooks(),desk,permitted::get)) {
+                check(!fallbackUi.nativeSearchAvailable() && fallbackUi.nativeToolbarAvailable() && fallbackUi.available());
+            }
             Hooks hooks = new Hooks();
             Class<?> singleton = Class.forName(SaltPageContentBinding.SINGLETON, true, host);
             Object cachedContent = singleton.getMethod(SaltPageContentBinding.GETTER).invoke(singleton.getField("INSTANCE").get(null));
@@ -95,6 +104,7 @@ public final class NativeUiContractTest {
             javax.swing.SwingUtilities.invokeAndWait(() -> { try { update.invoke(cachedContent, fixtureBlock); } catch (Exception error) { throw new AssertionError(error); } });
             try (SaltNativeUi ui = new SaltNativeUi(host, hooks, desk, permitted::get)) {
                 javax.swing.SwingUtilities.invokeAndWait(() -> {});
+                check(ui.nativeSearchAvailable());
                 check(ui.diagnostics().contains("bound=true"));
                 check(hooks.uiCalls == 1 && hooks.methodCalls == 1);
                 check(upstream.get() == 0 && queue.get() == 0 && actions.get() == 0);

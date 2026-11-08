@@ -11,6 +11,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.input.key.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -177,7 +185,7 @@ private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mo
     }
 }
 
-private enum class HeaderGlyph { SEARCH, ACCOUNT, PLAY, SORT, REFRESH, LAYOUT, BACK, DISCOVER, FAVORITES, SUBSCRIPTIONS }
+private enum class HeaderGlyph { SEARCH, ACCOUNT, PLAY, SORT, REFRESH, LAYOUT, BACK, CLOSE, DISCOVER, FAVORITES, SUBSCRIPTIONS }
 
 @Composable
 private fun HeaderIcon(ui: SaltNativeUi, label: String, glyph: HeaderGlyph, active: Boolean? = null, click: () -> Unit) {
@@ -222,6 +230,10 @@ private fun HeaderGlyphContent(ui: SaltNativeUi, label: String, glyph: HeaderGly
             drawLine(color,Offset(size.width*0.85f,size.height*0.5f),Offset(size.width*0.15f,size.height*0.5f),2.dp.toPx())
             drawLine(color,Offset(size.width*0.15f,size.height*0.5f),Offset(size.width*0.5f,size.height*0.15f),2.dp.toPx())
             drawLine(color,Offset(size.width*0.15f,size.height*0.5f),Offset(size.width*0.5f,size.height*0.85f),2.dp.toPx())
+        }
+        HeaderGlyph.CLOSE -> {
+            drawLine(color,Offset(size.width*0.25f,size.height*0.25f),Offset(size.width*0.75f,size.height*0.75f),2.dp.toPx())
+            drawLine(color,Offset(size.width*0.75f,size.height*0.25f),Offset(size.width*0.25f,size.height*0.75f),2.dp.toPx())
         }
         HeaderGlyph.LAYOUT -> {
             for(x in 0..1) for(y in 0..1) drawRect(color,Offset(size.width*(0.1f+x*0.5f),size.height*(0.1f+y*0.5f)),Size(size.width*0.3f,size.height*0.3f),style=Stroke(1.5.dp.toPx()))
@@ -290,7 +302,8 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
     val menuOffset = with(LocalDensity.current) { 44.dp.roundToPx() }
     Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal=12.dp).semantics {contentDescription="\u5728\u7ebf\u9875\u9762\u6807\u9898\u680f"},
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-        if(!memory.searching || !narrow) NativeText(ui, name(platform), modifier = if(memory.searching) Modifier.width(105.dp) else Modifier.weight(1f).padding(start=4.dp), heading = true,maxLines=1)
+        if(!memory.searching || !narrow) NativeText(ui, name(platform), modifier = Modifier.weight(1f).padding(start=4.dp), heading = true,maxLines=1)
+        else Spacer(Modifier.weight(1f))
         if(!memory.searching || !narrow) {
             listOf(Triple(Catalog.View.DISCOVER,"\u53d1\u73b0",HeaderGlyph.DISCOVER),
                 Triple(Catalog.View.MINE,"\u6536\u85cf",HeaderGlyph.FAVORITES),Triple(Catalog.View.SAVED,"\u8ba2\u9605",HeaderGlyph.SUBSCRIPTIONS)).forEach { (destination,label,glyph) ->
@@ -301,11 +314,8 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
             Spacer(Modifier.padding(horizontal=4.dp).width(1.dp).height(16.dp).background(Color(palette.secondary().toULong()).copy(alpha=0.18f)))
         }
         val searchLabel = if(platform == AccountPlatform.BILIBILI) "\u641c\u7d22B\u7ad9" else "\u641c\u7d22\u7f51\u6613\u4e91"
-        if(memory.searching) SearchInput(ui,memory.searchText,{memory.searchText=it},modifier=Modifier.weight(1f),label=searchLabel) { keyword ->
+        SearchControl(ui,memory.searchField,memory.searching,{memory.searching=it},label=searchLabel) { keyword ->
             action {ui.desk().search(platform,keyword);memory.view=Catalog.View.SEARCH;memory.localSearch=false;memory.localText=""}
-        }
-        HeaderIcon(ui, searchLabel, HeaderGlyph.SEARCH) {
-            memory.searching = !memory.searching
         }
         Box {
             if (loggedIn && image != null) {
@@ -329,14 +339,50 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
     }
 }
 
+private fun TextFieldState.replace(text: String) { edit { replace(0,length,text) } }
+
 @Composable
-private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> Unit, inside: Boolean = false, modifier: Modifier = Modifier,
-                        label: String = "\u641c\u7d22B\u7ad9", submit: (String) -> Unit) {
+private fun SearchControl(ui: SaltNativeUi, state: TextFieldState, expanded: Boolean, expand: (Boolean) -> Unit,
+                          inside: Boolean = false, label: String, submit: (String) -> Unit) {
+    val close = { state.replace(""); expand(false) }
+    AnimatedContent(expanded,contentAlignment=Alignment.CenterEnd,
+        transitionSpec={if(ui.nativeSearchAvailable()) ui.searchTransition(this) else fadeIn() togetherWith fadeOut()}) { open ->
+        if(!open) HeaderIcon(ui,label,HeaderGlyph.SEARCH) {expand(true)}
+        else Row(Modifier.width(184.dp).height(36.dp).onPreviewKeyEvent {
+            if(it.key==Key.Escape && it.type==KeyEventType.KeyDown) {close();true} else false
+        },verticalAlignment=Alignment.CenterVertically) {
+            SearchInput(ui,state,inside,Modifier.weight(1f),label,expanded,submit)
+            Spacer(Modifier.width(8.dp))
+            val description="\u5173\u95ed"+label
+            if(ui.nativeSearchAvailable()) ui.searchClose(Modifier.semantics {contentDescription=description},close,currentComposer)
+            else HeaderIcon(ui,description,HeaderGlyph.CLOSE,click=close)
+        }
+    }
+}
+
+@Composable
+private fun SearchInput(ui: SaltNativeUi, state: TextFieldState, inside: Boolean, modifier: Modifier,
+                        label: String, active: Boolean, submit: (String) -> Unit) {
     val focus = remember { FocusRequester() }
     val palette = ui.palette(currentComposer)
-    val search = { if (inside || keyword.isNotBlank()) submit(keyword.trim()) }
+    val search = {
+        val keyword=state.text.toString().trim()
+        if(active && (inside || keyword.isNotBlank()) && keyword.length<=100 && keyword.none {it.isISOControl()}) submit(keyword)
+    }
     LaunchedEffect(Unit) { focus.requestFocus() }
-        BasicTextField(value = keyword, onValueChange = { if (it.length <= 100 && it.none { c -> c.isISOControl() }) change(it) },
+    if(ui.nativeSearchAvailable()) {
+        val hasText=remember(state) {derivedStateOf {state.text.isNotEmpty()}}
+        val decorator=remember(ui,state,focus) {ui.searchDecorator(state,hasText,focus)}
+        BasicTextField(state=state,modifier=modifier.height(36.dp).focusRequester(focus).semantics {
+                contentDescription=if(inside) "\u5408\u96c6\u5185\u641c\u7d22\u8f93\u5165" else label.removePrefix("\u641c\u7d22")+"\u641c\u7d22\u8f93\u5165"
+            },inputTransformation=InputTransformation {
+                if(length>100 || asCharSequence().any {it.isISOControl()}) revertAllChanges()
+            },textStyle=palette.main().copy(color=Color(palette.text().toULong())),lineLimits=TextFieldLineLimits.SingleLine,
+            keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search),onKeyboardAction={search()},
+            cursorBrush=SolidColor(Color(palette.text().toULong())),decorator=decorator)
+    } else {
+        val keyword=state.text.toString()
+        BasicTextField(value = keyword, onValueChange = { if (it.length <= 100 && it.none { c -> c.isISOControl() }) state.replace(it) },
             modifier = modifier.height(36.dp).border(1.dp, Color(palette.secondary().toULong()).copy(alpha = 0.3f), palette.shape())
                 .padding(horizontal=8.dp).focusRequester(focus).semantics { contentDescription = if(inside) "\u5408\u96c6\u5185\u641c\u7d22\u8f93\u5165" else label.removePrefix("\u641c\u7d22") + "\u641c\u7d22\u8f93\u5165" },
             textStyle = palette.main().copy(color = Color(palette.text().toULong())), singleLine = true,
@@ -344,6 +390,7 @@ private fun SearchInput(ui: SaltNativeUi, keyword: String, change: (String) -> U
             cursorBrush = SolidColor(Color(palette.accent().toULong())), decorationBox = { field ->
                 Box(Modifier.fillMaxHeight(),contentAlignment=Alignment.CenterStart) { if (keyword.isEmpty()) NativeText(ui, if(inside) "\u5408\u96c6\u5185\u641c\u7d22" else "\u641c\u7d22 " + label.removePrefix("\u641c\u7d22"), true); field() }
             })
+    }
 }
 
 private enum class ListLayout { SINGLE, DOUBLE, CARDS }
@@ -353,9 +400,12 @@ private class PageMemory(val platform: AccountPlatform, layout: String) {
     var view by mutableStateOf(Catalog.View.DISCOVER)
     var selectedRow by mutableStateOf("")
     var searching by mutableStateOf(false)
-    var searchText by mutableStateOf("")
+    val searchField = TextFieldState()
     var localSearch by mutableStateOf(false)
-    var localText by mutableStateOf("")
+    val localField = TextFieldState()
+    var localText: String
+        get()=localField.text.toString()
+        set(value) {localField.replace(value)}
     val list = LazyListState()
     var location: List<Any?>? = null
 }
@@ -367,8 +417,7 @@ private fun CatalogTitle(ui: SaltNativeUi, platform: AccountPlatform, title: Str
         if(back) HeaderIcon(ui,"\u8fd4\u56de\u5217\u8868",HeaderGlyph.BACK) {action {ui.desk().back(platform);memory.localSearch=false;memory.localText=""}}
         NativeText(ui, title + if(count>=0) " ($count)" else "", modifier=Modifier.weight(if(memory.localSearch && folder) 0.6f else 1f),maxLines=1)
         if(folder) {
-            if(memory.localSearch) SearchInput(ui,memory.localText,{memory.localText=it},true,Modifier.weight(1f)) { keyword -> action {ui.desk().filter(keyword)} }
-            HeaderIcon(ui,"\u641c\u7d22\u5408\u96c6",HeaderGlyph.SEARCH) { memory.localSearch = !memory.localSearch }
+            SearchControl(ui,memory.localField,memory.localSearch,{memory.localSearch=it},true,"\u641c\u7d22\u5408\u96c6") { keyword -> action {ui.desk().filter(keyword)} }
             HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) { action {ui.desk().playPlaylist()} }
         }
         LayoutMenu(ui,memory,action)

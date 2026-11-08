@@ -76,17 +76,20 @@ public final class PlaylistRenderTest {
             var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png.getBytes()));
             float right=-1, top=-1;
             for(String label:List.of("\u641c\u7d22\u5408\u96c6","\u5168\u90e8\u64ad\u653e","\u6392\u5e8f")) {
-                var node=find(scene,label,SemanticsActions.INSTANCE.getOnClick()); check(node!=null); var bounds=node.getBoundsInRoot();
+                boolean expanded=label.equals("\u641c\u7d22\u5408\u96c6") && find(scene,"\u5173\u95ed"+label,SemanticsActions.INSTANCE.getOnClick())!=null;
+                var node=find(scene,expanded?"\u5173\u95ed"+label:label,SemanticsActions.INSTANCE.getOnClick()); check(node!=null); var bounds=node.getBoundsInRoot();
                 check(!hasText(node));
-                check(Math.abs(bounds.getWidth()-36*density)<=1 && Math.abs(bounds.getHeight()-36*density)<=1);
-                if(!label.equals("\u5168\u90e8\u64ad\u653e")) check(unmerged(scene,label+"\u5b98\u65b9\u56fe\u6807",null)!=null);
-                if(top<0) top=bounds.getTop();
-                check(bounds.getLeft()>=right && bounds.getRight()<=pixels.getWidth() && Math.abs(bounds.getTop()-top)<=1);
+                float size=(expanded?32:36)*density;
+                if(Math.abs(bounds.getWidth()-size)>1 || Math.abs(bounds.getHeight()-size)>1) throw new AssertionError("Search/toolbar bounds: "+bounds);
+                check(Math.abs(bounds.getWidth()-size)<=1 && Math.abs(bounds.getHeight()-size)<=1);
+                if(!expanded && !label.equals("\u5168\u90e8\u64ad\u653e")) check(unmerged(scene,label+"\u5b98\u65b9\u56fe\u6807",null)!=null);
+                if(top<0) top=bounds.getTop()+bounds.getBottom();
+                check(bounds.getLeft()>=right && bounds.getRight()<=pixels.getWidth() && Math.abs(bounds.getTop()+bounds.getBottom()-top)<=1);
                 right=bounds.getRight();
                 int ink=0;
                 for(int y=Math.max(0,(int)bounds.getTop());y<Math.min(pixels.getHeight(),(int)bounds.getBottom());y++)
                     for(int x=Math.max(0,(int)bounds.getLeft());x<Math.min(pixels.getWidth(),(int)bounds.getRight());x++)
-                        if((pixels.getRGB(x,y)>>>24)>200) ink++;
+                        if((pixels.getRGB(x,y)>>>24)>(expanded?32:200)) ink++;
                 check(ink>20*density*density);
             }
         }
@@ -170,18 +173,23 @@ public final class PlaylistRenderTest {
                             click(scene,"\u641c\u7d22\u5408\u96c6");
                             visibleButtons(scene,density);
                             var set=SemanticsActions.INSTANCE.getSetText(); var input=find(scene,null,set); check(input!=null);
-                            var icon=find(scene,"\u641c\u7d22\u5408\u96c6",null).getBoundsInRoot();
+                            var icon=find(scene,"\u5173\u95ed\u641c\u7d22\u5408\u96c6",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
                             check(input.getBoundsInRoot().getRight()<=icon.getLeft() && Math.abs(input.getBoundsInRoot().getTop()-icon.getTop())<15*density);
                             int beforeToggle=requests.get();
-                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle);
+                            click(scene,"\u5173\u95ed\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle);
                             click(scene,"\u641c\u7d22\u5408\u96c6"); input=find(scene,null,set); check(input!=null);
                             input.getConfig().get(set).getAction().invoke(new AnnotatedString("Song 21",List.of(),List.of())); render(scene);
-                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle);
-                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,"Song 21",null)!=null);
+                            click(scene,"\u5173\u95ed\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle);
+                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,"Song 21",null)==null);
+                            find(scene,null,set).getConfig().get(set).getAction().invoke(new AnnotatedString("Song 21",List.of(),List.of())); render(scene);
                             var ime=SemanticsActions.INSTANCE.getOnImeAction(); find(scene,null,ime).getConfig().get(ime).getAction().invoke(); render(scene);
                             check(find(scene,"Song 21",null)!=null && find(scene,"Song 01",null)==null);
+                            clearDraft(scene); check(library.snapshot().get("filter").equals("Song 21"));
+                            find(scene,null,ime).getConfig().get(ime).getAction().invoke(); render(scene);
+                            check(library.snapshot().get("filter").equals("") && find(scene,"Song 01",null)!=null);
+                            type(scene,"Song 21"); find(scene,null,ime).getConfig().get(ime).getAction().invoke(); render(scene);
                             beforeToggle=requests.get();
-                            click(scene,"\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle && library.snapshot().get("filter").equals("Song 21"));
+                            click(scene,"\u5173\u95ed\u641c\u7d22\u5408\u96c6"); check(find(scene,null,set)==null && requests.get()==beforeToggle && library.snapshot().get("filter").equals("Song 21"));
                             visibleButtons(scene,density);
                             click(scene,"\u6392\u5e8f");
                             check(find(scene,"\u5df2\u9009\u62e9\u9ed8\u8ba4\u987a\u5e8f",null)!=null);

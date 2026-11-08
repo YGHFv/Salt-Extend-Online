@@ -36,26 +36,54 @@ public final class HeaderSearchRenderTest {
     }
     private static SemanticsNode find(SemanticsNode node, String label, SemanticsPropertyKey<?> action) {
         for(var child:node.getChildren()) { var found=find(child,label,action); if(found!=null) return found; }
-        return (label==null || node.getConfig().toString().contains(label)) && (action==null || node.getConfig().contains(action)) ? node : null;
+        var config=node.getConfig();
+        var descriptions=SemanticsProperties.INSTANCE.getContentDescription();
+        boolean searchLabel=label!=null && (label.startsWith("\u641c\u7d22") || label.startsWith("\u5173\u95ed\u641c\u7d22"));
+        boolean matches=label==null || (searchLabel ? config.contains(descriptions) && config.get(descriptions).contains(label) : config.toString().contains(label));
+        return matches && (action==null || config.contains(action)) ? node : null;
     }
     static SemanticsNode find(ImageComposeScene scene,String label,SemanticsPropertyKey<?> action) {
         for(var owner:scene.getSemanticsOwners()) { var found=find(owner.getRootSemanticsNode(),label,action); if(found!=null) return found; }
         return null;
     }
     static void render(ImageComposeScene scene) throws Exception {
-        Thread.sleep(400);
-        for(int i=0;i<4;i++) try(Image ignored=scene.render(System.nanoTime())) { }
+        for(int i=0;i<6;i++) { try(Image ignored=scene.render(System.nanoTime())) { } Thread.sleep(90); }
+        try(Image ignored=scene.render(System.nanoTime())) { }
     }
     static void click(ImageComposeScene scene,String label) throws Exception {
         var key=SemanticsActions.INSTANCE.getOnClick(); var node=find(scene,label,key); check(node!=null);
         check(Boolean.TRUE.equals(node.getConfig().get(key).getAction().invoke())); render(scene);
     }
+    static String draft(ImageComposeScene scene) {
+        return find(scene,null,SemanticsActions.INSTANCE.getSetText()).getConfig().get(SemanticsProperties.INSTANCE.getEditableText()).getText();
+    }
+    static void type(ImageComposeScene scene,String text) throws Exception {
+        var set=SemanticsActions.INSTANCE.getSetText();
+        check(Boolean.TRUE.equals(find(scene,null,set).getConfig().get(set).getAction().invoke(new AnnotatedString(text,List.of(),List.of())))); render(scene);
+    }
+    static void clearDraft(ImageComposeScene scene) throws Exception {
+        var field=find(scene,null,SemanticsActions.INSTANCE.getSetText());
+        var click=SemanticsActions.INSTANCE.getOnClick(); SemanticsNode clear=null;
+        for(var child:field.getChildren()) { var candidate=find(child,null,click); if(candidate!=null) {clear=candidate;break;} }
+        check(clear!=null); var a=field.getBoundsInRoot(); var b=clear.getBoundsInRoot();
+        check(b.getLeft()>=a.getLeft() && b.getRight()<=a.getRight() && b.getWidth()<a.getWidth());
+        check(Boolean.TRUE.equals(clear.getConfig().get(click).getAction().invoke())); render(scene);
+        check(draft(scene).isEmpty());
+    }
+    private static void escape(ImageComposeScene scene) throws Exception {
+        var awt=new java.awt.event.KeyEvent(new javax.swing.JPanel(),java.awt.event.KeyEvent.KEY_PRESSED,
+                System.currentTimeMillis(),0,java.awt.event.KeyEvent.VK_ESCAPE,java.awt.event.KeyEvent.CHAR_UNDEFINED);
+        Object key=androidx.compose.ui.input.key.KeyEvent_desktopKt.toComposeEvent(awt);
+        check(Boolean.TRUE.equals(ImageComposeScene.class.getMethod("sendKeyEvent-ZmokQxo",Object.class).invoke(scene,key))); render(scene);
+    }
     private static void compactHeader(ImageComposeScene scene, int width, boolean searching) {
         var click=SemanticsActions.INSTANCE.getOnClick();
-        var search=find(scene,"\u641c\u7d22B\u7ad9",click); check(search!=null);
+        var search=find(scene,searching?"\u5173\u95ed\u641c\u7d22B\u7ad9":"\u641c\u7d22B\u7ad9",click); check(search!=null);
         var searchBounds=search.getBoundsInRoot();
-        check(Math.abs(searchBounds.getWidth()-36)<1 && Math.abs(searchBounds.getHeight()-36)<1);
-        check(find(scene,"\u641c\u7d22B\u7ad9\u5b98\u65b9\u56fe\u6807",null)!=null);
+        float size=searching?32:36;
+        if(Math.abs(searchBounds.getWidth()-size)>=1 || Math.abs(searchBounds.getHeight()-size)>=1) throw new AssertionError("Search button bounds: "+searchBounds);
+        check(Math.abs(searchBounds.getWidth()-size)<1 && Math.abs(searchBounds.getHeight()-size)<1);
+        if(!searching) check(find(scene,"\u641c\u7d22B\u7ad9\u5b98\u65b9\u56fe\u6807",null)!=null);
         if(searching && width<640) {
             check(find(scene,"\u53d1\u73b0",click)==null && find(scene,"\u6536\u85cf",click)==null && find(scene,"\u8ba2\u9605",click)==null);
             return;
@@ -64,7 +92,7 @@ public final class HeaderSearchRenderTest {
         for(String label:List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605")) {
             var node=find(scene,label,click); check(node!=null); var bounds=node.getBoundsInRoot();
             check(Math.abs(bounds.getWidth()-36)<1 && Math.abs(bounds.getHeight()-36)<1);
-            check(bounds.getLeft()>=right && bounds.getRight()<searchBounds.getLeft() && Math.abs(bounds.getTop()-searchBounds.getTop())<1);
+            check(bounds.getLeft()>=right && bounds.getRight()<searchBounds.getLeft() && Math.abs(bounds.getTop()+bounds.getBottom()-searchBounds.getTop()-searchBounds.getBottom())<1);
             check(!node.getConfig().contains(SemanticsProperties.INSTANCE.getText())); right=bounds.getRight();
         }
         check(searchBounds.getTop()<56 && searchBounds.getRight()<=width);
@@ -105,6 +133,8 @@ public final class HeaderSearchRenderTest {
     }
     @SuppressWarnings("unchecked")
     public static void main(String[] args) throws Exception {
+        var asynchronousFailure=new AtomicReference<Throwable>();
+        Thread.setDefaultUncaughtExceptionHandler((thread,error)->{asynchronousFailure.compareAndSet(null,error);error.printStackTrace();});
         Clock clock=Clock.systemUTC(); var login=new AtomicReference<>(signedIn("revision-one"));
         var lastAction=new AtomicReference<NativeDesk.Action>(); var queried=new AtomicReference<Catalog.Query>();
         var queues=new AtomicInteger(); var avatarRequests=new AtomicInteger(); var armed=new AtomicBoolean();
@@ -156,7 +186,7 @@ public final class HeaderSearchRenderTest {
                                 });
                         try {
                             render(scene);
-                            check(ui.nativeToolbarAvailable()); compactHeader(scene,width,false);
+                            check(ui.nativeToolbarAvailable() && ui.nativeSearchAvailable()); compactHeader(scene,width,false);
                             check(find(scene,"\u626b\u7801\u767b\u5f55",null)==null && find(scene,"\u9000\u51fa\u767b\u5f55",null)==null);
                             var avatar=find(scene,"\u8d26\u53f7\u83dc\u5355",null); var search=find(scene,"\u641c\u7d22B\u7ad9",null);
                             check(avatar!=null && search!=null && search.getBoundsInRoot().getRight() < avatar.getBoundsInRoot().getRight());
@@ -173,23 +203,35 @@ public final class HeaderSearchRenderTest {
                             login.set(signedIn("search-"+width)); render(scene); queried.set(null);
                             var setText=SemanticsActions.INSTANCE.getSetText();
                             if(find(scene,null,setText)==null) click(scene,"\u641c\u7d22B\u7ad9");
-                            click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==null);
+                            click(scene,"\u5173\u95ed\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==null);
                             click(scene,"\u641c\u7d22B\u7ad9");
                             compactHeader(scene,width,true);
                             var input=find(scene,null,setText); check(input!=null);
-                            var icon=find(scene,"\u641c\u7d22B\u7ad9",null).getBoundsInRoot();
+                            var icon=find(scene,"\u5173\u95ed\u641c\u7d22B\u7ad9",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
                             check(input.getBoundsInRoot().getRight()<=icon.getLeft() && Math.abs(input.getBoundsInRoot().getTop()-icon.getTop())<15);
+                            var submit=SemanticsActions.INSTANCE.getOnImeAction();
+                            check(Boolean.TRUE.equals(find(scene,null,submit).getConfig().get(submit).getAction().invoke())); render(scene);
+                            check(queried.get()==null);
+                            type(scene,"x".repeat(101)); check(draft(scene).isEmpty() && queried.get()==null);
+                            type(scene,"bad\u0001control"); check(draft(scene).isEmpty() && queried.get()==null);
+                            type(scene,"draft to clear"); clearDraft(scene); check(queried.get()==null);
+                            type(scene,"escape draft"); escape(scene); check(find(scene,null,setText)==null && queried.get()==null);
+                            click(scene,"\u641c\u7d22B\u7ad9"); check(draft(scene).isEmpty());
+                            input=find(scene,null,setText);
                             check(Boolean.TRUE.equals(input.getConfig().get(setText).getAction().invoke(new AnnotatedString("\u6d1b\u5929\u4f9d music",List.of(),List.of()))));
                             render(scene);
                             check(queried.get()==null);
-                            click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==null);
-                            click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,"\u6d1b\u5929\u4f9d music",null)!=null);
-                            var submit=SemanticsActions.INSTANCE.getOnImeAction(); var field=find(scene,null,submit); check(field!=null);
+                            click(scene,"\u5173\u95ed\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==null);
+                            click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,"\u6d1b\u5929\u4f9d music",null)==null);
+                            input=find(scene,null,setText);
+                            check(Boolean.TRUE.equals(input.getConfig().get(setText).getAction().invoke(new AnnotatedString("\u6d1b\u5929\u4f9d music",List.of(),List.of())))); render(scene);
+                            var field=find(scene,null,submit); check(field!=null);
                             check(Boolean.TRUE.equals(field.getConfig().get(submit).getAction().invoke())); render(scene);
                             check(queried.get()!=null && queried.get().view()==Catalog.View.SEARCH && queried.get().keyword().equals("\u6d1b\u5929\u4f9d music"));
                             check(find(scene,"Search hit",null)!=null);
                             var completedQuery=queried.get();
-                            click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==completedQuery);
+                            clearDraft(scene); check(queried.get()==completedQuery && find(scene,"Search hit",null)!=null);
+                            click(scene,"\u5173\u95ed\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==completedQuery);
                             compactHeader(scene,width,false);
                             int before=queues.get(); var hit=find(scene,"Search hit",null).getBoundsInRoot();
                             NativePageRenderTest.tap(scene,(hit.getLeft()+hit.getRight())/2,(hit.getTop()+hit.getBottom())/2,1000); Thread.sleep(70);
@@ -223,16 +265,16 @@ public final class HeaderSearchRenderTest {
                             check(find(scene,"\u53d6\u6d88\u767b\u5f55",SemanticsActions.INSTANCE.getOnClick())==null);
                             queried.set(null);
                             var setText=SemanticsActions.INSTANCE.getSetText();
-                            if(find(scene,null,setText)!=null) click(scene,"\u641c\u7d22\u7f51\u6613\u4e91");
+                            if(find(scene,null,setText)!=null) click(scene,"\u5173\u95ed\u641c\u7d22\u7f51\u6613\u4e91");
                             click(scene,"\u641c\u7d22\u7f51\u6613\u4e91");
                             var field=find(scene,null,setText); check(field!=null);
-                            var icon=find(scene,"\u641c\u7d22\u7f51\u6613\u4e91",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+                            var icon=find(scene,"\u5173\u95ed\u641c\u7d22\u7f51\u6613\u4e91",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
                             check(field.getBoundsInRoot().getRight()<=icon.getLeft() && icon.getRight()<=width);
                             check(Boolean.TRUE.equals(field.getConfig().get(setText).getAction().invoke(new AnnotatedString("netease music",List.of(),List.of())))); render(scene);
                             var submit=SemanticsActions.INSTANCE.getOnImeAction();
                             check(Boolean.TRUE.equals(find(scene,null,submit).getConfig().get(submit).getAction().invoke())); render(scene);
                             check(queried.get().platform()==AccountPlatform.NETEASE && queried.get().keyword().equals("netease music"));
-                            click(scene,"\u641c\u7d22\u7f51\u6613\u4e91"); check(find(scene,null,setText)==null);
+                            click(scene,"\u5173\u95ed\u641c\u7d22\u7f51\u6613\u4e91"); check(find(scene,null,setText)==null);
                             check(find(scene,"1/2",null)!=null && find(scene,"Search hit",null)!=null);
                             click(scene,"\u4e0b\u4e00\u9875"); check(library.snapshot().get("page").equals(2) && find(scene,"2/2",null)!=null);
                             failCatalog.set(true); click(scene,"\u5237\u65b0\u5f53\u524d\u5217\u8868");
@@ -257,6 +299,7 @@ public final class HeaderSearchRenderTest {
                 }
             }
         }
+        if(asynchronousFailure.get()!=null) throw new AssertionError("Asynchronous Compose failure",asynchronousFailure.get());
         System.out.println("PASS: "+checks+" real Compose avatar/menu/account replacement/search input/IME/double-click checks; synthetic account/API/queue");
     }
 }
