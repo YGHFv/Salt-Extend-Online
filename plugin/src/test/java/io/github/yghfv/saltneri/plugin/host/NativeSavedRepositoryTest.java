@@ -48,7 +48,9 @@ public final class NativeSavedRepositoryTest {
             suspend(insert,dao,(Object)new Playlist[]{playlist});
             var choices=gateway.choices();check(choices.size()==1,"Native playlist list not found");
             var entry=store.save(new OnlinePlaybackController.Target(AccountPlatform.NETEASE,"123"),new Catalog.Item(Catalog.Kind.TRACK,"123","Fixture song","Fixture artist",1000,true));
+            check(!Files.exists(Path.of(entry.path())),"Identity eagerly created a cover file");
             gateway.add(entry,choices.getFirst(),()->true);
+            check(Files.size(Path.of(entry.path()))==42,"Native insertion failed to materialize lazy artwork");
             Object saved=suspend(tracks.getMethod("\u037f",String.class,Continuation.class),trackRepo,entry.trackId());
             check(saved!=null && entry.path().equals(saved.getClass().getMethod("getPath").invoke(saved)),"Track not saved");
             try(var connection=driver.open(root.resolve("fixture.db").toString());var statement=connection.prepare("UPDATE Track SET title = 'User title' WHERE id = ?")) {

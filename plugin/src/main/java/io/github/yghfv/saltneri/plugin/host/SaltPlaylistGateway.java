@@ -46,6 +46,8 @@ public final class SaltPlaylistGateway {
         return List.copyOf(result);
     }
     public Object nativeTrack(SavedTrackStore.Entry entry) throws Exception {
+        // Explicit library insertion needs a real local file size; bulk playback does not.
+        entry.cover().ensureFile();
         Constructor<?> constructor=Arrays.stream(track.getConstructors()).filter(c->c.getParameterCount()==23).findFirst().orElseThrow();
         long now=System.currentTimeMillis();
         Class<?> gain=constructor.getParameterTypes()[21]; Object companion=gain.getField("Companion").get(null);

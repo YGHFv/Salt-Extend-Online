@@ -166,8 +166,10 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     public void playPlaylist(io.github.yghfv.saltneri.plugin.library.LibraryController.Playlist list, BooleanSupplier accountActive) throws Exception {
         synchronized(this) { if(closed || !permitted()) throw new IllegalStateException("Adapter stopped"); engine.ensureAttached(); }
         String scope=list.account()==null ? "anonymous:"+UUID.randomUUID() : list.account().accountScope();
+        BooleanSupplier active=()->!isClosed() && permitted() && accountActive.getAsBoolean();
+        var identities=savedTracks==null?null:savedStore.saveAll(list.platform(),list.items(),active).iterator();
         LazyPlaylistSession next=new LazyPlaylistSession(profile,adapter,transport,queue,list.items(),scope,
-                ()->!isClosed() && permitted() && accountActive.getAsBoolean(),
+                active,
                 new LazyPlaylistSession.Resolver() {
                     public Object revision() { return settings.get().qualityKey(); }
                     public io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.library.Catalog.Item item,String identity,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
@@ -177,10 +179,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
                 },
                 item -> list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE
                         ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(list.account()).load(Long.parseLong(item.target()),request) : null,
-                savedTracks,item->{
-                    try {return savedStore.save(new io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target(list.platform(),item.target()),item);}
-                    catch(IOException failure) {throw new java.io.UncheckedIOException(failure);}
-                });
+                savedTracks,item->identities.next());
         try {
             next.play();
             synchronized(this) { if(closed || !accountActive.getAsBoolean()) throw new SecurityException("Account retired"); if(playlist!=null) playlist.close(); playlist=next; playlistPlatform=MediaLease.Platform.valueOf(list.platform().name()); }

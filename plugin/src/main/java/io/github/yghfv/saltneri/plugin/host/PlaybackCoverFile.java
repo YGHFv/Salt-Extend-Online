@@ -32,14 +32,27 @@ public final class PlaybackCoverFile implements AutoCloseable {
         if (!id.matches("[a-f0-9]{64}")) throw new IOException("Invalid saved artwork ID");
         Files.createDirectories(root);
         if (!root.toRealPath().equals(root)) throw new IOException("Saved artwork directory changed");
-        PlaybackCoverFile cover = new PlaybackCoverFile(root, root.resolve(id + ".flac"));
-        cover.persistent = true; cover.materialized = true;
-        if (Files.exists(cover.file, LinkOption.NOFOLLOW_LINKS)) {
-            if (!Files.isRegularFile(cover.file, LinkOption.NOFOLLOW_LINKS) || !cover.file.toRealPath().equals(cover.file))
+        Path file=root.resolve(id+".flac");
+        if (Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().equals(file))
                 throw new IOException("Invalid saved artwork path");
-        } else cover.replace(null);
+        }
+        return reservePersistent(root,id);
+    }
+    /** Store has validated the root; defer per-file filesystem checks until artwork/stream access. */
+    static PlaybackCoverFile reservePersistent(Path root,String id) throws IOException {
+        if(!id.matches("[a-f0-9]{64}")) throw new IOException("Invalid saved artwork ID");
+        PlaybackCoverFile cover=new PlaybackCoverFile(root,root.resolve(id+".flac"));
+        cover.persistent=true; cover.materialized=true;
         PlaybackCoverFile existing = reserved.putIfAbsent(cover.path(), cover);
         return existing == null ? cover : existing;
+    }
+    /** Materialize only an opened track, without erasing artwork retained from an earlier session. */
+    public synchronized void ensureFile() throws IOException {
+        if(closed) throw new IOException("Artwork retired");
+        if(materialized && (!directory.toRealPath().equals(directory) || Files.exists(file,LinkOption.NOFOLLOW_LINKS)
+                && (!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().equals(file)))) throw new IOException("Artwork retired");
+        if(!Files.exists(file,LinkOption.NOFOLLOW_LINKS)) replace(null);
     }
     private static byte[] picture(byte[] png) throws IOException {
         if (png == null || png.length < 24 || png.length > MAX_PNG_BYTES
@@ -88,7 +101,9 @@ public final class PlaybackCoverFile implements AutoCloseable {
         if(reservation!=null) synchronized(reservation) {
             if(!reservation.closed && !reservation.materialized) return true;
             if(!reservation.closed && reservation.persistent) try {
-                return Files.isRegularFile(reservation.file,LinkOption.NOFOLLOW_LINKS) && reservation.file.toRealPath().equals(reservation.file);
+                return reservation.directory.toRealPath().equals(reservation.directory)
+                        && (!Files.exists(reservation.file,LinkOption.NOFOLLOW_LINKS)
+                        || Files.isRegularFile(reservation.file,LinkOption.NOFOLLOW_LINKS) && reservation.file.toRealPath().equals(reservation.file));
             } catch(IOException ignored) { return false; }
         }
         try {

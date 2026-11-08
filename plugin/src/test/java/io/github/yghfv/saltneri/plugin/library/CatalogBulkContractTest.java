@@ -13,7 +13,7 @@ import static io.github.yghfv.saltneri.plugin.library.Catalog.*;
 
 public final class CatalogBulkContractTest {
     private static int checks;
-    private static void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Bulk catalog "+checks); }
+    private static synchronized void check(boolean ok) { checks++; if(!ok) throw new AssertionError("Bulk catalog "+checks); }
     private static String song(int id) { return "{\"id\":"+id+",\"name\":\"Song "+id+"\",\"fee\":0,\"dt\":1000,\"ar\":[{\"name\":\"Artist\"}],\"al\":{\"picUrl\":\"https://p1.music.126.net/fixture.jpg\"}}"; }
     private static void await(BooleanSupplier done) throws Exception {
         long until=System.nanoTime()+TimeUnit.SECONDS.toNanos(4);
@@ -24,7 +24,8 @@ public final class CatalogBulkContractTest {
         Clock clock=CatalogContractTest.CLOCK;
         for(boolean loggedIn:List.of(false,true)) {
             var account=loggedIn?CatalogContractTest.account(AccountPlatform.NETEASE):null;
-            var verify=new CatalogContractTest.Fixture(); List<Integer> batches=new ArrayList<>(); var details=new AtomicInteger();
+            var verify=new CatalogContractTest.Fixture(); List<Integer> batches=new CopyOnWriteArrayList<>(); var details=new AtomicInteger();
+            var concurrent=new CountDownLatch(3);
             try(RequestScope request=new RequestScope(()->true)) {
                 var client=new CatalogClient(account,clock,(uri,form)->{
                     if(uri.getPath().contains("account")) return verify.open(uri,form);
@@ -37,6 +38,8 @@ public final class CatalogBulkContractTest {
                     } else if(uri.getPath().equals("/api/song/detail")) {
                         String decoded=URLDecoder.decode(uri.getRawQuery().substring(4),StandardCharsets.UTF_8);
                         var ids=BoundedJson.array(BoundedJson.parse(decoded.getBytes(StandardCharsets.UTF_8))); batches.add(ids.size()); check(ids.size()<=100);
+                        concurrent.countDown();
+                        try {check(concurrent.await(3,TimeUnit.SECONDS));} catch(InterruptedException e) {Thread.currentThread().interrupt();throw new java.io.IOException(e);}
                         var tracks=new ArrayList<String>(); for(Object id:ids) tracks.add(song((int)BoundedJson.integer(id)));
                         json="{\"code\":200,\"songs\":["+String.join(",",tracks)+"]}";
                     } else throw new AssertionError("Unexpected request");
@@ -45,7 +48,7 @@ public final class CatalogBulkContractTest {
                 var result=client.loadAll(new Query(AccountPlatform.NETEASE,View.FOLDER,10,1),request);
                 check(result.items().size()==315 && result.totalCount()==315);
                 for(int i=0;i<315;i++) check(result.items().get(i).target().equals(""+(i+1)));
-                check(details.get()==1 && batches.equals(List.of(100,100,95)));
+                check(details.get()==1 && batches.stream().sorted().toList().equals(List.of(95,100,100)));
                 check(verify.requests.size()==(loggedIn?1:0));
             } finally { if(account!=null) account.retire(); }
         }
@@ -76,6 +79,38 @@ public final class CatalogBulkContractTest {
             hold.countDown(); await(()->library.snapshot().get("loadingAll").equals(false));
             check(library.takePlaylist().items().size()==2 && library.takePlaylist()==null);
         } finally { hold.countDown(); }
-        System.out.println("PASS: "+checks+" bulk 315-song batching/order/single account verification and visible-list preservation checks; fake HTTP, no audio");
+        parallelWaves();
+        System.out.println("PASS: "+checks+" bulk parallel batching/order/cancellation/single account verification and visible-list preservation checks; fake HTTP, no audio");
+    }
+    private static void parallelWaves() throws Exception {
+        for(int failure:List.of(0,1,2)) {
+            var active=new AtomicBoolean(true);var inflight=new AtomicInteger();var maximum=new AtomicInteger();var calls=new AtomicInteger();
+            var firstWave=new CountDownLatch(3);
+            try(var request=new RequestScope(active::get)) {
+                var client=new CatalogClient(null,Clock.systemUTC(),(uri,form)->{
+                    if(uri.getPath().equals("/api/v6/playlist/detail")) {
+                        var ids=new ArrayList<String>();for(int i=1;i<=715;i++)ids.add("{\"id\":"+i+"}");
+                        return new CatalogContractTest.Response(uri,"{\"code\":200,\"playlist\":{\"id\":10,\"name\":\"Fixture\",\"trackIds\":["+String.join(",",ids)+"]}}",List.of());
+                    }
+                    check(uri.getPath().equals("/api/song/detail"));
+                    int call=calls.incrementAndGet();maximum.accumulateAndGet(inflight.incrementAndGet(),Math::max);
+                    try {
+                        if(call<=3) {firstWave.countDown();check(firstWave.await(3,TimeUnit.SECONDS));}
+                        if(failure==2 && call==1) {active.set(false);request.check();}
+                        String decoded=URLDecoder.decode(uri.getRawQuery().substring(4),StandardCharsets.UTF_8);
+                        var ids=BoundedJson.array(BoundedJson.parse(decoded.getBytes(StandardCharsets.UTF_8)));var songs=new ArrayList<String>();
+                        for(Object id:ids)songs.add(song((int)BoundedJson.integer(id)));
+                        if(failure==1 && call==1)songs.set(0,song(9999));
+                        return new CatalogContractTest.Response(uri,"{\"code\":200,\"songs\":["+String.join(",",songs)+"]}",List.of());
+                    } catch(InterruptedException e) {Thread.currentThread().interrupt();throw new java.io.IOException(e);}
+                    finally {inflight.decrementAndGet();}
+                });
+                try {
+                    var result=client.loadAll(new Query(AccountPlatform.NETEASE,View.FOLDER,10,1),request);
+                    check(failure==0 && result.items().size()==715 && calls.get()==8 && maximum.get()==3);
+                    for(int i=0;i<715;i++)check(result.items().get(i).target().equals(""+(i+1)));
+                } catch(java.io.IOException | CancellationException expected) {check(failure!=0 && calls.get()<=3);}
+            }
+        }
     }
 }

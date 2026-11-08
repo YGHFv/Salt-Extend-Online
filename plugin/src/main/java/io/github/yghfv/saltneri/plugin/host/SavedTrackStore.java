@@ -17,6 +17,7 @@ public final class SavedTrackStore implements AutoCloseable {
     private final Path root;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private boolean closed;
+    private record Record(String id,Target target,String title,String artist,long duration) { }
     public SavedTrackStore(Path directory) throws IOException {
         Files.createDirectories(directory);
         root = directory.toRealPath();
@@ -33,6 +34,35 @@ public final class SavedTrackStore implements AutoCloseable {
                     if(!file.getFileName().toString().equals(id+".track") || duration<0 || duration>86400000 || in.read()!=-1) continue;
                     entries.put(id,new Entry(id,target,title,artist,duration,PlaybackCoverFile.persistent(root,id)));
                 } catch(IOException | IllegalArgumentException ignored) { /* Isolate a damaged entry; retain other playlists. */ }
+            }
+        }
+        // Immutable, atomic batches avoid thousands of small file writes before the first song.
+        try(var files=Files.newDirectoryStream(root,"*.tracks")) {
+            int filesSeen=0;
+            for(Path file:files) {
+                if(++filesSeen>10000) throw new IOException("Saved batch limit exceeded");
+                if(!file.getFileName().toString().matches("[a-f0-9-]{36}\\.tracks") || !Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)
+                        || !file.toRealPath().equals(file) || Files.size(file)>(32768L+12)*10000+8) continue;
+                var batch=new LinkedHashMap<String,Record>();
+                try(var in=new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
+                    if(in.readInt()!=0x53454f32) continue;
+                    int count=in.readInt(); if(count<1 || count>10000) throw new IOException("Saved record limit exceeded");
+                    for(int i=0;i<count;i++) {
+                        int length=in.readInt(); if(length<1 || length>32768) throw new IOException("Invalid saved record length");
+                        byte[] bytes=in.readNBytes(length); if(bytes.length!=length) throw new EOFException();
+                        var crc=new java.util.zip.CRC32();crc.update(bytes);
+                        if(in.readLong()!=crc.getValue()) throw new IOException("Invalid saved record checksum");
+                        try(var record=new DataInputStream(new ByteArrayInputStream(bytes))) {
+                            Target target=canonical(new Target(AccountPlatform.valueOf(record.readUTF()),record.readUTF()));
+                            var value=new Record(id(target),target,text(record.readUTF()),text(record.readUTF()),record.readLong());
+                            if(value.duration()<0 || value.duration()>86400000 || record.read()!=-1 || batch.put(value.id(),value)!=null)
+                                throw new IOException("Invalid saved record");
+                        }
+                    }
+                    if(in.read()!=-1 || entries.size()+batch.keySet().stream().filter(id->!entries.containsKey(id)).count()>10000)
+                        throw new IOException("Invalid saved batch");
+                } catch(IOException | IllegalArgumentException ignored) { continue; }
+                for(var value:batch.values()) if(!entries.containsKey(value.id())) entries.put(value.id(),entry(value));
             }
         }
     }
@@ -60,6 +90,54 @@ public final class SavedTrackStore implements AutoCloseable {
             Files.move(next,file,StandardCopyOption.ATOMIC_MOVE);
             Entry entry=new Entry(id,target,title,artist,duration,cover); entries.put(id,entry); return entry;
         } finally { Files.deleteIfExists(next); }
+    }
+    /** Publish durable identities as one transaction, before a native queue can reference them. */
+    public synchronized List<Entry> saveAll(AccountPlatform platform,List<Catalog.Item> rows,java.util.function.BooleanSupplier active) throws IOException {
+        if(closed) throw new IOException("Saved tracks closed");
+        if(rows.isEmpty() || rows.size()>10000) throw new IllegalArgumentException("Invalid playlist size");
+        var ids=new ArrayList<String>(rows.size());var pending=new LinkedHashMap<String,Record>();
+        for(var row:rows) {
+            check(active);
+            if(row.kind()!=Catalog.Kind.TRACK || !row.enabled()) throw new IllegalArgumentException("Unplayable row");
+            Target target=canonical(new Target(platform,row.target()));String id=id(target);ids.add(id);
+            if(!entries.containsKey(id) && !pending.containsKey(id)) pending.put(id,new Record(id,target,text(row.title()),text(row.subtitle()),Math.max(0,Math.min(86400000,row.count()))));
+        }
+        if(entries.size()+pending.size()>10000) throw new IOException("Saved track limit reached");
+        if(!pending.isEmpty()) {
+            if(!root.toRealPath().equals(root)) throw new IOException("Saved directory changed");
+            Path next=root.resolve(UUID.randomUUID()+".tmp"),file=root.resolve(UUID.randomUUID()+".tracks");
+            var added=new LinkedHashMap<String,Entry>();
+            boolean committed=false;
+            try {
+                try(var out=new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(next,StandardOpenOption.CREATE_NEW)))) {
+                    out.writeInt(0x53454f32);out.writeInt(pending.size());
+                    for(var value:pending.values()) {
+                        check(active);
+                        var buffer=new ByteArrayOutputStream();
+                        try(var record=new DataOutputStream(buffer)) {
+                            record.writeUTF(value.target().platform().name());record.writeUTF(value.target().id());
+                            record.writeUTF(value.title());record.writeUTF(value.artist());record.writeLong(value.duration());
+                        }
+                        byte[] bytes=buffer.toByteArray();if(bytes.length>32768) throw new IOException("Saved metadata too large");
+                        var crc=new java.util.zip.CRC32();crc.update(bytes);
+                        out.writeInt(bytes.length);out.write(bytes);out.writeLong(crc.getValue());
+                        added.put(value.id(),entry(value));
+                    }
+                }
+                check(active);Files.move(next,file,StandardCopyOption.ATOMIC_MOVE);
+                entries.putAll(added);committed=true;
+            } finally {
+                if(!committed) added.values().forEach(e->e.cover().close());
+                Files.deleteIfExists(next);
+            }
+        }
+        check(active);return ids.stream().map(entries::get).toList();
+    }
+    private Entry entry(Record value) throws IOException {
+        return new Entry(value.id(),value.target(),value.title(),value.artist(),value.duration(),PlaybackCoverFile.reservePersistent(root,value.id()));
+    }
+    private static void check(java.util.function.BooleanSupplier active) {
+        if(!active.getAsBoolean() || Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException("Playlist retired");
     }
     private static String text(String value) {
         if(value==null || value.length()>4096 || value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException("Invalid saved metadata");

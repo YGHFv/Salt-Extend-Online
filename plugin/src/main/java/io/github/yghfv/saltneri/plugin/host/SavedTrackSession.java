@@ -65,7 +65,10 @@ public final class SavedTrackSession implements AutoCloseable {
     }
     private URI publish(Binding binding,Audio audio,Object revision) {
         URI uri=transport.register(audio.lease());
-        if(audio.metadata().coverPng()!=null) try {binding.entry.cover().replace(audio.metadata().coverPng());} catch(java.io.IOException ignored) { }
+        try {
+            if(audio.metadata().coverPng()!=null) binding.entry.cover().replace(audio.metadata().coverPng());
+            else binding.entry.cover().ensureFile();
+        } catch(java.io.IOException ignored) { }
         cache.put(binding,new Cached(uri,audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt(),revision));
         while(cache.size()>8) retire(cache.remove(cache.keySet().stream().filter(b->b!=opened).findFirst().orElseThrow()));
         return uri;

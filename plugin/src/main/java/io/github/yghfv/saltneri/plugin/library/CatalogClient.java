@@ -164,23 +164,17 @@ public final class CatalogClient {
             for (int i = 0; i < ids.size(); i++) { long song = id(object(ids.get(i)).get("id")); if (!all.add(song)) throw invalid(); if (full || i >= offset && i < offset + 20) selected.add(song); }
             List<Item> items = new ArrayList<>();
             if (!selected.isEmpty()) {
-                Map<Long, Map<String, Object>> songs = new HashMap<>(); Set<Long> seen = new HashSet<>();
+                Map<Long, Map<String, Object>> songs = new HashMap<>(); Set<Long> seen = new HashSet<>(),selectedIds=new HashSet<>(selected);
                 // First-page playlist responses can already contain the same song metadata. Fetch only gaps.
                 for (Object row : bounded(arrayOrEmpty(list.get("tracks")), 10000)) {
                     var song = object(row); long songId = id(song.get("id"));
                     if (!all.contains(songId) || !seen.add(songId)) throw invalid();
-                    if (selected.contains(songId) && song.get("name") instanceof String && song.get("fee") != null
+                    if (selectedIds.contains(songId) && song.get("name") instanceof String && song.get("fee") != null
                             && alias(song,"ar","artists") instanceof List<?>
                             && alias(song,"dt","duration") != null && neteaseSongCover(song)!=null) songs.put(songId,song);
                 }
                 List<Long> missing = selected.stream().filter(songId -> !songs.containsKey(songId)).toList();
-                for(int from=0;from<missing.size();from+=100) {
-                    request.check(); List<Long> batch=missing.subList(from,Math.min(from+100,missing.size()));
-                    String joined = batch.stream().map(Object::toString).collect(java.util.stream.Collectors.joining(",", "[", "]"));
-                    var details = success(http.json(URI.create("https://music.163.com/api/song/detail?ids=" + encode(joined)), null, request), 200, http.stage());
-                    List<Object> rows = array(details.get("songs")); if (rows.size() > batch.size()) throw invalid();
-                    for (Object row : rows) { var song = object(row); long songId = id(song.get("id")); if (!batch.contains(songId) || songs.put(songId, song) != null) throw invalid(); }
-                }
+                songs.putAll(neteaseDetails(missing,http,request));
                 for (long songId : selected) {
                     var song = songs.get(songId);
                     if (song == null) { items.add(new Item(Kind.TRACK, Long.toString(songId), "Unavailable #" + songId, "Missing/deleted track", 0, false)); continue; }
@@ -188,6 +182,40 @@ public final class CatalogClient {
                 }
             }
             return new CollectionContents(display(list.get("name")),items,ids.size());
+    }
+    private Map<Long,Map<String,Object>> neteaseDetails(List<Long> missing,CatalogHttp http,RequestScope request) throws IOException {
+        if(missing.size()<=100) return missing.isEmpty()?Map.of():neteaseBatch(missing,http,request);
+        var worker=java.util.concurrent.Executors.newFixedThreadPool(3,r->{var t=new Thread(r,"salt-netease-catalog-batch");t.setDaemon(true);return t;});
+        var pending=new ArrayList<java.util.concurrent.Future<Map<Long,Map<String,Object>>>>();
+        var result=new HashMap<Long,Map<String,Object>>();
+        try {
+            for(int from=0;from<missing.size();from+=300) {
+                request.check();pending.clear();
+                for(int offset=from;offset<Math.min(from+300,missing.size());offset+=100) {
+                    var batch=List.copyOf(missing.subList(offset,Math.min(offset+100,missing.size())));
+                    pending.add(worker.submit(()->{try(var child=http.fork(request)) {return neteaseBatch(batch,child,request);}}));
+                }
+                for(var future:pending) {
+                    try {result.putAll(future.get());}
+                    catch(InterruptedException error) {Thread.currentThread().interrupt();request.check();throw new IOException("Catalog interrupted");}
+                    catch(java.util.concurrent.ExecutionException error) {
+                        if(error.getCause() instanceof IOException io) throw io;
+                        if(error.getCause() instanceof RuntimeException runtime) throw runtime;
+                        throw new IOException("Catalog worker failed");
+                    }
+                }
+            }
+            request.check();return result;
+        } finally {pending.forEach(f->f.cancel(true));worker.shutdownNow();}
+    }
+    private Map<Long,Map<String,Object>> neteaseBatch(List<Long> batch,CatalogHttp http,RequestScope request) throws IOException {
+        request.check();
+        String joined=batch.stream().map(Object::toString).collect(java.util.stream.Collectors.joining(",","[","]"));
+        var details=success(http.json(URI.create("https://music.163.com/api/song/detail?ids="+encode(joined)),null,request),200,http.stage());
+        List<Object> rows=array(details.get("songs"));if(rows.size()>batch.size()) throw invalid();
+        var songs=new HashMap<Long,Map<String,Object>>();
+        for(Object row:rows) {var song=object(row);long songId=id(song.get("id"));if(!batch.contains(songId) || songs.put(songId,song)!=null) throw invalid();}
+        request.check();return songs;
     }
     private Item neteaseSong(Map<String, Object> song) throws IOException {
         long fee = number(song.get("fee"), -1), duration = number(alias(song, "dt", "duration"), 0);
