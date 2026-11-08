@@ -17,6 +17,7 @@ import java.util.function.BooleanSupplier;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import kotlin.jvm.functions.Function1;
+import kotlin.jvm.functions.Function0;
 import kotlin.jvm.functions.Function3;
 
 /** Capability-checked host-only bindings. No second Compose runtime or invented host classes. */
@@ -33,6 +34,7 @@ public final class SaltNativeUi implements AutoCloseable {
     public synchronized Object pageMemory(AccountPlatform platform, java.util.function.Supplier<Object> create) { return pageMemory.computeIfAbsent(platform,p -> create.get()); }
     private final CoverLoader covers;
     private final CoverLoader avatars;
+    private final SaltToolbarBindings toolbar;
     private final BooleanSupplier permitted;
     private final List<HookHandle> handles = new ArrayList<>();
     private final Method routeGetter, pluginIdGetter, nativeRow, text, canvas;
@@ -65,6 +67,10 @@ public final class SaltNativeUi implements AutoCloseable {
         this.desk = desk; this.permitted = permitted;
         if (!permitted.getAsBoolean()) throw new SecurityException("Native UI permission required");
         verify(host);
+        SaltToolbarBindings optionalToolbar;
+        try { optionalToolbar = new SaltToolbarBindings(host); }
+        catch (ReflectiveOperationException | LinkageError unsupported) { optionalToolbar = null; }
+        toolbar = optionalToolbar;
         Class<?> item = type(host, ROUTE_ITEM), modRoute = type(host, MOD_ROUTE);
         type(host, SIDEBAR).getMethod("\u037f", item, Composer.class, int.class);
         routeGetter = item.getMethod("\u0528"); pluginIdGetter = modRoute.getMethod("getPluginId");
@@ -154,6 +160,12 @@ public final class SaltNativeUi implements AutoCloseable {
         return true;
     }
     public NativeDesk desk() { return desk; }
+    public boolean nativeToolbarAvailable() { return toolbar != null; }
+    public void toolbarButton(String label, Modifier modifier, Function0<kotlin.Unit> click,
+                              Object content, Composer composer) {
+        toolbar.button(label, modifier, click, content, composer);
+    }
+    public void toolbarIcon(boolean sorting, Composer composer) { toolbar.icon(sorting, composer); }
     public byte[] cover(String token) {
         if (!available()) return null;
         return covers.requestSource(token, scope -> desk.resolveCover(token, scope), scope -> desk.fallbackCover(token, scope),

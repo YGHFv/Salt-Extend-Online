@@ -50,6 +50,25 @@ public final class HeaderSearchRenderTest {
         var key=SemanticsActions.INSTANCE.getOnClick(); var node=find(scene,label,key); check(node!=null);
         check(Boolean.TRUE.equals(node.getConfig().get(key).getAction().invoke())); render(scene);
     }
+    private static void compactHeader(ImageComposeScene scene, int width, boolean searching) {
+        var click=SemanticsActions.INSTANCE.getOnClick();
+        var search=find(scene,"\u641c\u7d22B\u7ad9",click); check(search!=null);
+        var searchBounds=search.getBoundsInRoot();
+        check(Math.abs(searchBounds.getWidth()-36)<1 && Math.abs(searchBounds.getHeight()-36)<1);
+        check(find(scene,"\u641c\u7d22B\u7ad9\u5b98\u65b9\u56fe\u6807",null)!=null);
+        if(searching && width<640) {
+            check(find(scene,"\u53d1\u73b0",click)==null && find(scene,"\u6536\u85cf",click)==null && find(scene,"\u8ba2\u9605",click)==null);
+            return;
+        }
+        float right=0;
+        for(String label:List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605")) {
+            var node=find(scene,label,click); check(node!=null); var bounds=node.getBoundsInRoot();
+            check(Math.abs(bounds.getWidth()-36)<1 && Math.abs(bounds.getHeight()-36)<1);
+            check(bounds.getLeft()>=right && bounds.getRight()<searchBounds.getLeft() && Math.abs(bounds.getTop()-searchBounds.getTop())<1);
+            check(!node.getConfig().contains(SemanticsProperties.INSTANCE.getText())); right=bounds.getRight();
+        }
+        check(searchBounds.getTop()<56 && searchBounds.getRight()<=width);
+    }
     private static void accountIcons(ImageComposeScene scene) throws Exception {
         menuIcons(scene,List.of("\u5207\u6362\u8d26\u6237","\u9000\u51fa\u767b\u5f55"));
     }
@@ -137,6 +156,7 @@ public final class HeaderSearchRenderTest {
                                 });
                         try {
                             render(scene);
+                            check(ui.nativeToolbarAvailable()); compactHeader(scene,width,false);
                             check(find(scene,"\u626b\u7801\u767b\u5f55",null)==null && find(scene,"\u9000\u51fa\u767b\u5f55",null)==null);
                             var avatar=find(scene,"\u8d26\u53f7\u83dc\u5355",null); var search=find(scene,"\u641c\u7d22B\u7ad9",null);
                             check(avatar!=null && search!=null && search.getBoundsInRoot().getRight() < avatar.getBoundsInRoot().getRight());
@@ -155,6 +175,7 @@ public final class HeaderSearchRenderTest {
                             if(find(scene,null,setText)==null) click(scene,"\u641c\u7d22B\u7ad9");
                             click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==null);
                             click(scene,"\u641c\u7d22B\u7ad9");
+                            compactHeader(scene,width,true);
                             var input=find(scene,null,setText); check(input!=null);
                             var icon=find(scene,"\u641c\u7d22B\u7ad9",null).getBoundsInRoot();
                             check(input.getBoundsInRoot().getRight()<=icon.getLeft() && Math.abs(input.getBoundsInRoot().getTop()-icon.getTop())<15);
@@ -169,6 +190,7 @@ public final class HeaderSearchRenderTest {
                             check(find(scene,"Search hit",null)!=null);
                             var completedQuery=queried.get();
                             click(scene,"\u641c\u7d22B\u7ad9"); check(find(scene,null,setText)==null && queried.get()==completedQuery);
+                            compactHeader(scene,width,false);
                             int before=queues.get(); var hit=find(scene,"Search hit",null).getBoundsInRoot();
                             NativePageRenderTest.tap(scene,(hit.getLeft()+hit.getRight())/2,(hit.getTop()+hit.getBottom())/2,1000); Thread.sleep(70);
                             NativePageRenderTest.tap(scene,(hit.getLeft()+hit.getRight())/2,(hit.getTop()+hit.getBottom())/2,1110);

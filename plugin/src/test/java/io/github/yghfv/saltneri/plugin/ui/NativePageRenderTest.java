@@ -281,6 +281,10 @@ public final class NativePageRenderTest {
                 if (expected) {
                     scrollTo(scene, rows + 4);
                     root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
+                    for(String label:List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605")) {
+                        var button=HeaderSearchRenderTest.find(scene,label,androidx.compose.ui.semantics.SemanticsActions.INSTANCE.getOnClick());
+                        check(button!=null && button.getBoundsInRoot().getTop()>=0 && button.getBoundsInRoot().getBottom()<=56);
+                    }
                 }
                 check((findText(root,"\u4e0a\u4e00\u9875") != null) == expected);
                 check((findText(root,"\u4e0b\u4e00\u9875") != null) == expected);

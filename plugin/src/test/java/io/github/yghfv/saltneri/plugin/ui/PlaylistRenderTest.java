@@ -47,18 +47,21 @@ public final class PlaylistRenderTest {
         var topLabels=List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605");
         var bottomLabels=List.of("\u70ed\u95e8\u89c6\u9891","\u97f3\u4e50\u70ed\u95e8\u699c","\u539f\u521b\u699c");
         check(find(scene,"\u521b\u5efa\u7684\u6536\u85cf",null)==null && find(scene,"\u6536\u85cf / \u8ba2\u9605",null)==null);
-        float top=-1, bottom=-1, right=-1, buttonWidth=-1;
+        float top=-1, bottom=-1, right=-1;
         for(int i=0;i<3;i++) {
             var upper=find(scene,topLabels.get(i),SemanticsActions.INSTANCE.getOnClick());
             var lower=find(scene,bottomLabels.get(i),SemanticsActions.INSTANCE.getOnClick());
             check(upper!=null && lower!=null);
             var a=upper.getBoundsInRoot(); var b=lower.getBoundsInRoot();
-            if(i==0) { top=a.getTop(); bottom=b.getTop(); buttonWidth=a.getWidth(); }
+            if(i==0) { top=a.getTop(); bottom=b.getTop(); }
             check(Math.abs(a.getTop()-top)<=1 && Math.abs(b.getTop()-bottom)<=1);
             check(a.getLeft()>=right && a.getRight()<=width && a.getBottom()<b.getTop());
-            check(Math.abs(a.getLeft()-b.getLeft())<=1 && Math.abs(a.getWidth()-b.getWidth())<=1);
-            check(a.getWidth()>60*density && Math.abs(a.getWidth()-buttonWidth)<=1);
-            centeredLabel(scene,topLabels.get(i),upper);
+            check(Math.abs(a.getWidth()-36*density)<=1 && Math.abs(a.getHeight()-36*density)<=1);
+            check(a.getTop()<56*density && a.getLeft()>width/3f && !hasText(upper));
+            var icon=unmerged(scene,topLabels.get(i)+"\u56fe\u6807",null); check(icon!=null);
+            var glyph=icon.getBoundsInRoot();
+            check(Math.abs(a.getLeft()+a.getRight()-glyph.getLeft()-glyph.getRight())<=2);
+            check(Math.abs(a.getTop()+a.getBottom()-glyph.getTop()-glyph.getBottom())<=2);
             centeredLabel(scene,bottomLabels.get(i),lower);
             check(Boolean.valueOf(i==0).equals(upper.getConfig().get(SemanticsProperties.INSTANCE.getSelected())));
             check(Boolean.valueOf(i==0).equals(lower.getConfig().get(SemanticsProperties.INSTANCE.getSelected())));
@@ -75,7 +78,8 @@ public final class PlaylistRenderTest {
             for(String label:List.of("\u641c\u7d22\u5408\u96c6","\u5168\u90e8\u64ad\u653e","\u6392\u5e8f")) {
                 var node=find(scene,label,SemanticsActions.INSTANCE.getOnClick()); check(node!=null); var bounds=node.getBoundsInRoot();
                 check(!hasText(node));
-                check(Math.abs(bounds.getWidth()-40*density)<=1 && Math.abs(bounds.getHeight()-40*density)<=1);
+                check(Math.abs(bounds.getWidth()-36*density)<=1 && Math.abs(bounds.getHeight()-36*density)<=1);
+                if(!label.equals("\u5168\u90e8\u64ad\u653e")) check(unmerged(scene,label+"\u5b98\u65b9\u56fe\u6807",null)!=null);
                 if(top<0) top=bounds.getTop();
                 check(bounds.getLeft()>=right && bounds.getRight()<=pixels.getWidth() && Math.abs(bounds.getTop()-top)<=1);
                 right=bounds.getRight();
@@ -102,6 +106,7 @@ public final class PlaylistRenderTest {
             desk.playlistPlayer(submitted::set);
             ClassLoader host=PlaylistRenderTest.class.getClassLoader();
             try(var ui=new SaltNativeUi(host,new NativePageRenderTest.Hooks(),desk,()->true)) {
+                check(ui.nativeToolbarAvailable());
                 var singleton=Class.forName(SaltPageContentBinding.SINGLETON);
                 var cached=(Function3<Object,Composer,Integer,Object>)singleton.getMethod(SaltPageContentBinding.GETTER).invoke(singleton.getField("INSTANCE").get(null));
                 Object route=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID+"/native/BILIBILI");
