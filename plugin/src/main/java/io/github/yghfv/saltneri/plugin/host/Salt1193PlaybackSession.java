@@ -37,6 +37,9 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
     @FunctionalInterface public interface QueueSink {
         /** Call on the host's appropriate execution context, only after an explicit user action. */
         void addToPlay(Object mediaItem) throws ReflectiveOperationException;
+        default void insert(Object mediaItem, io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws ReflectiveOperationException {
+            throw new UnsupportedOperationException("Queue insertion unavailable");
+        }
         default void replace(java.util.List<Object> items) throws ReflectiveOperationException { throw new UnsupportedOperationException("Queue replacement unavailable"); }
         default int firstIndex(int size) throws ReflectiveOperationException { return 0; }
         default void replace(java.util.List<Object> items,int index) throws ReflectiveOperationException {
@@ -88,6 +91,7 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
     private final ScheduledExecutorService revocations;
     private final Map<String, PreparedTrack> tracks = new HashMap<>();
     private final java.util.LinkedHashMap<PreparedTrack,Boolean> cached = new java.util.LinkedHashMap<>(16,0.75f,true);
+    private PreparedTrack opened;
     private volatile boolean closed;
 
     public static Salt1193PlaybackSession open(ClassLoader loader, Salt1193Probe.Result profile,
@@ -218,6 +222,7 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         synchronized(track.resolveLock) {
             synchronized(this) {
                 requireTrack(track);
+                opened = track;
                 if(transport.isAvailable(track.localUri) && Objects.equals(track.qualityRevision,track.renewer.revision()) && transport.now().plusSeconds(10).isBefore(track.expiresAt)) {
                     cached.get(track); return track.localUri;
                 }
@@ -248,7 +253,11 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         requireActive(); if(track.retired || tracks.get(track.path)!=track) throw new java.util.concurrent.CancellationException("Queue item retired");
     }
     private void trimCache() {
-        while(cached.size()>8) { var oldest=cached.keySet().iterator().next(); cached.remove(oldest); releaseLease(oldest); }
+        while(cached.size()>8) {
+            // Inserting many tracks must not revoke the stream currently being decoded.
+            var oldest=cached.keySet().stream().filter(track -> track != opened).findFirst().orElseThrow();
+            cached.remove(oldest); releaseLease(oldest);
+        }
     }
     private void releaseLease(PreparedTrack track) {
         if(track.localUri!=null) { transport.revoke(track.localUri); track.localUri=null; if(track.cover!=null) track.cover.clear(); }
@@ -256,6 +265,7 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
 
     private synchronized void retire(PreparedTrack track) {
         if (tracks.remove(track.path, track)) {
+            if (opened == track) opened = null;
             track.retired=true; RequestScope pending=track.request; if(pending!=null) pending.close();
             cached.remove(track);
             if(track.lyrics!=null) track.lyrics.close();
@@ -300,6 +310,10 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
             Object instance = controller.getField("INSTANCE").get(null);
             submitAndPlay(instance, media, item, authorized);
           }
+          public void insert(Object item, io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws ReflectiveOperationException {
+            Class<?> media = Class.forName("com.xuncorp.pisces.PiscesMediaItem", false, loader);
+            submitNext(controller(), media, item, action, authorized);
+          }
         };
     }
 
@@ -329,6 +343,27 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
             // Internal host exceptions can include paths; do not publish causes to the plugin UI.
             throw new ReflectiveOperationException("Native queue submission failed");
         }
+    }
+
+    static void submitNext(Object controller, Class<?> media, Object item,
+                           io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action,
+                           BooleanSupplier authorized) throws ReflectiveOperationException {
+        if (!authorized.getAsBoolean()) throw new SecurityException("Queue permission revoked");
+        if (!media.isInstance(item)) throw new IllegalArgumentException("Not a native media item");
+        Class<?> position = Class.forName("com.xuncorp.spc.core.queue.PlaybackQueue$\u037f", false, media.getClassLoader());
+        String field = switch (action) {
+            case AFTER_CURRENT -> "\u037f";
+            case AFTER_LAST_ADDED -> "\u0528";
+            case AT_QUEUE_END -> "\u0529";
+            default -> throw new IllegalArgumentException("Insertion position required");
+        };
+        Object array = java.lang.reflect.Array.newInstance(media, 1);
+        java.lang.reflect.Array.set(array, 0, item);
+        try {
+            // Same command as Salt's track menu; never follow insertion with play/prepare.
+            controller.getClass().getMethod("addToPlayNext", position, array.getClass())
+                    .invoke(controller, position.getField(field).get(null), array);
+        } catch (InvocationTargetException failure) { throw new ReflectiveOperationException("Native queue insertion failed"); }
     }
 
     private static void requireProfile(Salt1193Probe.Result profile) {

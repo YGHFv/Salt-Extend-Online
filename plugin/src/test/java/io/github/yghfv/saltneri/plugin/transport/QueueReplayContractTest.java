@@ -84,12 +84,18 @@ public final class QueueReplayContractTest {
                 check(Arrays.equals(fields,profile.mediaFactory().read(track.mediaItem())) && queue.size()==1);
                 check(Files.size(cover)>42 && OnlineLyrics.load(fields[0],fields[5]).contains("Fixture"));
                 check(open(adapter,queue.getFirst()).equals(321) && renewals.get()==1);
+                Salt1193PlaybackSession.PreparedTrack lastInserted=null;
                 for(int i=0;i<9;i++) {
                     var next=audio(key,"account-A",clock,png);
-                    session.prepare(key,next.metadata(),next.lease(),null,r->audio(key,"account-A",clock,png));
+                    lastInserted=session.prepare(key,next.metadata(),next.lease(),null,r->audio(key,"account-A",clock,png));
                 }
+                check(Files.size(cover)>42 && server.isAvailable(opened.get()));
+                check(open(adapter,lastInserted.mediaItem()).equals(321));
+                var extra=audio(key,"account-A",clock,png);
+                session.prepare(key,extra.metadata(),extra.lease(),null,r->audio(key,"account-A",clock,png));
                 check(Files.isRegularFile(cover) && Files.size(cover)==42);
                 check(open(adapter,queue.getFirst()).equals(321) && renewals.get()==2 && Files.size(cover)>42);
+                check(open(adapter,lastInserted.mediaItem()).equals(321));
                 // Logical queue entries must not consume one live URL each or hit the former 64-lease limit.
                 for(int i=0;i<70;i++) { var next=audio(key,"account-A",clock,null); session.prepare(key,next.metadata(),next.lease(),null,r->audio(key,"account-A",clock,null)); }
                 check(open(adapter,queue.getFirst()).equals(321) && renewals.get()==3);

@@ -23,7 +23,13 @@ public final class OnlinePlaybackController implements AutoCloseable {
         public static Audio from(NeteaseClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
         @Override public String toString() { return "PreparedAudio[" + key.stableId() + ", URL redacted]"; }
     }
-    @FunctionalInterface public interface Player { void play(Audio audio, BooleanSupplier active) throws Exception; }
+    public enum QueueAction { PLAY, AFTER_CURRENT, AFTER_LAST_ADDED, AT_QUEUE_END }
+    @FunctionalInterface public interface Player {
+        void play(Audio audio, BooleanSupplier active) throws Exception;
+        default void insert(Audio audio, BooleanSupplier active, QueueAction action) throws Exception {
+            throw new UnsupportedOperationException("Queue insertion unavailable");
+        }
+    }
     private final Function<AccountPlatform, AccountCredentials> accounts;
     private final BooleanSupplier authorized, armed;
     private final Player player;
@@ -34,7 +40,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
     private String status = "No track prepared.";
     private boolean consumed;
     private boolean submissionFailed;
-    private record PlayIntent(String token, Runnable setup, long deadline) { }
+    private record PlayIntent(String token, Runnable setup, long deadline, QueueAction action) { }
     private PlayIntent intent;
     private final ScheduledExecutorService playbackWorker;
     public OnlinePlaybackController(Function<AccountPlatform, AccountCredentials> accounts, BooleanSupplier authorized, BooleanSupplier armed, Player player) {
@@ -113,8 +119,15 @@ public final class OnlinePlaybackController implements AutoCloseable {
                 "error", submissionFailed ? status : state.failed() ? state.status() : "");
     }
     public synchronized void playSelected(Target target, Runnable setup) {
+        submitSelected(target, setup, QueueAction.PLAY);
+    }
+    public synchronized void insertSelected(Target target, Runnable setup, QueueAction action) {
+        if (action == null || action == QueueAction.PLAY) throw new IllegalArgumentException("Insertion position required");
+        submitSelected(target, setup, action);
+    }
+    private void submitSelected(Target target, Runnable setup, QueueAction action) {
         prepare(target);
-        intent = new PlayIntent(token, java.util.Objects.requireNonNull(setup), System.nanoTime() + TimeUnit.SECONDS.toNanos(30));
+        intent = new PlayIntent(token, java.util.Objects.requireNonNull(setup), System.nanoTime() + TimeUnit.SECONDS.toNanos(30), action);
     }
     private void dispatchPlayIntent() {
         PlayIntent pending;
@@ -131,7 +144,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
             validateConfirmation(pending.token());
             if (!armed.getAsBoolean()) pending.setup().run();
             setupComplete = true;
-            play(pending.token());
+            submit(pending.token(), pending.action());
         } catch (Exception | LinkageError error) {
             synchronized (this) {
                 if (!setupComplete && token.equals(pending.token()) && !consumed) adapterFailed();
@@ -156,12 +169,19 @@ public final class OnlinePlaybackController implements AutoCloseable {
     }
     private void failPreparation(String detail) { submissionFailed = true; status = detail; resolver.invalidate(detail); }
     public synchronized void play(String capability) throws Exception {
+        submit(capability, QueueAction.PLAY);
+    }
+    private synchronized void submit(String capability, QueueAction action) throws Exception {
         Audio audio = validatedAudio(capability);
         if (!armed.getAsBoolean()) throw new IllegalStateException("Arm the adapter in Salt first");
         AccountCredentials playingAccount = selected; AccountPlatform playingPlatform = platform;
         consumed = true; status = "\u6b63\u5728\u5411 Salt \u63d0\u4ea4\u64ad\u653e\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5";
-        try { player.play(audio, () -> authorized.getAsBoolean() && (playingAccount == null || playingAccount.isActive()) && accounts.apply(playingPlatform) == playingAccount);
-            status = "\u5df2\u5411 Salt \u63d0\u4ea4\u64ad\u653e [SUBMITTED]\uff1b\u8bf7\u68c0\u67e5\u5e95\u90e8\u64ad\u653e\u5668\u548c\u58f0\u97f3\uff0c\u63d0\u4ea4\u4e0d\u4ee3\u8868\u5df2\u53d1\u58f0\u3002";
+        try {
+            BooleanSupplier active = () -> authorized.getAsBoolean() && (playingAccount == null || playingAccount.isActive()) && accounts.apply(playingPlatform) == playingAccount;
+            if (action == QueueAction.PLAY) player.play(audio, active); else player.insert(audio, active, action);
+            status = action == QueueAction.PLAY
+                    ? "\u5df2\u5411 Salt \u63d0\u4ea4\u64ad\u653e [SUBMITTED]\uff1b\u8bf7\u68c0\u67e5\u5e95\u90e8\u64ad\u653e\u5668\u548c\u58f0\u97f3\uff0c\u63d0\u4ea4\u4e0d\u4ee3\u8868\u5df2\u53d1\u58f0\u3002"
+                    : "\u5df2\u5411 Salt \u63d0\u4ea4\u63d2\u64ad [SUBMITTED]\uff0c\u4e0d\u6539\u53d8\u5f53\u524d\u64ad\u653e\u72b6\u6001\u3002";
         } catch (Exception | LinkageError failure) { submissionFailed = true; status = "\u64ad\u653e\u63d0\u4ea4\u5931\u8d25 [QUEUE_SUBMIT/" + failure.getClass().getSimpleName() + "]\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5\u3002"; throw failure; }
     }
     public synchronized void invalidate(String detail) { intent = null; token = ""; consumed = false; submissionFailed = false; resolver.invalidate(detail); status = detail; }

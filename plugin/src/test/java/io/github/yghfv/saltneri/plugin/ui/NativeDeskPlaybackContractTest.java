@@ -41,10 +41,19 @@ public final class NativeDeskPlaybackContractTest {
     public static void main(String[] args) throws Exception {
         AtomicBoolean allowed = new AtomicBoolean(true), armed = new AtomicBoolean(false), failArm = new AtomicBoolean(false), failQueue = new AtomicBoolean(false);
         AtomicInteger arms = new AtomicInteger(), queue = new AtomicInteger();
+        var insertions = new java.util.concurrent.CopyOnWriteArrayList<OnlinePlaybackController.QueueAction>();
         Clock clock = Clock.systemUTC(); AtomicReference<Runnable> duringArm = new AtomicReference<>(() -> {});
         AtomicReference<CountDownLatch> gate = new AtomicReference<>(); AtomicInteger resolves = new AtomicInteger();
         try (OnlinePlaybackController player = new OnlinePlaybackController(p -> null, allowed::get, armed::get,
-                (audio,active) -> { queue.incrementAndGet(); if (failQueue.get()) throw new java.io.IOException("COOKIE_SECRET https://example.invalid/URL_SECRET"); }, clock,
+                new OnlinePlaybackController.Player() {
+                    public void play(OnlinePlaybackController.Audio audio,BooleanSupplier active) throws Exception {
+                        queue.incrementAndGet(); if(failQueue.get()) throw new java.io.IOException("COOKIE_SECRET https://example.invalid/URL_SECRET");
+                    }
+                    public void insert(OnlinePlaybackController.Audio audio,BooleanSupplier active,OnlinePlaybackController.QueueAction action) throws Exception {
+                        check(active.getAsBoolean()); insertions.add(action);
+                        if(failQueue.get()) throw new java.io.IOException("COOKIE_SECRET");
+                    }
+                }, clock,
                 a -> (t,q,s,r) -> {
                     resolves.incrementAndGet(); CountDownLatch latch = gate.get(); if (latch != null) latch.await(); r.check();
                     Instant expires = clock.instant().plusSeconds(300);
@@ -111,6 +120,25 @@ public final class NativeDeskPlaybackContractTest {
             }
             duringArm.set(() -> player.invalidate("Changed during internal setup")); armed.set(false); desk.playRow(row);
             waitFor(armed::get); Thread.sleep(250); check(queue.get() == 5); duringArm.set(() -> {});
+            for(var position:List.of(OnlinePlaybackController.QueueAction.AFTER_CURRENT,OnlinePlaybackController.QueueAction.AFTER_LAST_ADDED,OnlinePlaybackController.QueueAction.AT_QUEUE_END)) {
+                int before=insertions.size(); desk.insertRow(row,position); waitFor(()->insertions.size()==before+1);
+                check(insertions.getLast()==position && queue.get()==5);
+                Thread.sleep(150); check(insertions.size()==before+1);
+            }
+            fails(()->desk.insertRow("stale",OnlinePlaybackController.QueueAction.AFTER_CURRENT));
+            failQueue.set(true); desk.insertRow(row,OnlinePlaybackController.QueueAction.AFTER_CURRENT);
+            waitFor(()->player.snapshot().get("status").toString().contains("QUEUE_SUBMIT"));
+            check(insertions.size()==4 && !player.snapshot().toString().contains("SECRET"));
+            Thread.sleep(150); check(insertions.size()==4); failQueue.set(false);
+            for(int mode=0;mode<3;mode++) {
+                CountDownLatch blocked=new CountDownLatch(1); gate.set(blocked); int before=resolves.get();
+                desk.insertRow(row,OnlinePlaybackController.QueueAction.AT_QUEUE_END); waitFor(()->resolves.get()>before);
+                if(mode==0) desk.leave();
+                if(mode==1) allowed.set(false);
+                if(mode==2) player.accountChanged(AccountPlatform.NETEASE);
+                gate.set(null); blocked.countDown(); Thread.sleep(200);
+                check(insertions.size()==4 && queue.get()==5); allowed.set(true);
+            }
         }
         System.out.println("PASS: " + checks + " explicit arm/confirmation/stale/revoked/setup/submission checks (recording queue)");
     }

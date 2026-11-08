@@ -69,6 +69,9 @@ public final class NativePageRenderTest {
         return node.getConfig().toString().contains(text) ? node : null;
     }
     static void tap(ImageComposeScene scene, float x, float y, long time) throws Exception {
+        tap(scene,x,y,time,0);
+    }
+    static void tap(ImageComposeScene scene, float x, float y, long time, int mouseButton) throws Exception {
         Class<?> buttons = Class.forName("androidx.compose.ui.input.pointer.PointerButtons"), modifiers = Class.forName("androidx.compose.ui.input.pointer.PointerKeyboardModifiers"),
                 button = Class.forName("androidx.compose.ui.input.pointer.PointerButton"), event = Class.forName("androidx.compose.ui.input.pointer.PointerEventType"),
                 pointer = Class.forName("androidx.compose.ui.input.pointer.PointerType");
@@ -76,10 +79,10 @@ public final class NativePageRenderTest {
         int mouse = (int)pointerCompanion.getClass().getMethod("getMouse-T8wyACA").invoke(pointerCompanion);
         Method send = ImageComposeScene.class.getMethod("sendPointerEvent-BGSDPeU", int.class,long.class,long.class,long.class,int.class,buttons,modifiers,Object.class,button);
         long position = androidx.compose.ui.geometry.OffsetKt.Offset(x,y);
-        Object keys = modifiers.getMethod("box-impl",int.class).invoke(null,0), left = button.getMethod("box-impl",int.class).invoke(null,0);
+        Object keys = modifiers.getMethod("box-impl",int.class).invoke(null,0), left = button.getMethod("box-impl",int.class).invoke(null,mouseButton);
         for (int i = 0; i < 2; i++) {
             int type = (int)eventCompanion.getClass().getMethod(i == 0 ? "getPress-7fucELk" : "getRelease-7fucELk").invoke(eventCompanion);
-            send.invoke(scene,type,position,0L,time + i * 10,mouse,buttons.getMethod("box-impl",int.class).invoke(null,i == 0 ? 1 : 0),keys,null,left);
+            send.invoke(scene,type,position,0L,time + i * 10,mouse,buttons.getMethod("box-impl",int.class).invoke(null,i == 0 ? 1 << mouseButton : 0),keys,null,left);
         }
     }
     @SuppressWarnings("unchecked")
@@ -281,7 +284,7 @@ public final class NativePageRenderTest {
                 int rows = ((List<?>)library.snapshot().get("items")).size();
                 if (rows == 20) check(findText(root,"\u4e0b\u4e00\u9875") == null);
                 if (expected) {
-                    scrollTo(scene, rows + 4);
+                    scrollTo(scene, rows + 3); // Refresh now belongs to the fixed header, not this list.
                     root = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                     for(String label:List.of("\u53d1\u73b0","\u6536\u85cf","\u8ba2\u9605")) {
                         var button=HeaderSearchRenderTest.find(scene,label,androidx.compose.ui.semantics.SemanticsActions.INSTANCE.getOnClick());
@@ -304,7 +307,7 @@ public final class NativePageRenderTest {
                     while ((!library.snapshot().get("page").equals(first ? 2 : 1) || !Boolean.TRUE.equals(library.snapshot().get("loaded"))) && System.nanoTime()<until) Thread.sleep(10);
                     check(library.snapshot().get("page").equals(first ? 2 : 1) && Boolean.TRUE.equals(library.snapshot().get("loaded")));
                     Thread.sleep(450);
-                    scrollTo(scene, ((List<?>)library.snapshot().get("items")).size() + 4);
+                    scrollTo(scene, ((List<?>)library.snapshot().get("items")).size() + 3);
                     try (Image ignored = scene.render(System.nanoTime())) {
                         var after = scene.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode();
                         check(findText(after,"\u4e0a\u4e00\u9875") != null && findText(after,"\u4e0b\u4e00\u9875") != null);

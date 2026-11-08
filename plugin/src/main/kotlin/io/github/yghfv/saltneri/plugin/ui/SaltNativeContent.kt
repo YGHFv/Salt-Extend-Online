@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.runtime.InternalComposeApi::class, com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi::class)
+@file:OptIn(androidx.compose.runtime.InternalComposeApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class, com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi::class)
 
 package io.github.yghfv.saltneri.plugin.ui
 
@@ -19,6 +19,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -54,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.rememberCursorPositionProvider
 import com.xuncorp.spw.workshop.api.hook.ComposableHook
 import com.xuncorp.spw.workshop.api.hook.UiHookCall
 import io.github.yghfv.saltneri.plugin.auth.AccountPlatform
@@ -302,7 +306,7 @@ private fun sortVector(sort: Catalog.Sort) = when(sort) {
 
 @Composable
 private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: AccountLoginController.Snapshot?, action: (() -> Unit) -> Unit,
-                          memory: PageMemory, narrow: Boolean) {
+                          memory: PageMemory, narrow: Boolean, catalog: Map<String,Any>?, enabled: Boolean) {
     var menu by remember(platform, login?.revision()) { mutableStateOf(false) }
     val loggedIn = login?.phase() == AccountLoginController.Phase.LOGGED_IN
     var png by remember(platform, login?.revision()) { mutableStateOf<ByteArray?>(null) }
@@ -325,6 +329,11 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
                 }
             }
             Spacer(Modifier.padding(horizontal=4.dp).width(1.dp).height(16.dp).background(Color(palette.secondary().toULong()).copy(alpha=0.18f)))
+        }
+        if(enabled && (catalog?.get("view") as? String).orEmpty().isNotEmpty()) {
+            HeaderIcon(ui,if((catalog?.get("error") as? String).orEmpty().isEmpty()) "\u5237\u65b0\u5f53\u524d\u5217\u8868" else "\u91cd\u8bd5\u5f53\u524d\u5217\u8868",HeaderGlyph.REFRESH) {
+                action {ui.desk().reload()}
+            }
         }
         val searchLabel = if(platform == AccountPlatform.BILIBILI) "\u641c\u7d22B\u7ad9" else "\u641c\u7d22\u7f51\u6613\u4e91"
         SearchControl(ui,memory.searchField,memory.searching,{memory.searching=it},label=searchLabel) { keyword ->
@@ -498,12 +507,26 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     val palette=ui.palette(currentComposer)
     val token=row["token"] as String
     val track=row["kind"]=="TRACK"
+    var menu by remember(platform,token) {mutableStateOf(false)}
+    var playlists by remember(platform,token) {mutableStateOf(ui.desk().savedPlaylists())}
+    LaunchedEffect(menu) {
+        if(menu) {
+            ui.desk().loadSavedPlaylists()
+            while(true) {playlists=ui.desk().savedPlaylists();delay(100)}
+        }
+    }
     val middle=if(middleLabel=="\u66f4\u65b0\u65f6\u95f4") (row["updated"] as? String).orEmpty() else (row["collection"] as? String).orEmpty()
     val count=(row["count"] as? Number)?.toLong() ?: -1
     val title=(row["title"] as String)+if(!track && count>=0) " ($count)" else ""
     val click={action {if(track) memory.selectedRow=token else {ui.desk().choose(token);memory.localSearch=false;memory.localText=""}}}
     val modifier=Modifier.fillMaxWidth().clip(palette.shape())
         .background(if(memory.selectedRow==token) Color(palette.background().toULong()).copy(alpha=0.65f) else Color.Transparent)
+        .onPointerEvent(PointerEventType.Press) { event ->
+            if(track && row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
+                event.changes.forEach {it.consume()}
+                memory.selectedRow=token; menu=true
+            }
+        }
         .combinedClickable(enabled=row["enabled"]==true,onDoubleClick=if(track) ({action {ui.desk().playRow(token);memory.selectedRow=token}}) else null,onClick=click)
         .padding(vertical=6.dp)
     val author: @Composable () -> Unit = {
@@ -514,6 +537,7 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
             palette.sub().copy(color=Color(palette.accent().toULong())),1,1,currentComposer)
         else NativeText(ui,label,true,Modifier.height(20.dp),maxLines=1)
     }
+    Box(Modifier.fillMaxWidth()) {
     if(card) Column(modifier,verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Cover(ui,token,platform,mode,true,if(track) row else null)
         NativeText(ui,title,modifier=Modifier.fillMaxWidth(),maxLines=2,minLines=2)
@@ -529,6 +553,12 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
         if(track && !compact && middleLabel.isNotEmpty()) NativeText(ui,middle,true,middleCell())
         if(track) TrackStats(ui,row,Modifier.width(80.dp))
     }
+    if(menu && track && row["enabled"]==true) {
+        ui.trackContextMenu(rememberCursorPositionProvider(), {menu=false}, {position ->
+            action {ui.desk().insertRow(token,position)}
+        }, playlists, {playlist -> action {ui.desk().addToPlaylist(token,playlist)}}, currentComposer)
+    }
+    }
 }
 
 @Composable
@@ -538,6 +568,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     var error by remember(ui, platform) { mutableStateOf("") }
     var enabled by remember(ui) { mutableStateOf(ui.available()) }
     var coverMode by remember(ui) {mutableStateOf(ui.desk().coverMode())}
+    var playlistStatus by remember(ui) {mutableStateOf("")}
     val action: (() -> Unit) -> Unit = { block ->
         try { block(); error = "" }
         catch (failure: Exception) { error = "\u64cd\u4f5c\u672a\u5b8c\u6210\uff08${failure.javaClass.simpleName}\uff09\uff0c\u8bf7\u68c0\u67e5\u6388\u6743\u548c\u5b9e\u9a8c\u9002\u914d\u72b6\u6001\u3002" }
@@ -546,6 +577,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         while (true) {
             enabled = ui.available()
             coverMode=ui.desk().coverMode()
+            playlistStatus=ui.desk().savedPlaylists().status()
             state = if (enabled) try {
                 if (ui.desk().enter(platform)) { memory.view=Catalog.View.DISCOVER; memory.localSearch=false; memory.localText="" }
                 ui.desk().snapshot(platform)
@@ -579,7 +611,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         val narrowHeader=maxWidth<640.dp
         val columns=when(memory.layout) {ListLayout.SINGLE -> 1; ListLayout.DOUBLE -> if(maxWidth>=600.dp) 2 else 1; ListLayout.CARDS -> (maxWidth.value/210f).toInt().coerceIn(1,6)}
         Column(Modifier.fillMaxSize()) {
-        AccountHeader(ui, platform, login, action, memory, narrowHeader)
+        AccountHeader(ui, platform, login, action, memory, narrowHeader, catalog, enabled)
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp), state = listState,
             contentPadding = PaddingValues(bottom = 140.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (!enabled) {
@@ -617,6 +649,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 }
                 item {
                     if (error.isNotEmpty()) NativeText(ui, error)
+                    if (playlistStatus.isNotEmpty()) NativeText(ui, playlistStatus)
                     val catalogError = (catalog?.get("error") as? String).orEmpty()
                     if (catalogError.isNotEmpty()) NativeText(ui, catalogError)
                     val title=catalog?.get("title") as? String ?: ""
@@ -655,11 +688,6 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                 }
                 if (catalog?.get("loaded") == true && rows.isNullOrEmpty()) item {
                     NativeText(ui, if(catalog["view"] == "SEARCH") "\u5f53\u9875\u6ca1\u6709\u53ef\u64ad\u653e\u7684\u641c\u7d22\u7ed3\u679c" else "\u5f53\u9875\u6682\u65e0\u53ef\u663e\u793a\u7684\u5185\u5bb9", true)
-                }
-                if ((catalog?.get("view") as? String).orEmpty().isNotEmpty()) item(key = "catalog-refresh") {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        HeaderIcon(ui, if((catalog?.get("error") as? String).orEmpty().isEmpty()) "\u5237\u65b0\u5f53\u524d\u5217\u8868" else "\u91cd\u8bd5\u5f53\u524d\u5217\u8868", HeaderGlyph.REFRESH) { action {ui.desk().reload()} }
-                    }
                 }
                 val page = (catalog?.get("page") as? Number)?.toInt() ?: 1
                 val total = (catalog?.get("totalPages") as? Number)?.toInt() ?: 0

@@ -17,6 +17,19 @@ public final class NativeQueueContractTest {
         public void playOrPause() { throw new AssertionError("Never toggle"); }
         public void setPlaybackQueue(List<Object> items,int index) { if(items.size()!=3 || index!=expectedIndex) throw new AssertionError(); calls.add("replace"); }
     }
+    public static final class InsertController {
+        Object position, item;
+        int insertions;
+        boolean paused = true, fail;
+        public void addToPlayNext(com.xuncorp.spc.core.queue.PlaybackQueue.\u037f position,
+                                  com.xuncorp.pisces.PiscesMediaItem[] items) {
+            if (fail) throw new IllegalStateException("SECRET");
+            check(items.length == 1); this.position=position; item=items[0]; insertions++;
+        }
+        public void play() { throw new AssertionError("Insertion must not start playback"); }
+        public void prepare() { throw new AssertionError("Insertion must not reload playback"); }
+        public void setPlaybackQueue(List<?> items,int index) { throw new AssertionError("Insertion must not replace queue"); }
+    }
     public static void main(String[] args) throws Exception {
         Controller controller = new Controller(); AtomicBoolean allowed = new AtomicBoolean(true);
         Salt1193PlaybackSession.submitAndPlay(controller, Object.class, new Object(), allowed::get);
@@ -40,6 +53,23 @@ public final class NativeQueueContractTest {
         Salt1193PlaybackSession.replaceAndPlay(controller,List.of(new Object(),new Object(),new Object()),2,allowed::get);
         check(controller.calls.equals(List.of("replace","play")));
         check(host.getMethod("setPlaybackQueue",List.class,int.class).getReturnType()==void.class);
+        var profile=Salt1193Probe.inspect(NativeQueueContractTest.class.getClassLoader(),"1.19.3","Steam");
+        Object item=profile.mediaFactory().create("saltneri:insert:test","Fixture","Artist","","","saltneri://fixture");
+        var insertion=new InsertController();
+        Class<?> position=Class.forName("com.xuncorp.spc.core.queue.PlaybackQueue$\u037f");
+        Class<?> media=item.getClass();
+        check(host.getMethod("addToPlayNext",position,java.lang.reflect.Array.newInstance(media,0).getClass()).getReturnType()==void.class);
+        var actions=io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.values();
+        String[] names={"AfterCurrent","AfterLastAdded","AtQueueEnd"};
+        for(int i=1;i<actions.length;i++) {
+            Salt1193PlaybackSession.submitNext(insertion,media,item,actions[i],()->true);
+            check(((Enum<?>)insertion.position).name().equals(names[i-1]) && insertion.item==item && insertion.paused);
+        }
+        try { Salt1193PlaybackSession.submitNext(insertion,media,item,actions[1],()->false); throw new AssertionError(); }
+        catch(SecurityException expected) {check(insertion.insertions==3);}
+        insertion.fail=true;
+        try { Salt1193PlaybackSession.submitNext(insertion,media,item,actions[1],()->true); throw new AssertionError(); }
+        catch(ReflectiveOperationException expected) {check(!expected.toString().contains("SECRET") && expected.getCause()==null);}
         System.out.println("PASS: " + checks + " explicit add-then-play ordering/revoke/failure checks; recording controller only");
     }
 }

@@ -36,6 +36,7 @@ public final class SaltNativeUi implements AutoCloseable {
     private final CoverLoader avatars;
     private final SaltToolbarBindings toolbar;
     private final SaltSearchBindings search;
+    private final SaltContextMenuBindings contextMenu;
     private final BooleanSupplier permitted;
     private final List<HookHandle> handles = new ArrayList<>();
     private final Method routeGetter, pluginIdGetter, nativeRow, text, canvas;
@@ -76,6 +77,10 @@ public final class SaltNativeUi implements AutoCloseable {
         try { optionalSearch = new SaltSearchBindings(host); }
         catch (ReflectiveOperationException | RuntimeException | LinkageError unsupported) { optionalSearch = null; }
         search = optionalSearch;
+        SaltContextMenuBindings optionalMenu;
+        try { optionalMenu = new SaltContextMenuBindings(host); }
+        catch (ReflectiveOperationException | RuntimeException | LinkageError unsupported) { optionalMenu = null; }
+        contextMenu = optionalMenu;
         Class<?> item = type(host, ROUTE_ITEM), modRoute = type(host, MOD_ROUTE);
         type(host, SIDEBAR).getMethod("\u037f", item, Composer.class, int.class);
         routeGetter = item.getMethod("\u0528"); pluginIdGetter = modRoute.getMethod("getPluginId");
@@ -172,6 +177,17 @@ public final class SaltNativeUi implements AutoCloseable {
     }
     public void toolbarIcon(boolean sorting, Composer composer) { toolbar.icon(sorting, composer); }
     public boolean nativeSearchAvailable() { return search != null; }
+    public boolean nativeContextMenuAvailable() { return contextMenu != null; }
+    public void trackContextMenu(androidx.compose.ui.window.PopupPositionProvider position, Function0<kotlin.Unit> dismiss,
+                                 java.util.function.Consumer<io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction> select,
+                                 io.github.yghfv.saltneri.plugin.library.SavedPlaylistController.Snapshot playlists,
+                                 java.util.function.Consumer<String> save,Composer composer) {
+        contextMenu.menu(position, dismiss, select, playlists, save, ()->{
+            if(!available() || navigator==null) throw new IllegalStateException("Navigation unavailable");
+            try {invoke(navigate,navigator,Class.forName("com.xuncorp.voxzen.ui.navigation.ScreenRoute$NewPlaylist",true,navigate.getDeclaringClass().getClassLoader()).getField("INSTANCE").get(null));}
+            catch(ReflectiveOperationException failure) {throw new IllegalStateException("Native new playlist unavailable",failure);}
+        },composer);
+    }
     public androidx.compose.foundation.text.input.TextFieldDecorator searchDecorator(
             androidx.compose.foundation.text.input.TextFieldState state, androidx.compose.runtime.State<Boolean> hasText,
             androidx.compose.ui.focus.FocusRequester focus) { return search.decorator(state, hasText, focus); }

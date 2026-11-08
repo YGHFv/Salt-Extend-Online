@@ -20,6 +20,14 @@ public final class NativeDesk {
     private final BooleanSupplier permitted;
     private Consumer<LibraryController.Playlist> playlistPlayer = list -> { throw new IllegalStateException("Playlist playback not configured"); };
     public void playlistPlayer(Consumer<LibraryController.Playlist> player) { playlistPlayer=Objects.requireNonNull(player); }
+    private SavedPlaylistController savedPlaylists;
+    public void savedPlaylists(SavedPlaylistController controller) {savedPlaylists=controller;}
+    public SavedPlaylistController.Snapshot savedPlaylists() {return savedPlaylists==null?new SavedPlaylistController.Snapshot(java.util.List.of(),false,""):savedPlaylists.snapshot();}
+    public void loadSavedPlaylists() {check();if(savedPlaylists!=null) savedPlaylists.load();}
+    public void addToPlaylist(String token,String playlist) {
+        check(); if(savedPlaylists==null) throw new IllegalStateException("Native playlists unavailable");
+        library.saveRow(token,(target,row)->savedPlaylists.add(target,row,playlist,()->permitted.getAsBoolean() && library.currentRow(token)));
+    }
     private Supplier<CoverMode> coverMode=()->CoverMode.FIT;
     public void coverMode(Supplier<CoverMode> value) { coverMode=Objects.requireNonNull(value); }
     public CoverMode coverMode() { return coverMode.get(); }
@@ -57,6 +65,11 @@ public final class NativeDesk {
         check(); library.playRow(token, target -> player.playSelected(target, () -> {
             check(); actions.accept(target.platform(), Action.ARM);
         }));
+    }
+    public void insertRow(String token, OnlinePlaybackController.QueueAction action) {
+        check(); library.playRow(token, target -> player.insertSelected(target, () -> {
+            check(); actions.accept(target.platform(), Action.ARM);
+        }, action));
     }
     public void play(String token) throws Exception { check(); player.play(token); }
     /** This button explicitly authorizes both adapter setup and the current one-use submission. */

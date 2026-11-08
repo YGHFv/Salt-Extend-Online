@@ -32,6 +32,12 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     public void clearCache() { transport.clearCache(); }
     public long cacheBytes() { return transport.cacheBytes(); }
     private LazyPlaylistSession playlist;
+    private SavedTrackSession savedTracks;
+    public synchronized void savedTracks(SavedTrackStore store,SavedTrackSession.Resolver resolver) {
+        if(closed || !permitted()) throw new IllegalStateException("Adapter unavailable");
+        if(savedTracks==null) savedTracks=new SavedTrackSession(adapter,transport,()->!closed && permitted(),resolver);
+        store.entries().forEach(savedTracks::register);
+    }
     private MediaLease.Platform playlistPlatform;
     private final java.util.Map<String, Salt1193PlaybackSession> sessions = new java.util.HashMap<>();
     private final java.util.Map<String, MediaLease.Platform> sessionPlatforms = new java.util.HashMap<>();
@@ -111,6 +117,12 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     }
     public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive, OnlineLyrics.Source lyrics, Salt1193PlaybackSession.Renewer renewer) throws ReflectiveOperationException {
+        submitTrack(key, metadata, lease, accountActive, lyrics, renewer,
+                io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.PLAY);
+    }
+    public synchronized void submitTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+                                       BooleanSupplier accountActive, OnlineLyrics.Source lyrics, Salt1193PlaybackSession.Renewer renewer,
+                                       io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws ReflectiveOperationException {
         if (closed || !permitted()) throw new IllegalStateException("Arm the experimental adapter first");
         if (!accountActive.getAsBoolean()) throw new SecurityException("Account revision revoked");
         engine.ensureAttached();
@@ -125,11 +137,13 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease, lyrics,renewer);
         try { session.enqueue(track, item -> {
             if (!permitted() || !accountActive.getAsBoolean()) throw new SecurityException("Account/permission revoked before enqueue");
-            queue.addToPlay(item);
+            if (action == io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.PLAY) queue.addToPlay(item);
+            else queue.insert(item, action);
         }); }
         catch (ReflectiveOperationException | RuntimeException failure) { track.close(); throw failure; }
     }
     public synchronized void revokePlatform(MediaLease.Platform platform) {
+        if(savedTracks!=null) savedTracks.revoke(io.github.yghfv.saltneri.plugin.auth.AccountPlatform.valueOf(platform.name()));
         if(playlist!=null && playlistPlatform==platform) { playlist.close(); playlist=null; }
         for (String scope : java.util.List.copyOf(sessions.keySet())) if (sessionPlatforms.get(scope) == platform) {
             sessions.remove(scope).close(); sessionPlatforms.remove(scope);
@@ -161,6 +175,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     @Override public synchronized void close() {
         if (closed) return;
         closed = true;
+        if(savedTracks!=null) {savedTracks.close();savedTracks=null;}
         if(playlist!=null) { playlist.close(); playlist=null; }
         watchdog.shutdownNow();
         tonePath = null; toneUri = null;

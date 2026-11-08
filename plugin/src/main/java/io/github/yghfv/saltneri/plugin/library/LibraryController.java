@@ -335,6 +335,9 @@ public final class LibraryController implements AutoCloseable {
         if (item == null || !item.enabled() || item.kind() != Kind.TRACK) throw new IllegalStateException("Stale or unsupported track");
         play.accept(new OnlinePlaybackController.Target(s.platform, item.target()));
     }
+    public synchronized void saveRow(String token,java.util.function.BiConsumer<OnlinePlaybackController.Target,Item> save) {
+        playRow(token,target->save.accept(target,stateFor(token).rows.get(token)));
+    }
     public synchronized boolean currentRow(String token) { State s = stateFor(token); if (s == null) return false; refresh(s); return s.rows.containsKey(token); }
     private void invalidate(State s) { s.cache.clear(); reset(s); s.history.clear(); s.authorName=""; s.rows.clear(); s.visible=null; s.query=null; s.loader.invalidate(""); }
     public synchronized void accountChanged(AccountPlatform changed) { invalidate(states.get(changed)); if(platform==changed) navigation.run(); }

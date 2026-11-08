@@ -42,6 +42,9 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile LibraryController library;
     private volatile SaltNativeUi nativeUi;
     private NativeDesk desk;
+    private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
+    private SavedPlaylistController savedPlaylists;
+    private java.util.concurrent.ScheduledExecutorService savedRestore;
     private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
     private volatile String mediaIdentityStatus="not registered";
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
@@ -71,7 +74,14 @@ public final class ExperimentalPlugin extends SpwPlugin {
         neteaseLogin = new AccountLoginController(AccountPlatform.NETEASE, this::granted, accounts, () -> accountChanged(AccountPlatform.NETEASE));
         bili = new BiliResolutionController(this::granted, () -> biliLogin == null ? null : biliLogin.credentials());
         netease = new NeteaseResolutionController(this::granted, () -> neteaseLogin == null ? null : neteaseLogin.credentials());
-        online = new OnlinePlaybackController(this::credentials, this::granted, this::adapterArmed, (audio, activeAccount) -> {
+        online = new OnlinePlaybackController(this::credentials, this::granted, this::adapterArmed, new OnlinePlaybackController.Player() {
+            public void play(OnlinePlaybackController.Audio audio, java.util.function.BooleanSupplier active) throws Exception {
+                submit(audio, active, OnlinePlaybackController.QueueAction.PLAY);
+            }
+            public void insert(OnlinePlaybackController.Audio audio, java.util.function.BooleanSupplier active, OnlinePlaybackController.QueueAction action) throws Exception {
+                submit(audio, active, action);
+            }
+            private void submit(OnlinePlaybackController.Audio audio, java.util.function.BooleanSupplier activeAccount, OnlinePlaybackController.QueueAction action) throws Exception {
             Salt1193DiagnosticRuntime current = runtime;
             if (current == null || current.isClosed()) throw new IllegalStateException("Arm the adapter first");
             AccountPlatform platform=AccountPlatform.valueOf(audio.key().platform().name());
@@ -79,7 +89,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             OnlinePlaybackController.Target target=audio.target();
             if(target==null) throw new IllegalStateException("Missing replay identity");
             String scope=audio.lease().scope(), remoteId=audio.key().remoteId();
-            current.playTrack(audio.key(), audio.metadata(), audio.lease(), activeAccount,
+            current.submitTrack(audio.key(), audio.metadata(), audio.lease(), activeAccount,
                     audio.key().platform()==io.github.yghfv.saltneri.core.TrackKey.Platform.NETEASE
                     ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(account).load(Long.parseLong(remoteId),request) : null,
                     new io.github.yghfv.saltneri.plugin.host.Salt1193PlaybackSession.Renewer() {
@@ -87,7 +97,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
                         public OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
                             return OnlinePlaybackController.resolveAudio(account,target,scope,request,settings);
                         }
-                    });
+                    }, action);
+            }
         },()->settings);
         OnlinePlaybackController startedOnline = online;
         library = new LibraryController(this::credentials, this::granted, startedOnline::prepare,
@@ -99,6 +110,23 @@ public final class ExperimentalPlugin extends SpwPlugin {
         }, () -> generation == started && granted());
         desk.coverMode(()->settings.coverMode());
         desk.preferences(new io.github.yghfv.saltneri.plugin.ui.CatalogPreferences(configManager.getConfig("catalog-ui.json")));
+        try {
+            savedTracks=new io.github.yghfv.saltneri.plugin.host.SavedTrackStore(configManager.getConfig().getConfigPath().getParent().resolve("saved-online-tracks"));
+            var gateway=new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway(WorkshopApi.class.getClassLoader());
+            savedPlaylists=new SavedPlaylistController(new SavedPlaylistController.Gateway() {
+                public java.util.List<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice> choices() throws Exception {return gateway.choices();}
+                public void add(OnlinePlaybackController.Target target,Catalog.Item row,io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice choice,java.util.function.BooleanSupplier valid) throws Exception {
+                    if(!valid.getAsBoolean()) throw new java.util.concurrent.CancellationException();
+                    io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry;
+                    synchronized(ExperimentalPlugin.this) {
+                        if(generation!=started || !granted()) throw new java.util.concurrent.CancellationException();
+                        entry=savedTracks.save(target,row); arm();
+                    }
+                    gateway.add(entry,choice,valid);
+                }
+            },()->generation==started && granted());
+            desk.savedPlaylists(savedPlaylists);
+        } catch(Exception failure) { status="Native saved playlists unavailable ("+failure.getClass().getSimpleName()+")"; }
         desk.playlistPlayer(list -> startedOnline.playPlaylist(list, () -> {
             try { arm(); } catch(Exception failure) { throw new IllegalStateException("Adapter unavailable"); }
         }, (playlist,valid) -> {
@@ -132,6 +160,19 @@ public final class ExperimentalPlugin extends SpwPlugin {
             catch(RuntimeException | LinkageError failure) { mediaIdentityStatus="registration failed: "+failure.getClass().getSimpleName(); }
             try { ensureNativeUi(); }
             catch (Exception | LinkageError failure) { status = "Native UI unavailable (" + failure.getClass().getSimpleName() + "). No browser fallback."; }
+        }
+        if(savedTracks!=null && !savedTracks.entries().isEmpty()) {
+            savedRestore=java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"salt-online-playlist-restore");t.setDaemon(true);return t;});
+            var attempts=new java.util.concurrent.atomic.AtomicInteger();
+            savedRestore.scheduleWithFixedDelay(()->{
+                synchronized(ExperimentalPlugin.this) {
+                    if(generation!=started || stopped) return;
+                    try { arm(); savedRestore.shutdown(); }
+                    catch(Exception | LinkageError failure) {
+                        if(attempts.incrementAndGet()>=60) {status="Saved playlist playback adapter unavailable; reopen the plugin page and retry.";savedRestore.shutdown();}
+                    }
+                }
+            },0,1,java.util.concurrent.TimeUnit.SECONDS);
         }
     }
 
@@ -217,6 +258,16 @@ public final class ExperimentalPlugin extends SpwPlugin {
                     WorkshopApi.hookRegistrar(), this::granted);
             runtime.settings(()->settings); runtime.cacheLimit(settings.cacheBytes());
         }
+        if(savedTracks!=null) runtime.savedTracks(savedTracks,new io.github.yghfv.saltneri.plugin.host.SavedTrackSession.Resolver() {
+            public Object revision(AccountPlatform platform) {return java.util.Arrays.asList(credentials(platform),settings.qualityKey());}
+            public OnlinePlaybackController.Audio resolve(io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws Exception {
+                AccountCredentials account=credentials(entry.target().platform());
+                return OnlinePlaybackController.resolveAudio(account,entry.target(),account==null?"anonymous:saved:"+java.util.UUID.randomUUID():account.accountScope(),request,settings);
+            }
+            public io.github.yghfv.saltneri.plugin.host.OnlineLyrics.Source lyrics(io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry) {
+                return entry.target().platform()==AccountPlatform.NETEASE?request->new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(credentials(AccountPlatform.NETEASE)).load(Long.parseLong(entry.target().id()),request):null;
+            }
+        });
         status = "Experimental adapter armed. No audio enqueued. NetEase lyrics load only for owned playing items.";
     }
 
@@ -237,6 +288,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        if(savedRestore!=null) {savedRestore.shutdownNow();savedRestore=null;}
+        if(savedPlaylists!=null) {savedPlaylists.close();savedPlaylists=null;}
         if(mediaIdentity!=null) { mediaIdentity.close(); mediaIdentity=null; }
         stopped = true;
         generation = null;
@@ -247,6 +300,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 desk = null;
                 if (library != null) { library.close(); library = null; }
                 if (online != null) { online.close(); online = null; }
+                if (savedTracks != null) {savedTracks.close();savedTracks=null;}
                 if (biliLogin != null) { biliLogin.close(); biliLogin = null; }
                 if (neteaseLogin != null) { neteaseLogin.close(); neteaseLogin = null; }
                 if (bili != null) { bili.close(); bili = null; }
