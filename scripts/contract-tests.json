@@ -29,6 +29,11 @@
   ],
   "tests": [
     {
+      "class": "io.github.yghfv.saltneri.plugin.ui.SidebarOptimizationRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.ui.CatalogPagingRenderTest",
       "baseOnly": false,
       "offline": false

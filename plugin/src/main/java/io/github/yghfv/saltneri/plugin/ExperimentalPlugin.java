@@ -53,6 +53,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         settings=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
         LibraryController catalog=library; if(catalog!=null) catalog.pageLimit(CatalogPaging.parse(config.get("catalog.pageLimit","30")));
+        SaltNativeUi ui=nativeUi; if(ui!=null) ui.sidebarOptimization(config.get("ui.sidebarOptimization",false));
     }
 
     public ExperimentalPlugin(PluginContext context) { super(context); }
@@ -200,6 +201,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             Object owner = generation;
             nativeUi = new SaltNativeUi(WorkshopApi.class.getClassLoader(), WorkshopApi.hookRegistrar(), desk,
                     () -> generation == owner && granted());
+            nativeUi.sidebarOptimization(configManager.getConfig().get("ui.sidebarOptimization", false));
         }
         status = "0.7.6: Salt native UI requested; remembered plugin logins are verified in background. No automatic playback.";
         boolean remember = configManager.getConfig().get("auth.remember", true);

@@ -38,6 +38,10 @@ public final class SaltNativeUi implements AutoCloseable {
     private final SaltSearchBindings search;
     private final SaltContextMenuBindings contextMenu;
     private final BooleanSupplier permitted;
+    private final ClassLoader host;
+    private final HookRegistrar hooks;
+    private volatile SaltSidebarBindings sidebar;
+    private String sidebarFailure = "none";
     private final List<HookHandle> handles = new ArrayList<>();
     private final Method routeGetter, pluginIdGetter, nativeRow, text, canvas;
     private final Method colors, styles, shapes, dimens, localNavigator, navigate;
@@ -65,6 +69,7 @@ public final class SaltNativeUi implements AutoCloseable {
     @SuppressWarnings("unchecked")
     public SaltNativeUi(ClassLoader host, HookRegistrar hooks, NativeDesk desk, BooleanSupplier permitted, CoverLoader covers, CoverLoader avatars) throws Exception {
         this.covers = covers;
+        this.host = host; this.hooks = hooks;
         this.avatars = avatars;
         this.desk = desk; this.permitted = permitted;
         if (!permitted.getAsBoolean()) throw new SecurityException("Native UI permission required");
@@ -165,11 +170,28 @@ public final class SaltNativeUi implements AutoCloseable {
     public boolean available() {
         if (closed) return false;
         if (!permitted.getAsBoolean()) {
+            SaltSidebarBindings compact = sidebar;
+            if (compact != null) compact.enabled(false);
             closed = true; pendingLogin.set(null); covers.close(); pageBinding.close(); return false;
         }
         return true;
     }
     public NativeDesk desk() { return desk; }
+    public synchronized void sidebarOptimization(boolean enabled) {
+        if (closed) return;
+        if (enabled && sidebar == null) {
+            SaltSidebarBindings candidate = null;
+            try {
+                candidate = new SaltSidebarBindings(host);
+                candidate.install(hooks, this);
+                sidebar = candidate; sidebarFailure = "none";
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
+                if (candidate != null) candidate.close();
+                sidebarFailure = failure.getClass().getSimpleName();
+            }
+        }
+        if (sidebar != null) sidebar.enabled(enabled);
+    }
     public boolean nativeToolbarAvailable() { return toolbar != null; }
     public void toolbarButton(String label, Modifier modifier, Function0<kotlin.Unit> click,
                               Object content, Composer composer) {
@@ -283,7 +305,8 @@ public final class SaltNativeUi implements AutoCloseable {
         String visible = pages.isEmpty() ? "none" : new TreeSet<>(pages.values().stream().map(Enum::name).toList()).toString();
         return "Native UI 0.7.6: bound=" + pageBinding.isInstalled() + ", dispatch=" + dispatched.get()
                 + ", platform=" + selected.get() + ", rendered=" + rendered.get() + ", visible=" + visible
-                + ", pendingLogin=" + (pendingLogin.get() != null) + ", error=" + (failure.equals("none") ? pageBinding.failure() : failure);
+                + ", pendingLogin=" + (pendingLogin.get() != null) + ", sidebar=" + (sidebar == null ? sidebarFailure : sidebar.enabled())
+                + ", error=" + (failure.equals("none") ? pageBinding.failure() : failure);
     }
     public void requestLogin(AccountPlatform platform) {
         pendingLogin.set(platform);
@@ -323,6 +346,7 @@ public final class SaltNativeUi implements AutoCloseable {
     @Override public synchronized void close() {
         closed = true; navigator = null; sidebarStyle.setValue(null); pendingLogin.set(null); pages.clear();
         covers.close(); avatars.close(); pageMemory.clear();
+        if (sidebar != null) { sidebar.close(); sidebar = null; }
         pageBinding.close();
         for (int i = handles.size() - 1; i >= 0; i--) {
             try { handles.get(i).close(); }

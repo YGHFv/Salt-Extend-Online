@@ -52,8 +52,10 @@ def validate(path, experimental):
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(prefs) != {"bili.quality", "netease.quality", "auth.remember", "cache.limitMiB", "cover.mode", "catalog.pageLimit"} or sum(len(c["preferences"]) for c in configs["configs"]) != 10:
+            if set(prefs) != {"bili.quality", "netease.quality", "auth.remember", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization"} or sum(len(c["preferences"]) for c in configs["configs"]) != 11:
                 raise ValueError("Unexpected expanded settings menu")
+            if prefs["ui.sidebarOptimization"]["type"] != "switch" or prefs["ui.sidebarOptimization"]["default_value"] is not False:
+                raise ValueError("Sidebar optimization must be opt-in")
             if prefs["cover.mode"]["entry_values"] != ["fit", "center", "left", "right"] or prefs["cover.mode"]["default_value"] != "fit":
                 raise ValueError("Wrong cover presentation options/default")
             if prefs["catalog.pageLimit"]["entry_values"] != ["20", "30", "50", "60", "100", "0"] or prefs["catalog.pageLimit"]["default_value"] != "30":

@@ -19,6 +19,13 @@
           "default_value": true
         },
         {
+          "key": "ui.sidebarOptimization",
+          "type": "switch",
+          "title": "侧栏优化",
+          "summary": "收起侧栏时，将导航图标移至顶部侧栏切换按钮右侧；再次展开自动还原。包括在线平台和本地歌单，窄窗口可横向滚动。默认关闭。",
+          "default_value": false
+        },
+        {
           "key": "bili.quality",
           "type": "list",
           "title": "Bilibili 音质",
