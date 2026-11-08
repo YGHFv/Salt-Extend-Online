@@ -379,6 +379,11 @@
       "class": "io.github.yghfv.saltneri.plugin.ui.NavigationUiRenderTest",
       "baseOnly": false,
       "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.AutomaticPlaybackRecoveryTest",
+      "baseOnly": false,
+      "offline": false
     }
   ]
 }

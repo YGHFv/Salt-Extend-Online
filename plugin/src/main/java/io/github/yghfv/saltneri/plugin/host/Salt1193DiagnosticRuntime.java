@@ -37,10 +37,14 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     private SavedTrackSession savedTracks;
     private SavedTrackStore savedStore;
     private SavedTrackSession.Resolver savedResolver;
+    private AutomaticPlaybackRecovery recovery;
+    private java.util.function.Consumer<String> errorToast=text->{};
+    public void errorToast(java.util.function.Consumer<String> notifier) {errorToast=Objects.requireNonNull(notifier);}
     public synchronized void savedTracks(SavedTrackStore store,SavedTrackSession.Resolver resolver) {
         if(closed || !permitted()) throw new IllegalStateException("Adapter unavailable");
         if(savedTracks==null) {savedResolver=resolver;savedStore=store;savedTracks=new SavedTrackSession(adapter,transport,()->!closed && permitted(),resolver);}
         store.entries().forEach(savedTracks::register);
+        savedTracks.prefetch(queue);
     }
     public synchronized void submitOnline(io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio audio,
                                          BooleanSupplier accountActive,io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws Exception {
@@ -67,9 +71,16 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         Salt1193StreamAdapter adapter = null;
         try {
             adapter = new Salt1193StreamAdapter(loader, profile, authorized, Salt1193StreamAdapter.nativeFactory(loader, transport::revoke));
-            return new Salt1193DiagnosticRuntime(profile, adapter, transport,
+            Salt1193DiagnosticRuntime runtime=new Salt1193DiagnosticRuntime(profile, adapter, transport,
                     Salt1193EngineLink.nativeHost(loader, profile), Salt1193EngineLink.hooks(registrar),
                     Salt1193PlaybackSession.nativeQueue(loader, profile, authorized,registrar), authorized);
+            try {
+                runtime.recovery=new AutomaticPlaybackRecovery(AutomaticPlaybackRecovery.nativeHost(loader,profile),
+                        Salt1193EngineLink.hooks(registrar),()->!runtime.closed && authorized.getAsBoolean(),
+                        (id,path)->runtime.savedTracks!=null && runtime.savedTracks.contains(id,path),text->runtime.errorToast.accept(text));
+                adapter.recovery(runtime.recovery);
+                return runtime;
+            } catch(ReflectiveOperationException | RuntimeException | LinkageError failure) {runtime.close();throw failure;}
         } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
             try { if (adapter != null) adapter.close(); } finally { transport.close(); }
             throw failure;
@@ -195,6 +206,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
     @Override public synchronized void close() {
         if (closed) return;
         closed = true;
+        if(recovery!=null)recovery.close();
         queue.close();
         if(savedTracks!=null) {savedTracks.close();savedTracks=null;}
         if(playlist!=null) { playlist.close(); playlist=null; }

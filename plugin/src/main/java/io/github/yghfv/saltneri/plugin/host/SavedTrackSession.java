@@ -31,6 +31,28 @@ public final class SavedTrackSession implements AutoCloseable {
     private final Resolver resolver;
     private volatile boolean closed;
     private Binding opened;
+    private PlaylistPrefetch prefetch;
+    public synchronized boolean contains(String id,String path) {
+        Binding binding=bindings.get(path);return binding!=null && binding.entry.trackId().equals(id);
+    }
+    public synchronized void prefetch(Salt1193PlaybackSession.QueueSink queue) {
+        if(prefetch!=null)return;
+        prefetch=new PlaylistPrefetch(()->{
+            try{return queue.upcoming();}catch(ReflectiveOperationException | RuntimeException ignored){return NativePlaylistOrder.Plan.EMPTY;}
+        },new PlaylistPrefetch.Source() {
+            private Binding binding(String id) {
+                synchronized(SavedTrackSession.this) {
+                    return bindings.values().stream().filter(b->b.entry.trackId().equals(id)).findFirst().orElse(null);
+                }
+            }
+            public boolean contains(String id) {return binding(id)!=null;}
+            public URI resolve(String id,BooleanSupplier valid) throws Exception {
+                Binding binding=binding(id);if(binding==null)throw new java.util.concurrent.CancellationException();
+                return SavedTrackSession.this.resolve(binding,valid);
+            }
+            public Object revision() {return Arrays.asList(resolver.revision(AccountPlatform.BILIBILI),resolver.revision(AccountPlatform.NETEASE));}
+        },transport,()->!closed && active.getAsBoolean());
+    }
     public SavedTrackSession(StreamBinding adapter,LoopbackRangeServer transport,BooleanSupplier active,Resolver resolver) {
         this.adapter=adapter; this.transport=transport; this.active=active; this.resolver=resolver;
     }
@@ -106,6 +128,7 @@ public final class SavedTrackSession implements AutoCloseable {
     }
     @Override public synchronized void close() {
         if(closed) return; closed=true;
+        if(prefetch!=null)prefetch.close();
         for(Binding binding:bindings.values()) {
             if(binding.request!=null) binding.request.close();
             if(binding.lyrics!=null) binding.lyrics.close(); adapter.unregister(binding.entry.path());

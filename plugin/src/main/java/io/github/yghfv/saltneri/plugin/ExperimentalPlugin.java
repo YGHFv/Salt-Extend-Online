@@ -269,6 +269,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             runtime = Salt1193DiagnosticRuntime.open(WorkshopApi.class.getClassLoader(), profile,
                     WorkshopApi.hookRegistrar(), this::granted);
             runtime.settings(()->settings); runtime.accounts(this::credentials); runtime.cacheLimit(settings.cacheBytes());
+            runtime.errorToast(text->toast(text,WorkshopApi.Ui.ToastType.Error));
         }
         if(savedTracks!=null) runtime.savedTracks(savedTracks,new io.github.yghfv.saltneri.plugin.host.SavedTrackSession.Resolver() {
             public Object revision(AccountPlatform platform) {return java.util.Arrays.asList(credentials(platform),settings.qualityKey());}

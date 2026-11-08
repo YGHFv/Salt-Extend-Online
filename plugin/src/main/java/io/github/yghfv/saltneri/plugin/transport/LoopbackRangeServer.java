@@ -41,6 +41,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
     private final RangeDiskCache cache=new RangeDiskCache();
     public void cacheLimit(long bytes) { cache.limit(bytes); cancelReadAhead(); }
     public long cacheBytes() { return cache.usedBytes(); }
+    public long cacheRevision() {return cache.revision();}
     public void clearCache() { cache.clear(); cancelReadAhead(); }
     @FunctionalInterface
     interface ConnectionOpener { HttpURLConnection open(URI uri) throws IOException; }
@@ -178,20 +179,33 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if (entry.lease != null && entry.lease.accountScope().equals(accountScope)) revoke(token, entry);
         });
     }
-    /** Warm only a small verified prefix through the same private range/cache path, never the audio device. */
+    /** Cache a complete track in native-aligned blocks, bounded by the configured disk budget. */
     public void prefetch(URI uri,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws IOException {
         if(cache.limitBytes()==0) return;
         if(!"http".equals(uri.getScheme()) || !"127.0.0.1".equals(uri.getHost()) || uri.getPort()!=listener.getLocalPort()
                 || uri.getRawUserInfo()!=null || uri.getRawQuery()!=null || uri.getRawFragment()!=null
                 || uri.getRawPath()==null || !uri.getRawPath().matches("/media/[0-9a-f]{64}")) throw new IOException("Foreign prefetch");
         Entry entry=leases.get(uri.getRawPath().substring(7)); if(entry==null) return;
-        // Salt 1.19.3 reads aligned 512 KiB chunks; a shorter prefix would miss its very first read.
-        ensureValid(entry); request.check(); long count=Math.min(entry.length(),512*1024);
+        ensureValid(entry); request.check();
+        if(entry.length()>cache.limitBytes()) throw new IOException("Track exceeds audio cache budget");
+        long revision=cache.revision();
+        for(long first=0;first<entry.length();first+=HOST_CHUNK_BYTES) {
+            request.check(); ensureValid(entry);
+            if(revision!=cache.revision()) throw new IOException("Audio cache settings changed");
+            ByteRange range=new ByteRange(first,Math.min(entry.length()-1,first+HOST_CHUNK_BYTES-1));
+            if(cache.get(entry,range)==null) prefetchRange(uri,range,request);
+        }
+        for(long first=0;first<entry.length();first+=HOST_CHUNK_BYTES)
+            if(cache.get(entry,new ByteRange(first,Math.min(entry.length()-1,first+HOST_CHUNK_BYTES-1)))==null)
+                throw new IOException("Full track not retained in audio cache");
+    }
+    private void prefetchRange(URI uri,ByteRange range,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws IOException {
+        long count=range.length();
         HttpURLConnection connection=(HttpURLConnection)uri.toURL().openConnection(java.net.Proxy.NO_PROXY);
         request.attach(connection);
         try {
             connection.setConnectTimeout(2000); connection.setReadTimeout(2000); connection.setInstanceFollowRedirects(false);
-            connection.setRequestProperty("Range","bytes=0-"+(count-1)); connection.setUseCaches(false);
+            connection.setRequestProperty("Range",range.requestHeader()); connection.setUseCaches(false);
             connection.setRequestProperty("X-Salt-Prefetch","1");
             if(connection.getResponseCode()!=206 || connection.getContentLengthLong()!=count) throw new IOException("Invalid prefetch range");
             try(InputStream input=connection.getInputStream()) {
@@ -219,6 +233,15 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 || !uri.getRawPath().matches("/media/[0-9a-f]{64}")) return false;
         Entry entry = leases.get(uri.getRawPath().substring(7));
         return entry != null && valid(entry);
+    }
+
+    public boolean isFullyCached(URI uri) {
+        if(!isAvailable(uri)) return false;
+        Entry entry=leases.get(uri.getRawPath().substring(7));
+        if(entry==null) return false;
+        for(long first=0;first<entry.length();first+=HOST_CHUNK_BYTES)
+            if(!cache.contains(entry,new ByteRange(first,Math.min(entry.length()-1,first+HOST_CHUNK_BYTES-1)))) return false;
+        return true;
     }
 
     private void revoke(String token, Entry entry) {
@@ -443,7 +466,12 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 connection.setReadTimeout(request.speculative==null?TIMEOUT_MILLIS:2000);
                 connection.setUseCaches(false);
                 connection.setRequestMethod("GET");
-                entry.lease.headers().forEach(connection::setRequestProperty);
+                // No account cookie crosses a CDN redirect, including an approved Bilibili edge.
+                boolean originalHost=uri.getHost().equalsIgnoreCase(entry.lease.uri().getHost());
+                entry.lease.headers().forEach((name,value)->{
+                    if(!name.equalsIgnoreCase("cookie") || originalHost)
+                        connection.setRequestProperty(name,value);
+                });
                 connection.setRequestProperty("Accept-Encoding", "identity");
                 connection.setRequestProperty("Range", range.requestHeader());
                 int code = connection.getResponseCode();
@@ -452,9 +480,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
                     String location = connection.getHeaderField("Location");
                     if (location == null) throw new InvalidRange();
                     URI target = uri.resolve(location);
-                    entry.lease.requireTarget(target);
-                    // Credentials are never forwarded across hosts, even to another platform CDN.
-                    if (!uri.getHost().equalsIgnoreCase(target.getHost())) throw new InvalidRange();
+                    try { MediaLease.requireRedirect(entry.lease.platform(),uri,target); }
+                    catch(IllegalArgumentException rejected) { throw new InvalidRange(); }
                     uri = target;
                     continue;
                 }

@@ -80,7 +80,8 @@ public final class RangeDiskCacheContractTest {
             server.cacheLimit(chunk*16);
             URI local=server.register(new MediaLease(MediaLease.Platform.NETEASE,URI.create("https://m7.music.126.net/ahead"),
                     Map.of(),"fixture",clock.instant().plusSeconds(60),total));
-            try(var scope=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {server.prefetch(local,scope);}
+            // Exercise foreground two-chunk read-ahead independently of full-track prefetch.
+            check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\nX-Salt-Prefetch: 1\r\n","").code()==206);
             check(calls.get()==1 && server.cacheBytes()==chunk);
             Thread.sleep(150);check(calls.get()==1); // Prefix prefetch does not crawl the song.
             check(TransportContractTest.call(local,"GET","Range: bytes=0-"+(chunk-1)+"\r\n","").body().length==chunk);

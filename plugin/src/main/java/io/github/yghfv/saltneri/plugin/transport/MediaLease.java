@@ -60,7 +60,8 @@ public final class MediaLease {
         Objects.requireNonNull(target);
         String host = target.getHost();
         boolean allowed = host != null && switch (platform) {
-            case BILIBILI -> under(host, "bilivideo.com") || under(host, "bilivideo.cn");
+            case BILIBILI -> under(host, "bilivideo.com") || under(host, "bilivideo.cn")
+                    || host.toLowerCase(Locale.ROOT).matches("[a-f0-9]{32}\\.v\\.smtcdns\\.com");
             case NETEASE -> under(host, "music.126.net");
         };
         if (!allowed || !"https".equalsIgnoreCase(target.getScheme())
@@ -68,6 +69,13 @@ public final class MediaLease {
                 || target.getRawUserInfo() != null || target.getRawFragment() != null) {
             throw new IllegalArgumentException("Media target outside platform HTTPS policy");
         }
+    }
+
+    public static void requireRedirect(Platform platform, URI from, URI to) {
+        requireTarget(platform, from);
+        requireTarget(platform, to);
+        if (platform != Platform.BILIBILI && !from.getHost().equalsIgnoreCase(to.getHost()))
+            throw new IllegalArgumentException("Cross-host media redirect rejected");
     }
 
     static boolean safeHeader(String text) {

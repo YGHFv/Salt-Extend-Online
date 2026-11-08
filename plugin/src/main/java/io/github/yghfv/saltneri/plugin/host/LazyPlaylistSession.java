@@ -28,10 +28,8 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private final Set<RequestScope> requests = ConcurrentHashMap.newKeySet();
     private final LinkedHashMap<Entry, Cached> cache = new LinkedHashMap<>(16,0.75f,true);
     private volatile boolean closed, submitted;
-    private java.util.concurrent.ScheduledExecutorService preloader;
+    private PlaylistPrefetch preloader;
     private volatile Entry opened;
-    private final java.util.concurrent.atomic.AtomicLong openRevision=new java.util.concurrent.atomic.AtomicLong();
-    private Object lastWarmPlan;
     private record Cached(URI uri, Instant expiry, Entry entry, Object revision) { }
     private static final class Entry {
         final Catalog.Item row;
@@ -80,7 +78,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
                 if(persistent!=null) {persistent.register(entry.saved);continue;}
                 var source=lyrics.apply(row);
                 if(source!=null) entry.lyrics=OnlineLyrics.bind(entry.id,entry.path,()->!closed && active.getAsBoolean(),source);
-                adapter.registerDeferred(entry.path,()->{ opened=entry; openRevision.incrementAndGet(); return resolve(entry,()->true); });
+                adapter.registerDeferred(entry.path,()->{ opened=entry; return resolve(entry,()->true); });
             }
         } catch (ReflectiveOperationException | RuntimeException failure) { close(); throw failure; }
     }
@@ -109,10 +107,11 @@ public final class LazyPlaylistSession implements AutoCloseable {
         queue.replace(entries.stream().map(e->e.media).toList(),first); submitted=true;
         synchronized(cache) {
             check();
-            preloader=java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r->{
-                Thread t=new Thread(r,"salt-online-playlist-prefetch"); t.setDaemon(true); return t;
-            });
-            preloader.scheduleWithFixedDelay(this::preload,250,250,java.util.concurrent.TimeUnit.MILLISECONDS);
+            if(persistent==null) preloader=new PlaylistPrefetch(this::plan,new PlaylistPrefetch.Source() {
+                public boolean contains(String id) {return byId.containsKey(id);}
+                public URI resolve(String id,BooleanSupplier valid) throws Exception {return LazyPlaylistSession.this.resolve(byId.get(id),valid);}
+                public Object revision() {return resolver.revision();}
+            },transport,()->!closed && opened!=null && active.getAsBoolean());
         }
     }
     private URI resolve(Entry entry,BooleanSupplier valid) throws Exception {
@@ -162,32 +161,12 @@ public final class LazyPlaylistSession implements AutoCloseable {
     private NativePlaylistOrder.Plan plan() {
         try { return queue.upcoming(); } catch(ReflectiveOperationException | RuntimeException ignored) { return NativePlaylistOrder.Plan.EMPTY; }
     }
-    private void preload() {
-        try {
-            check(); NativePlaylistOrder.Plan plan=plan(); Entry current=persistent==null?opened:byId.get(plan.current());
-            if(current==null || !current.id.equals(plan.current())) return;
-            long revision=openRevision.get(); Object quality=resolver.revision(); Object key=List.of(plan,quality==null?"":quality,revision);
-            if(key.equals(lastWarmPlan)) return; lastWarmPlan=key;
-            BooleanSupplier valid=()->!closed && active.getAsBoolean() && (persistent!=null || opened==current) && revision==openRevision.get()
-                    && Objects.equals(quality,resolver.revision()) && plan.equals(plan());
-            for(String id:plan.next()) {
-                Entry next=byId.get(id); if(next==null || next==current || !valid.getAsBoolean()) continue;
-                try {
-                    URI local=resolve(next,valid);
-                    try(RequestScope request=new RequestScope(valid,5000)) {
-                        requests.add(request);
-                        try { transport.prefetch(local,request); } finally { requests.remove(request); }
-                    }
-                } catch(Exception ignored) { /* One speculative attempt per plan; real playback can retry normally. */ }
-            }
-        } catch(RuntimeException ignored) { }
-    }
     private void retire(Cached cached) { transport.revoke(cached.uri()); if(cached.entry().cover!=null) cached.entry().cover.clear(); }
     @Override public void close() {
         closed=true; requests.forEach(RequestScope::close); requests.clear();
         for(Entry entry:entries) { if(entry.lyrics!=null) entry.lyrics.close(); if(persistent==null) adapter.unregister(entry.path); }
         synchronized(cache) {
-            if(preloader!=null) preloader.shutdownNow();
+            if(preloader!=null) preloader.close();
             cache.values().forEach(c->transport.revoke(c.uri())); cache.clear();
             entries.forEach(e->{if(e.cover!=null) e.cover.close();});
         }

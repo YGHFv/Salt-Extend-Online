@@ -183,6 +183,8 @@ public final class PinnedHttpsContractTest {
             long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
             while (!expiring.closed && System.nanoTime() < until) Thread.sleep(10);
             check(expiring.closed); fails(deadline::check);
+            try{deadline.check();throw new AssertionError("Deadline not distinguished");}
+            catch(RequestScope.DeadlineExceeded expected){check(true);}
         }
         Thread.currentThread().interrupt();
         try (RequestScope scope = new RequestScope(() -> true)) { fails(scope::check); }

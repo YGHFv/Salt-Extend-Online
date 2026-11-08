@@ -16,6 +16,10 @@ public final class RequestScope implements AutoCloseable {
     private final BooleanSupplier active;
     private final ScheduledExecutorService timer;
     private volatile boolean closed;
+    private volatile boolean timedOut;
+    public static final class DeadlineExceeded extends CancellationException {
+        DeadlineExceeded() {super("Platform operation timed out");}
+    }
     public RequestScope(BooleanSupplier active) { this(active, 30000); }
     public RequestScope(BooleanSupplier active, long deadlineMillis) {
         if (deadlineMillis < 1 || deadlineMillis > 300000) throw new IllegalArgumentException("Invalid operation deadline");
@@ -23,11 +27,14 @@ public final class RequestScope implements AutoCloseable {
         timer = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "salt-neri-platform-request"); thread.setDaemon(true); return thread;
         });
-        timer.schedule(this::close, deadlineMillis, TimeUnit.MILLISECONDS);
+        timer.schedule(()->{timedOut=true;close();}, deadlineMillis, TimeUnit.MILLISECONDS);
         timer.scheduleWithFixedDelay(() -> { if (!permitted()) close(); }, 250, 250, TimeUnit.MILLISECONDS);
     }
     private boolean permitted() { try { return active.getAsBoolean(); } catch (RuntimeException failure) { return false; } }
-    public void check() { if (closed || Thread.currentThread().isInterrupted() || !permitted()) throw new CancellationException("Platform operation cancelled"); }
+    public void check() {
+        if(Thread.currentThread().isInterrupted() || !permitted())throw new CancellationException("Platform operation cancelled");
+        if(closed) {if(timedOut)throw new DeadlineExceeded();throw new CancellationException("Platform operation cancelled");}
+    }
     public void attach(HttpURLConnection connection) {
         Objects.requireNonNull(connection);
         try {

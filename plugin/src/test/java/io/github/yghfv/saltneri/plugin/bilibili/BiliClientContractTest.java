@@ -216,7 +216,14 @@ public final class BiliClientContractTest {
         redirect.status = uri -> uri.getPath().equals("/audio.m4s") ? 302 : 206;
         redirect.probeHeaders = Map.of("Location", "/next", "Content-Length", "1", "Content-Range", "bytes 0-0/4096");
         check(resolve(redirect.client()).lease().length() == 4096); check(redirect.requests.size() == 5);
-        for (String location : List.of("https://evil/media", "http://upos-fixture.bilivideo.com/next", "https://backup.bilivideo.cn/next")) {
+        for(String location:List.of("https://backup.bilivideo.cn/next","https://"+"a".repeat(32)+".v.smtcdns.com/next")) {
+            Fixture edge=new Fixture();edge.status=uri->uri.getPath().equals("/audio.m4s")?302:206;
+            edge.probeHeaders=Map.of("Location",location,"Content-Length","1","Content-Range","bytes 0-0/4096");
+            check(resolve(edge.client()).lease().length()==4096 && edge.requests.size()==5);
+        }
+        for (String location : List.of("https://evil/media", "http://upos-fixture.bilivideo.com/next",
+                "https://evil.v.smtcdns.com/next","https://"+"a".repeat(32)+".v.smtcdns.com.evil.test/next",
+                "https://"+"a".repeat(32)+".v.smtcdns.com:444/next","https://127.0.0.1/next")) {
             Fixture invalid = new Fixture(); invalid.status = uri -> 302; invalid.probeHeaders = Map.of("Location", location); fails(() -> resolve(invalid.client()));
         }
         Fixture anonymousDenied = new Fixture(); anonymousDenied.nav = NAV.replace("-101", "-412");

@@ -29,6 +29,15 @@ public final class RangeDiskCache implements AutoCloseable {
     private boolean safeDirectory() {
         try { return directory!=null && directory.equals(directory.toRealPath()); } catch(IOException error) { return false; }
     }
+    synchronized boolean contains(Object owner,ByteRange range) {
+        if(closed || limit==0) return false;
+        if(files.containsKey(new Key(owner,range))) return true;
+        var index=ranges.get(owner);
+        if(index==null)return false;
+        for(var keys:index.subMap(Math.max(0,range.last()-MAX_RANGE_BYTES+1),true,range.first(),true).values())
+            for(Key key:keys)if(key.range().last()>=range.last())return true;
+        return false;
+    }
     synchronized byte[] get(Object owner,ByteRange range) {
         if(closed || limit==0 || !safeDirectory()) return null;
         Key key=new Key(owner,range); FileEntry entry=files.get(key);

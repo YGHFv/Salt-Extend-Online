@@ -133,7 +133,7 @@ public final class TransportContractTest {
                     case 2 -> connection.declaredLength = 2;
                     case 3 -> connection.encoding = "gzip";
                     case 4 -> { connection.code = 302; connection.location = "https://evil.test/audio"; }
-                    case 5 -> { connection.code = 302; connection.location = "https://other.bilivideo.com/audio"; }
+                    case 5 -> { connection.code = 302; connection.location = "https://evil.v.smtcdns.com/audio"; }
                     case 6 -> { connection.code = 302; connection.location = "/loop"; }
                     case 7 -> { connection.code = 302; connection.location = "http://test.bilivideo.com/a"; }
                     default -> throw new AssertionError();
@@ -158,6 +158,19 @@ public final class TransportContractTest {
             eq(206, call(local, "GET", "Range: bytes=0-0\r\n", "").code());
             eq(2, targets.size());
             eq("/redirected", targets.getLast().getPath());
+        }
+        List<FakeConnection> redirected=new CopyOnWriteArrayList<>();
+        try(LoopbackRangeServer server=server(uri->{
+            var c=new FakeConnection(uri,100);redirected.add(c);
+            if(uri.getHost().equals(TARGET.getHost())){c.code=302;c.location="https://"+"a".repeat(32)+".v.smtcdns.com/audio";}
+            return c;
+        })) {
+            URI local=server.register(new MediaLease(MediaLease.Platform.BILIBILI,TARGET,Map.of("Cookie","SECRET","Referer","https://www.bilibili.com/"),"a",NOW.plusSeconds(60),100));
+            eq(206,call(local,"GET","Range: bytes=0-0\r\n","").code());
+            eq(2,redirected.size());
+            eq("SECRET",redirected.getFirst().getRequestProperty("Cookie"));
+            eq(null,redirected.getLast().getRequestProperty("Cookie"));
+            eq("https://www.bilibili.com/",redirected.getLast().getRequestProperty("Referer"));
         }
         try (LoopbackRangeServer server = server(uri -> {
             FakeConnection connection = new FakeConnection(uri, 100);

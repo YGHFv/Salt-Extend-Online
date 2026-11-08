@@ -34,6 +34,8 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     private final StreamFactory factory;
     private final Object interceptor;
     private volatile boolean closed;
+    private volatile AutomaticPlaybackRecovery recovery;
+    public void recovery(AutomaticPlaybackRecovery recovery) {this.recovery=recovery;}
 
     public Salt1193StreamAdapter(ClassLoader loader, Salt1193Probe.Result profile,
                                 BooleanSupplier authorized, StreamFactory factory) throws ReflectiveOperationException {
@@ -55,6 +57,9 @@ public final class Salt1193StreamAdapter implements StreamBinding {
             String path = (String)pathGetter.invoke(args[1]);
             if (!path.startsWith("saltneri://") && !((String)idGetter.invoke(args[1])).startsWith("saltneri:")) return null;
             JobKt.ensureActive(((Continuation<?>)args[5]).getContext());
+            String id=(String)idGetter.invoke(args[1]);
+            AutomaticPlaybackRecovery recover=recovery;
+            long ticket=recover==null?0:recover.started(id);
             Object raw;
             try {
                 if (closed || !authorized.getAsBoolean()) throw new SecurityException("Online stream adapter disabled");
@@ -72,17 +77,31 @@ public final class Salt1193StreamAdapter implements StreamBinding {
                 }
                 if (raw instanceof kotlin.Result.Failure failure) {
                     if (failure.exception instanceof CancellationException cancellation) throw cancellation;
+                    if(recover!=null)recover.failed(id,ticket,failureCode(failure.exception));
                     raw = ResultKt.createFailure(new IllegalStateException("Online stream creation failed"));
                 }
+                else if(recover!=null)recover.succeeded(id,ticket);
                 // The host owns successful handles and frees them if the caller is cancelled.
                 // Checking cancellation after create here would leak that just-created handle.
+            } catch (io.github.yghfv.saltneri.plugin.net.RequestScope.DeadlineExceeded timeout) {
+                if(recover!=null)recover.failed(id,ticket,"NETWORK_TIMEOUT");
+                raw=ResultKt.createFailure(new IllegalStateException("Online stream resolution timed out"));
             } catch (CancellationException cancellation) {
                 throw cancellation;
             } catch (Exception failure) {
+                if(recover!=null)recover.failed(id,ticket,failureCode(failure));
                 raw = ResultKt.createFailure(new IllegalStateException("Online stream creation failed"));
             }
             return box.invoke(null, raw);
         });
+    }
+
+    private static String failureCode(Throwable failure) {
+        if(failure instanceof io.github.yghfv.saltneri.plugin.bilibili.BiliClient.PlatformRejected
+                || failure instanceof io.github.yghfv.saltneri.plugin.netease.NeteaseClient.PlatformRejected) return "REJECTED";
+        if(failure instanceof java.net.SocketTimeoutException) return "NETWORK_TIMEOUT";
+        if(failure instanceof java.io.IOException) return "AUDIO_RESOLUTION";
+        return "STREAM_CREATE";
     }
 
     public synchronized void register(String path, URI localUri) {

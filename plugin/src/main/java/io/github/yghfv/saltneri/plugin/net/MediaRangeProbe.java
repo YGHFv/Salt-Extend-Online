@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Shared one-byte CDN validation. No account headers, cross-host redirects or full download. */
+/** Shared one-byte CDN validation. Bilibili redirects stay within its explicit HTTPS CDN policy. */
 public final class MediaRangeProbe {
     @FunctionalInterface public interface Opener { HttpURLConnection open(URI uri) throws IOException; }
     public record Result(URI uri, long length, Instant expiresAt) {
@@ -47,8 +47,8 @@ public final class MediaRangeProbe {
                     String location = connection.getHeaderField("Location"); URI next;
                     try { next = location == null ? null : uri.resolve(location); }
                     catch (IllegalArgumentException failure) { throw invalid(); }
-                    requireTarget(platform, next);
-                    if (!uri.getHost().equalsIgnoreCase(next.getHost())) throw invalid();
+                    try { MediaLease.requireRedirect(platform, uri, next); }
+                    catch (IllegalArgumentException | NullPointerException rejected) { throw invalid(); }
                     uri = next; continue;
                 }
                 String encoding = connection.getHeaderField("Content-Encoding"), range = connection.getHeaderField("Content-Range");
