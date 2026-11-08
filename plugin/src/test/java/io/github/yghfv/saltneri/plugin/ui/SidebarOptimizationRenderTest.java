@@ -22,6 +22,27 @@ import kotlinx.coroutines.flow.*;
 public final class SidebarOptimizationRenderTest {
     private static int checks;
     private static void check(boolean value) { checks++; if (!value) throw new AssertionError("Sidebar check " + checks); }
+    private static SemanticsNode icon(SemanticsNode n,String label) {
+        var key=SemanticsProperties.INSTANCE.getContentDescription();
+        if(n.getConfig().contains(key) && n.getConfig().get(key).contains(label+" icon")) return n;
+        for(var child:n.getChildren()){var found=icon(child,label);if(found!=null)return found;}return null;
+    }
+    private static void centeredIcon(ImageComposeScene scene,String label,boolean colored) throws Exception {
+        SemanticsNode image=null;
+        for(var owner:scene.getSemanticsOwners()){image=icon(owner.getUnmergedRootSemanticsNode(),label);if(image!=null)break;}
+        check(image!=null);
+        var bounds=image.getBoundsInRoot();var button=HeaderSearchRenderTest.find(scene,label,SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
+        check(Math.abs(bounds.getLeft()+bounds.getRight()-button.getLeft()-button.getRight())<1);
+        check(Math.abs(bounds.getTop()+bounds.getBottom()-button.getTop()-button.getBottom())<1);
+        if(colored)try(var frame=scene.render(System.nanoTime());var data=frame.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
+            var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data.getBytes()));int count=0;
+            for(int y=(int)bounds.getTop();y<(int)bounds.getBottom();y++)for(int x=(int)bounds.getLeft();x<(int)bounds.getRight();x++) {
+                int p=pixels.getRGB(x,y),r=(p>>16)&255,g=(p>>8)&255,b=p&255;
+                if((p>>>24)>100 && Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))>40)count++;
+            }
+            check(count>10);
+        }
+    }
     private static final class Hooks extends HookRegistrar {
         int installed, closed;
         private HookHandle handle() { return new HookHandle() {
@@ -30,11 +51,13 @@ public final class SidebarOptimizationRenderTest {
             public void close() { unhook(); }
         }; }
         public HookHandle hookMethod(String c,String m,List<String> t,MethodHook h) { return handle(); }
-        public HookHandle afterComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) { return handle(); }
-        public HookHandle replaceComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) {
-            check(c.equals(SaltSidebarBindings.CAPTION) && i.equals(SaltSidebarBindings.TOGGLE) && t.equals(SaltSidebarBindings.PARAMETERS));
+        public HookHandle afterComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) {
+            if(c.equals(SaltNativeUi.SIDEBAR)) return handle();
+            check((c.equals(SaltSidebarBindings.CAPTION) && i.equals(SaltSidebarBindings.TOGGLE) && t.equals(SaltSidebarBindings.PARAMETERS))
+                    || (c.equals(SaltSidebarBindings.TITLEBAR) && i.equals(SaltSidebarBindings.WINDOW) && t.equals(SaltSidebarBindings.TITLE_PARAMETERS)));
             installed++; return handle();
         }
+        public HookHandle replaceComposable(String c,String m,String i,List<String> t,int p,ComposableHook h) { throw new AssertionError("Defaults skip native replacement"); }
         public <S> HookHandle appendContent(String c,String m,String i,String a,Class<S> s,List<String> t,int p,ContentHook<S> h) { throw new AssertionError(); }
     }
     private static Object sheet() throws Exception {
@@ -49,11 +72,6 @@ public final class SidebarOptimizationRenderTest {
                 String.class,long.class,int.class,int.class,boolean.class,String.class,String.class,byte[].class,byte[].class)
                 .newInstance(id,title,0L,false,"",0L,0,0,false,"","",new byte[0],new byte[0]);
     }
-    private static UiHookCall call(List<Object> args) { return new UiHookCall() {
-        public Object getThisObject() { return null; }
-        public List<Object> getArguments() { return args; }
-        public Object getArgument(String name) { return null; }
-    }; }
     @SuppressWarnings("unchecked")
     public static void main(String[] ignored) throws Exception {
         ClassLoader host = SidebarOptimizationRenderTest.class.getClassLoader();
@@ -69,7 +87,7 @@ public final class SidebarOptimizationRenderTest {
                      p->new AccountLoginController.Snapshot(AccountLoginController.Phase.IDLE,"",null,""),(p,a)->{},permitted::get),permitted::get);
              SaltSidebarBindings binding = new SaltSidebarBindings(host,()->{subscription.incrementAndGet(); return flow;})) {
             var hooks = new Hooks();
-            binding.install(hooks,ui); binding.install(hooks,ui); check(hooks.installed==1);
+            binding.install(hooks,ui); binding.install(hooks,ui); check(hooks.installed==2);
             check(!binding.enabled()); check(binding.entries().size()==10); check(subscription.get()==0);
             var hidden = new ClassLoader(host) {
                 @Override protected Class<?> loadClass(String n,boolean resolve) throws ClassNotFoundException {
@@ -80,7 +98,6 @@ public final class SidebarOptimizationRenderTest {
             Class<?> stateType = Class.forName("androidx.compose.ui.\u09b8");
             AtomicInteger toggles = new AtomicInteger();
             Object state = stateType.getConstructor(boolean.class,Function1.class).newInstance(true,(Function1<Boolean,Unit>)v->{toggles.incrementAndGet();return Unit.INSTANCE;});
-            Function0<Unit> toggle = ()->{try {stateType.getMethod("\u052b").invoke(state);return Unit.INSTANCE;}catch(Exception e){throw new AssertionError(e);}};
             var stack = new androidx.navigation3.runtime.NavBackStack<androidx.navigation3.runtime.NavKey>();
             Object initial = binding.entries().getFirst().route(); stack.add((androidx.navigation3.runtime.NavKey)initial);
             Object nav = Class.forName("com.xuncorp.voxzen.ui.navigation.Navigator").getConstructors()[0].newInstance(initial,
@@ -89,8 +106,10 @@ public final class SidebarOptimizationRenderTest {
             var localNav = (ProvidableCompositionLocal<Object>)Class.forName("com.xuncorp.voxzen.ui.navigation.AppNavigationKt").getMethod("getLocalNavigator").invoke(null);
             ComposableHook content = (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltSidebarContent")
                     .getConstructor(SaltSidebarBindings.class,SaltNativeUi.class).newInstance(binding,ui);
-            Method draw = content.getClass().getMethod("Content",UiHookCall.class,Composer.class,int.class);
+            ComposableHook anchorContent = (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltSidebarAnchor")
+                    .getConstructor(SaltSidebarBindings.class,SaltNativeUi.class).newInstance(binding,ui);
             Map<Object,String> nativeLabels = new LinkedHashMap<>();
+            try(var transformed = new SidebarHookTransformFixture(anchorContent, content)) {
             SwingUtilities.invokeAndWait(()->{
                 try {
                     for(int width : new int[]{1280,520}) {
@@ -99,9 +118,7 @@ public final class SidebarOptimizationRenderTest {
                             CompositionLocalKt.CompositionLocalProvider(new ProvidedValue[]{localState.provides(state),localNav.provides(nav)},(c,f)->{
                                 for(var entry:binding.entries()) nativeLabels.put(entry.route(),binding.label(entry,c));
                                 Modifier modifier=SemanticsModifierKt.semantics(Modifier.Companion,false,s->{SemanticsPropertiesKt.setContentDescription(s,"Fixture toggle");return Unit.INSTANCE;});
-                                UiHookCall call=call(Arrays.asList(toggle,"Fixture toggle",binding.painter(binding.entries().getFirst(),c),modifier,
-                                        false,null,0f,ui.palette(c).secondary(),null,null));
-                                try {draw.invoke(content,call,c,0);}catch(Exception e){throw new AssertionError(e);}
+                                transformed.render(modifier,c);
                                 return Unit.INSTANCE;
                             },composer,0); return Unit.INSTANCE;
                         });
@@ -112,11 +129,14 @@ public final class SidebarOptimizationRenderTest {
                             check(subscription.get()==before); check(binding.expanded(state));
                             HeaderSearchRenderTest.click(scene,"Fixture toggle"); check(!binding.expanded(state));
                             check(ui.sidebarStyle()!=null); check(subscription.get()>before);
+                            check(!binding.diagnostics().endsWith("/width=0"));
                             var bili=HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick()); check(bili!=null);
                             if(width==1280) {
                                 var toggleNode=HeaderSearchRenderTest.find(scene,"Fixture toggle",SemanticsActions.INSTANCE.getOnClick());
                                 check(bili.getBoundsInRoot().getLeft()>=toggleNode.getBoundsInRoot().getRight());
                                 check(Math.abs(bili.getBoundsInRoot().getTop()-toggleNode.getBoundsInRoot().getTop())<2);
+                                check(bili.getBoundsInRoot().getWidth()==40f && bili.getBoundsInRoot().getLeft()>260f);
+                                centeredIcon(scene,"Bilibili",true);centeredIcon(scene,"\u7f51\u6613\u4e91",true);
                                 float right=toggleNode.getBoundsInRoot().getRight();
                                 for(var entry:binding.entries()) {
                                     String label=nativeLabels.get(entry.route());
@@ -124,6 +144,7 @@ public final class SidebarOptimizationRenderTest {
                                     check(node.getBoundsInRoot().getLeft()>=right); right=node.getBoundsInRoot().getRight();
                                     check(node.getBoundsInRoot().getWidth()==40f);
                                     check(!node.getConfig().contains(SemanticsProperties.INSTANCE.getText()));
+                                    centeredIcon(scene,label,Set.of("Genre","Folder","MusicLibrary").contains(entry.route().getClass().getSimpleName()));
                                     HeaderSearchRenderTest.click(scene,label); check(stack.getLast().equals(entry.route()));
                                     node=HeaderSearchRenderTest.find(scene,label,SemanticsActions.INSTANCE.getOnClick());
                                     check(node.getConfig().get(SemanticsProperties.INSTANCE.getSelected()));
@@ -139,8 +160,9 @@ public final class SidebarOptimizationRenderTest {
                                 check(HeaderSearchRenderTest.find(scene,"Fixture playlist",SemanticsActions.INSTANCE.getOnClick())==null);
                             }
                             var scroll=HeaderSearchRenderTest.find(scene,null,SemanticsActions.INSTANCE.getScrollBy()); check(scroll!=null);
-                            check(scroll.getBoundsInRoot().getRight()<=width-320+1);
+                            check(scroll.getBoundsInRoot().getRight()<=width-240+1);
                             binding.enabled(false); HeaderSearchRenderTest.render(scene);
+                            check(binding.diagnostics().endsWith("/width=0"));
                             check(!binding.expanded(state)); check(HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick())==null);
                             binding.enabled(true); HeaderSearchRenderTest.render(scene);
                             check(HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick())!=null);
@@ -155,9 +177,11 @@ public final class SidebarOptimizationRenderTest {
                     }
                 }catch(Exception e){throw new AssertionError(e);}
             });
-            binding.close(); binding.close(); check(hooks.closed==1 && !binding.enabled());
+            check(transformed.afterCalls()>0); check(transformed.replacementCalls()==0);
+            }
+            binding.close(); binding.close(); check(hooks.closed==2 && !binding.enabled());
             check(toggles.get()>=6); check(remote.get()==0);
         }
-        System.out.println("PASS: "+checks+" native sidebar checks; toggle/restore, opt-in, selection/navigation, playlists, overflow and permission loss; no user data or playback");
+        System.out.println("PASS: "+checks+" native sidebar checks through actual host UI transform/default-mask dispatch; toggle/restore, opt-in, navigation, playlists, overflow and permission loss; no user data or playback");
     }
 }

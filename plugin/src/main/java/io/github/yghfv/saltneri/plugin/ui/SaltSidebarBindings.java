@@ -15,18 +15,27 @@ import kotlinx.coroutines.flow.Flow;
 public final class SaltSidebarBindings implements AutoCloseable {
     public static final String CAPTION = "com.xuncorp.voxzen.ui.component.\u0529";
     public static final String TOGGLE = "androidx.compose.ui.\u0476";
+    public static final String TITLEBAR = "androidx.compose.ui.\u0b61";
+    public static final String WINDOW = "androidx.compose.ui.\u0537";
+    public static final List<String> TITLE_PARAMETERS = List.of("androidx.compose.ui.\u04d7", "androidx.compose.ui.\u0aa0",
+            "androidx.compose.ui.\u091a", "androidx.compose.ui.Modifier");
     public static final List<String> PARAMETERS = List.of("kotlin.jvm.functions.Function0", "java.lang.String",
             "androidx.compose.ui.graphics.painter.Painter", "androidx.compose.ui.Modifier", "boolean", "java.lang.String",
             "float", "long", "androidx.compose.foundation.layout.PaddingValues", "androidx.compose.ui.Modifier");
     public record Entry(Object route, String label, Object drawable, Object vector) { }
-    private final Method caption, iconCaption, stateLocal, expanded, style, navigate, backStack, dismiss;
+    public record Anchor(float x, float y) { }
+    private final MutableState<Anchor> anchor = SnapshotStateKt.mutableStateOf(null, SnapshotStateKt.structuralEqualityPolicy());
+    private final Method iconCaption, stateLocal, expanded, style, navigate, backStack, dismiss;
+    private final float captionWidth, captionHeight, titleHeight;
+    private final java.util.concurrent.atomic.AtomicInteger renders = new java.util.concurrent.atomic.AtomicInteger();
+    private volatile int visibleWidth;
     private final Method painter, vectorPainter, string, playlistFlow, playlistId, playlistTitle;
     private final Class<?> repository;
     private final Constructor<?> playlistRoute;
     private final List<Entry> entries;
     private final java.util.function.Supplier<Flow<List<Object>>> playlistSource;
     private final MutableState<Boolean> enabled = SnapshotStateKt.mutableStateOf(false, SnapshotStateKt.structuralEqualityPolicy());
-    private HookHandle handle;
+    private HookHandle handle, titleHandle;
     private boolean closed;
 
     public SaltSidebarBindings(ClassLoader host) throws ReflectiveOperationException {
@@ -35,11 +44,16 @@ public final class SaltSidebarBindings implements AutoCloseable {
     SaltSidebarBindings(ClassLoader host, java.util.function.Supplier<Flow<List<Object>>> playlistSource) throws ReflectiveOperationException {
         this.playlistSource = playlistSource;
         Class<?> c = type(host, CAPTION);
-        caption = c.getMethod("\u037f", kotlin.jvm.functions.Function0.class, String.class, Painter.class, Modifier.class,
+        c.getMethod("\u037f", kotlin.jvm.functions.Function0.class, String.class, Painter.class, Modifier.class,
                 boolean.class, String.class, float.class, long.class, androidx.compose.foundation.layout.PaddingValues.class,
                 Modifier.class, Composer.class, int.class, int.class);
         iconCaption = c.getMethod("\u037f", Function0.class, String.class, Modifier.class, boolean.class,
                 String.class, float.class, Function3.class, Composer.class, int.class, int.class);
+        captionWidth = (float)type(host, "androidx.compose.ui.\u0766").getMethod("\u052a").invoke(null);
+        captionHeight = (float)type(host, "androidx.compose.ui.\u0766").getMethod("\u0529").invoke(null);
+        titleHeight = (float)type(host, "androidx.compose.ui.\u0766").getMethod("\u037f").invoke(null);
+        if (!Float.isFinite(captionWidth) || captionWidth < 16 || captionWidth > 100)
+            throw new NoSuchMethodException("Unsupported caption metrics");
         stateLocal = type(host, "androidx.compose.ui.\u10eb").getMethod("\u037f");
         Class<?> state = type(host, "androidx.compose.ui.\u09b8");
         expanded = state.getMethod("\u037f");
@@ -107,7 +121,13 @@ public final class SaltSidebarBindings implements AutoCloseable {
         if (closed || handle != null) return;
         ComposableHook content = (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltSidebarContent")
                 .getConstructor(SaltSidebarBindings.class, SaltNativeUi.class).newInstance(this, ui);
-        handle = hooks.replaceComposable(CAPTION, "\u037f", TOGGLE, PARAMETERS, 50, content);
+        ComposableHook location = (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltSidebarAnchor")
+                .getConstructor(SaltSidebarBindings.class, SaltNativeUi.class).newInstance(this, ui);
+        // Salt skips replacement for calls with nonzero default masks (this call uses 880).
+        // After-content runs for these calls too, without emulating or replacing the original button.
+        handle = hooks.afterComposable(CAPTION, "\u037f", TOGGLE, PARAMETERS, 50, location);
+        try { titleHandle = hooks.afterComposable(TITLEBAR, "\u037f", WINDOW, TITLE_PARAMETERS, 50, content); }
+        catch (RuntimeException | LinkageError failure) { handle.close(); handle = null; throw failure; }
     }
     public synchronized void enabled(boolean value) { if (!closed) enabled.setValue(value); }
     public boolean enabled() { return enabled.getValue(); }
@@ -145,19 +165,22 @@ public final class SaltSidebarBindings implements AutoCloseable {
         }
         return List.copyOf(result);
     }
-    public void original(UiHookCall call, Composer composer) {
-        Object[] args = Arrays.copyOf(call.getArguments().toArray(), 13);
-        args[10] = composer; args[11] = 0;
-        // Original SidebarCaptionButton omits enabled/tooltip/width/padding/icon modifier.
-        args[12] = 880;
-        invoke(caption, null, args);
-    }
+    public float captionWidth() { return captionWidth; }
+    public float captionHeight() { return captionHeight; }
+    public float titleHeight() { return titleHeight; }
+    public Anchor anchor() { return anchor.getValue(); }
+    public void anchor(Anchor value) { anchor.setValue(value); }
+    public void rendered() { renders.incrementAndGet(); }
+    public void visibleWidth(int pixels) { visibleWidth = pixels; }
+    public String diagnostics() { return enabled() + "/rendered=" + renders.get() + "/width=" + visibleWidth; }
     public void button(String label, Modifier modifier, Function0<Unit> action, Object icon, Composer composer) {
         invoke(iconCaption, null, action, label, modifier, true, null, 40f, icon, composer, 0, 16);
     }
     @Override public synchronized void close() {
         if (closed) return;
-        enabled.setValue(false); closed = true;
+        enabled.setValue(false); visibleWidth = 0; closed = true;
+        anchor.setValue(null);
+        if (titleHandle != null) { titleHandle.close(); titleHandle = null; }
         if (handle != null) { handle.close(); handle = null; }
     }
 }

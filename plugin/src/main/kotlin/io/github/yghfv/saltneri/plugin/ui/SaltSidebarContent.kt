@@ -12,9 +12,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.contentDescription
@@ -27,21 +29,33 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 
+/** Only measures the toggle's real position; never draws inside the clipped sidebar-width region. */
+class SaltSidebarAnchor(private val binding: SaltSidebarBindings, private val ui: SaltNativeUi) : ComposableHook() {
+    @Composable
+    override fun Content(call: UiHookCall) {
+        if (!binding.enabled() || !ui.available()) return
+        val state = binding.state(currentComposer)
+        if (binding.expanded(state)) return
+        DisposableEffect(binding) { onDispose { binding.anchor(null) } }
+        Box(Modifier.size(0.dp).onGloballyPositioned {
+            val p = it.positionInRoot()
+            binding.anchor(SaltSidebarBindings.Anchor(p.x, p.y))
+        })
+    }
+}
+
 /** Uses the native toggle callback and snapshot state, never a second sidebar preference. */
 class SaltSidebarContent(private val binding: SaltSidebarBindings, private val ui: SaltNativeUi) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
         var available by remember { mutableStateOf(ui.available()) }
         LaunchedEffect(ui) { while (true) { available = ui.available(); delay(500) } }
-        if (!binding.enabled() || !available) {
-            binding.original(call, currentComposer)
-            return
-        }
+        SideEffect { binding.rendered() }
+        if (!binding.enabled() || !available) return
         val state = binding.state(currentComposer)
-        if (binding.expanded(state)) {
-            binding.original(call, currentComposer)
-            return
-        }
+        val anchor = binding.anchor() ?: return
+        if (binding.expanded(state)) return
+        DisposableEffect(binding) { onDispose { binding.visibleWidth(0) } }
         val navigator = ui.navigator(currentComposer)
         val style = binding.style(currentComposer)
         SideEffect { ui.publishSidebarStyle(style) }
@@ -55,18 +69,20 @@ class SaltSidebarContent(private val binding: SaltSidebarBindings, private val u
             catch (_: Exception) { /* Native actions remain available if the optional database is unavailable. */ }
         }
         CompositionLocalProvider(ui.styleLocal().provides(style)) {
-            val maxWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
-            // Reserve window controls and a drag area; overflow stays within this scrollable strip.
-            Row(Modifier.widthIn(max = (maxWidth - 320.dp).coerceAtLeast(80.dp)), verticalAlignment = Alignment.CenterVertically) {
-                binding.original(call, currentComposer)
-                Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            val density = LocalDensity.current
+            var origin by remember { mutableStateOf(Offset.Zero) }
+            // This slot is a sibling of the entire native titlebar, outside its 260dp left region.
+            BoxWithConstraints(Modifier.fillMaxWidth().height(binding.titleHeight().dp).onGloballyPositioned { origin = it.positionInRoot() }) {
+                val start = with(density) { (anchor.x() - origin.x).toDp() } + binding.captionWidth().dp
+                val top = with(density) { (anchor.y() - origin.y).toDp() }
+                Row(Modifier.offset(x = start, y = top).widthIn(max = (maxWidth - start - 240.dp).coerceAtLeast(40.dp))
+                    .height(binding.captionHeight().dp).horizontalScroll(rememberScrollState()).onSizeChanged { binding.visibleWidth(it.width) }, verticalAlignment = Alignment.CenterVertically) {
                     val selectedRoute = binding.selected(navigator)
                     binding.entries().forEach { entry ->
                         key(entry.route()) {
                             SidebarShortcut(binding, ui, binding.label(entry, currentComposer), selectedRoute == entry.route(),
                                 { if (ui.available()) binding.open(navigator, state, entry) }) {
-                                Image(binding.painter(entry, currentComposer), null, Modifier.size(20.dp),
-                                    colorFilter = ColorFilter.tint(Color(ui.palette(currentComposer).secondary().toULong())))
+                                Image(binding.painter(entry, currentComposer), null, Modifier.size(20.dp))
                             }
                         }
                         if (entry.route().javaClass.simpleName == "MusicLibrary") {
@@ -84,8 +100,7 @@ class SaltSidebarContent(private val binding: SaltSidebarBindings, private val u
                         key(entry.route()) {
                             SidebarShortcut(binding, ui, entry.label(), selectedRoute == entry.route(),
                                 { if (ui.available()) binding.open(navigator, state, entry) }) {
-                                Image(binding.painter(entry, currentComposer), null, Modifier.size(20.dp),
-                                    colorFilter = ColorFilter.tint(Color(ui.palette(currentComposer).secondary().toULong())))
+                                Image(binding.painter(entry, currentComposer), null, Modifier.size(20.dp))
                             }
                         }
                     }
@@ -101,5 +116,8 @@ private fun SidebarShortcut(binding: SaltSidebarBindings, ui: SaltNativeUi, labe
     val palette = ui.palette(currentComposer)
     val modifier = Modifier.semantics { selected = active; contentDescription = label }.clip(palette.shape())
         .background(if (active) Color(palette.background().toULong()) else Color.Transparent)
-    binding.button(label, modifier, action, icon, currentComposer)
+    val centered: @Composable BoxScope.() -> Unit = { Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(20.dp).semantics { contentDescription = "$label icon" }, contentAlignment = Alignment.Center, content = icon)
+    } }
+    binding.button(label, modifier, action, centered, currentComposer)
 }

@@ -305,7 +305,7 @@ public final class SaltNativeUi implements AutoCloseable {
         String visible = pages.isEmpty() ? "none" : new TreeSet<>(pages.values().stream().map(Enum::name).toList()).toString();
         return "Native UI 0.7.6: bound=" + pageBinding.isInstalled() + ", dispatch=" + dispatched.get()
                 + ", platform=" + selected.get() + ", rendered=" + rendered.get() + ", visible=" + visible
-                + ", pendingLogin=" + (pendingLogin.get() != null) + ", sidebar=" + (sidebar == null ? sidebarFailure : sidebar.enabled())
+                + ", pendingLogin=" + (pendingLogin.get() != null) + ", sidebar=" + (sidebar == null ? sidebarFailure : sidebar.diagnostics())
                 + ", error=" + (failure.equals("none") ? pageBinding.failure() : failure);
     }
     public void requestLogin(AccountPlatform platform) {
