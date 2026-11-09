@@ -49,6 +49,23 @@ public final class CoverLoaderContractTest {
         check(SOURCE.equals(CoverSource.parse(AccountPlatform.BILIBILI, SOURCE.toString().replace("https:", "http:"))));
         check(CoverSource.parse(AccountPlatform.NETEASE, "http://p1.music.126.net/abc/fixture.jpg") != null);
         check(CoverSource.parse(AccountPlatform.NETEASE, "http://p1.music.126.net/fixture_base64==/fixture.jpg") != null);
+        for(String source:List.of("https://music-file.y.qq.com/songlist/u/fixture.jpg?imageView2/4/w/300/h/300",
+                "http://qpic.y.qq.com/music_cover/fixture/300?n=1","https://p.qpic.cn/music_cover/fixture/600?n=1&max_age=2592000",
+                "https://y.gtimg.cn/music/photo_new/T002R500x500M000fixture.jpg?max_age=2592000",
+                "https://q.qlogo.cn/headimg_dl?dst_uin=42&spec=640")) {
+            URI qq=CoverSource.parse(AccountPlatform.QQMUSIC,source);
+            check(qq!=null && qq.getScheme().equals("https"));
+            check(qq.getHost().equals("q.qlogo.cn") || qq.getRawQuery()==null);
+            try(var loader=new CoverLoader(uri->new Response(uri,png()));var scope=new RequestScope(()->true)) {
+                check(loader.load(qq,scope).length>0);
+            }
+        }
+        for(String bad:List.of("https://music-file.y.qq.com/songlist/u/fixture.jpg?vkey=SECRET",
+                "https://music-file.y.qq.com/songlist/u/fixture.jpg?imageView2/4/w/300/h/300&token=SECRET",
+                "https://qpic.y.qq.com/music_cover/fixture/300?n=1&token=SECRET",
+                "https://music-file.y.qq.com.evil/songlist/fixture.jpg",
+                "https://q.qlogo.cn/headimg_dl?dst_uin=42&spec=640&token=SECRET",
+                "https://u.y.qq.com/cgi-bin/musicu.fcg"))check(CoverSource.parse(AccountPlatform.QQMUSIC,bad)==null);
         for (String input : List.of("", "fixture", "https://i0.hdslb.com/fixture?token=URL_SECRET", "https://user:COOKIE_SECRET@i0.hdslb.com/a",
                 "https://i0.hdslb.com:443/a", "https://i0.hdslb.com/a#URL_SECRET", "https://i0.hdslb.com.evil.example/a", "https://127.0.0.1/a",
                 "https://m7.music.126.net/audio", "file:///a", "//evil.example/a")) {
@@ -56,6 +73,20 @@ public final class CoverLoaderContractTest {
             check(CoverSource.parse(AccountPlatform.NETEASE, input) == null);
         }
         byte[] fixture = png(); Response response = new Response(SOURCE, fixture);
+        URI album=URI.create("https://y.qq.com/music/photo_new/T002R800x800M00000123456789abc.jpg");
+        URI albumCdn=URI.create("https://y.gtimg.cn/music/photo_new/T002R800x800M00000123456789abc.jpg");
+        check(albumCdn.equals(CoverSource.playbackFallback(album)));
+        for(URI bad:List.of(SOURCE,URI.create("https://y.qq.com/other.jpg"),URI.create(album+"?token=SECRET"),
+                URI.create("https://y.qq.com/music/photo_new/T002R800x800M000wrong.jpg")))
+            check(CoverSource.playbackFallback(bad)==null);
+        var albumRequests=new ArrayList<URI>();
+        try(var loader=new CoverLoader(uri->{
+            albumRequests.add(uri);var result=new Response(uri,fixture);
+            if(uri.equals(album))result.status=404;return result;
+        });var scope=new RequestScope(()->true)) {
+            check(loader.loadPlayback(album,scope).length>0);
+            check(albumRequests.equals(List.of(album,albumCdn)));
+        }
         var loads=new AtomicInteger();
         try(var loader=new CoverLoader(uri->{loads.incrementAndGet();return new Response(uri,fixture);});var scope=new RequestScope(()->true)) {
             byte[] first=loader.load(SOURCE,scope);

@@ -1,5 +1,27 @@
 # Third-Party Notices
 
+## Mygo-Qyin
+
+- Repository: https://github.com/Amamiya23/mygo-qyin
+- Snapshot revision: `152d32d2a0ba49a3074b120030684a2d22d899cf`
+- License: AGPL-3.0; see `licenses/Mygo-Qyin-AGPL-3.0.txt`.
+- Copyright: upstream authors; upstream notices remain authoritative.
+- `QqMusicLoginResponse`, `QqMusicPtui`, QQ authenticated profile verification and
+  session fencing adapt `internal/qqmusic/auth*.go`.
+- `QqMusicQrcDecoder`, `QqMusicLyricsText` and `QqMusicLyricsClient` adapt
+  `internal/qqmusic/qrc_decrypt.go`, `internal/qqmusic/playback.go` and
+  `internal/lyrics/qrc.go` / `lyrics.go`. This AGPL-covered portion is combined
+  with the GPL-3.0-or-later project under the licenses' version-3 combination terms.
+- The decoder's DES tables derive from Go's `crypto/des`: Copyright 2010 The Go
+  Authors. BSD-3-Clause notice reproduced in `licenses/Go-DES-BSD-3-Clause.txt`.
+- QQ substitutions, byte order and key-schedule changes are a legacy lyric
+  wire protocol, not general encryption or a membership/authorization bypass.
+- Synthetic regression vectors contain only invented text. Upstream public-song
+  encrypted samples are used locally for verification, not bundled in the mod.
+- Corresponding local source is in this repository; the mod's existing
+  `Plugin-Open-Source-Url` exposes the project source entry point. Distribution
+  must include the source matching the distributed build.
+
 ## Simple Icons
 
 - Bilibili and NetEase Cloud Music vector paths in `PlatformIcons.kt` are from Simple Icons 16.36.0.
@@ -28,16 +50,24 @@ The following Java files are ports or adaptations, not independent claims of aut
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/bilibili/BiliClient.java` | View/playurl and DASH mapping branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/bilibili/api/client/BiliClient.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/BiliQrClient.java` | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/bilibili/api/auth/BiliQrLoginClient.kt`; related QR auth model files |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseQrClient.java` | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/auth/NeteaseQrLoginClient.kt`; related QR auth model files |
-| `plugin/src/main/resources/auth/netease-web-login.ps1` (device script), `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseDeviceSnapshot.java` | Official `createNEFingerprint/getToken` parameters and device snapshot mapping from `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/auth/NeteaseYdDeviceTokenProvider.kt`. Windows isolation, origin checks and fail-closed validation are plugin-specific. |
+| `plugin/src/main/resources/auth/netease-web-login.ps1` (legacy device script), `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseDeviceSnapshot.java`, `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseDeviceCollector.java` | Official `createNEFingerprint/getToken` parameters, page/API/token stages and raw device snapshot mapping from `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/auth/NeteaseYdDeviceTokenProvider.kt`. Native Edge isolation, cookie filtering, context fences and fail-closed validation are plugin-specific. |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/auth/NeteaseWeapi.java` | WEAPI AES/RSA branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/crypto/NeteaseCrypto.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseEapi.java` | EAPI framing/AES/MD5 branches of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/crypto/NeteaseCrypto.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseClient.java` | Song detail/audio parameters of `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/client/NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteaseSongMapping.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/api/playback/parser/NeteasePlaybackResponseParser.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseLyricsClient.java`, `plugin/src/main/java/io/github/yghfv/saltneri/plugin/netease/NeteaseLyricsText.java` | `getLyricNew` endpoint/parameters from the same `NeteaseClient.kt`; YRC/LRC and translation field priority from `modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/metadata/PlayerLyricsSupport.kt`. Salt serialization, transport and item bindings are plugin-specific. |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogClient.java` | Read-only favorites/playlist and CloudSearch parameters of the same `BiliClient.kt` and `NeteaseClient.kt`; `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteasePlaylistMapping.kt` and `NeteaseSongMapping.kt` |
-| `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/AutoSourceMatcher.java`, `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/NeteaseAutoSourceResolver.java` | Query ordering, six-candidate scoring, duration filters and page matching from `modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/resolver/netease/PlayerManagerNeteaseAutoSourceSwitch.kt`. Two-account revocation, logical identity retention, alternative-version gates and bounded work are plugin-specific. QQ Music networking is not connected. |
+| `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/AutoSourceMatcher.java`, `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/NeteaseAutoSourceResolver.java` | Query ordering, six-candidate scoring, duration filters and page matching from `modules/playback/runtime/src/main/java/moe/ouom/neriplayer/core/player/resolver/netease/PlayerManagerNeteaseAutoSourceSwitch.kt`. Two-account revocation, logical identity retention, alternative-version gates and bounded work are plugin-specific. QQ Music reuses the same matching engine with its original identity and account fences. |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogHttp.java` | Authenticated-only WEAPI preheat condition from `shouldPreheatNeteaseWeapiSession` in `NeteaseClient.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/CatalogFailure.java` | NetEase code 50000005 login hint from `buildHomeErrorText` in `app/src/main/java/moe/ouom/neriplayer/ui/viewmodel/tab/HomeViewModel.kt` |
 | `plugin/src/main/java/io/github/yghfv/saltneri/plugin/library/BiliDiscovery.java` | Music chart endpoints/mapping from `BiliClient.kt`; latest-period selection from `app/src/main/java/moe/ouom/neriplayer/ui/viewmodel/tab/bili/BiliMusicHomeRepository.kt`; source priority from `modules/model/src/main/java/moe/ouom/neriplayer/data/model/bilibili/music/BiliMusicModels.kt` |
+
+QQ Music additions in 0.8.38 are GPL-3.0-or-later adaptations of the same pinned revision:
+
+- `auth/QqMusicQrClient.java`: `modules/platform/src/main/java/moe/ouom/neriplayer/platform/qqmusic/auth/QQMusicQrLoginClient.kt` (QQ QR, OAuth, credential fields); account profile mapping from `qqmusic/api/profile/QQMusicAccountProfileClient.kt`.
+- `qqmusic/QqMusicClient.java`, `qqmusic/QqMusicHttp.java`, `library/QqMusicCatalog.java`: `qqmusic/api/client/QQMusicClient.kt` (gateway, playlists, song details and quality/vkey mapping) and `qqmusic/api/search/QQMusicSearchApi.kt` (desktop search, native lyrics).
+- `library/QqMusicAutoSourceResolver.java`: QQ source-switch behavior in the playback runtime, reusing the existing NetEase matching port.
+- `PlatformIcons.kt` QQ path: `app/src/main/res/drawable/ic_qq_music.xml`; not part of the Simple Icons CC0 paths. Brand ownership remains unchanged.
+- `auth/WindowsQqMusicWebLogin.java` and the shared isolated Edge helper are plugin-specific desktop integration. The QQ/WeChat official page completes authentication; no QIMEI device emulation or preview fallback is ported.
 
 Arithmetic in the duration ports avoids overflow on invalid, extremely large input while retaining
 upstream results on normal media durations. The selection port is intentionally incomplete:
@@ -61,7 +91,7 @@ in a 2026-11-06 public creation-only probe, in addition to the pinned upstream l
 
 The explicit NetEase web-login fallback follows the desktop official-homepage choice and
 user-completed login flow in upstream `NeteaseWebLoginUrl.kt` / `NeteaseWebLoginActivity.kt`.
-The Windows Edge/PowerShell bridge is plugin-specific, uses a fresh isolated profile, and
+The native Windows Edge bridge (and retained legacy PowerShell resource) is plugin-specific, uses a fresh isolated profile, and
 does not redistribute Microsoft Edge, its runtime, or a captcha/device-fingerprint solver.
 
 The NetEase resolver ports exact song detail GET and EAPI audio URL parameters, not Android playback,

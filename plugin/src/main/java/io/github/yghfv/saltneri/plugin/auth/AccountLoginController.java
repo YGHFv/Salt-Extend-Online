@@ -18,7 +18,10 @@ import java.util.function.Supplier;
 public final class AccountLoginController implements AutoCloseable {
     public enum Phase { IDLE, CREATING, WAITING_SCAN, WAITING_CONFIRMATION, VERIFICATION_REQUIRED, WEB_LOGIN, LOGGED_IN, EXPIRED, ERROR, CLOSED }
     @FunctionalInterface interface WebLogin { AccountCredentials login(RequestScope request) throws java.io.IOException; }
-    public record Snapshot(Phase phase, String status, URI qrContent, String userId, AccountCredentials.Profile profile, String revision) {
+    public record Snapshot(Phase phase, String status, URI qrContent, String userId, AccountCredentials.Profile profile, String revision, byte[] qrImage) {
+        public Snapshot(Phase phase,String status,URI qrContent,String userId,AccountCredentials.Profile profile,String revision) {this(phase,status,qrContent,userId,profile,revision,null);}
+        public Snapshot { if(qrImage!=null) qrImage=qrImage.clone(); }
+        @Override public byte[] qrImage() {return qrImage==null?null:qrImage.clone();}
         public Snapshot(Phase phase, String status, URI qrContent, String userId) { this(phase, status, qrContent, userId, new AccountCredentials.Profile("", null), ""); }
         @Override public String toString() { return "LoginStatus[" + phase + ", QR and secrets redacted]"; }
     }
@@ -52,7 +55,7 @@ public final class AccountLoginController implements AutoCloseable {
     private Phase phase = Phase.IDLE;
     private String status = "Not logged in. Login is explicit; no existing account is imported.";
     public AccountLoginController(AccountPlatform platform, BooleanSupplier authorized, EncryptedAccountStore store, Runnable onChange) {
-        this(platform, platform == AccountPlatform.BILIBILI ? BiliQrClient::new : NeteaseQrClient::new,
+        this(platform, switch(platform) {case BILIBILI -> BiliQrClient::new; case NETEASE -> NeteaseQrClient::new; case QQMUSIC -> QqMusicQrClient::new;},
                 authorized, store, onChange, Clock.systemUTC(), 3000);
     }
     public AccountLoginController(AccountPlatform platform, Supplier<QrAuthClient> clients, BooleanSupplier authorized,
@@ -73,18 +76,19 @@ public final class AccountLoginController implements AutoCloseable {
         current = new Operation(clients.get()); phase = Phase.CREATING;
         status = platform == AccountPlatform.NETEASE
                 ? "\u6b63\u5728\u901a\u8fc7\u72ec\u7acb\u4e34\u65f6 Edge \u51c6\u5907\u7f51\u6613\u4e91\u626b\u7801\u5b89\u5168\u73af\u5883\uff0c\u4e0d\u8bfb\u53d6\u6d4f\u89c8\u5668\u5df2\u6709\u8d26\u53f7\u3002"
-                : "Preparing explicit QR login in background. No audio or queue changes."; return current;
+                : "\u6b63\u5728\u51c6\u5907\u5b98\u65b9\u626b\u7801\u767b\u5f55\uff0c\u4e0d\u8bfb\u53d6\u5176\u4ed6\u5e94\u7528\u8d26\u53f7\u3002"; return current;
     }
     public void start(boolean remember) {
         Operation operation;
         synchronized (this) { rememberEnabled = remember; startupAttempted = true; operation = begin(); }
         changed();
         submit(operation, () -> {
-            try (RequestScope request = request(operation, platform == AccountPlatform.NETEASE ? 70000 : 30000)) {
+            try (RequestScope request = request(operation, platform == AccountPlatform.NETEASE ? 90000 : 30000)) {
                 QrAuthClient.Session session = operation.client.create(request); request.check();
                 synchronized (this) {
                     if (!valid(operation)) return; operation.session = session; phase = Phase.WAITING_SCAN;
-                    status = "Scan with the official platform app, then confirm there. QR expires locally after 3 minutes.";
+                    status = platform == AccountPlatform.QQMUSIC ? "\u8bf7\u4f7f\u7528\u624b\u673a QQ \u626b\u7801\u5e76\u786e\u8ba4\u767b\u5f55\uff0c\u4e8c\u7ef4\u7801\u6709\u6548\u671f 2 \u5206\u949f\u3002"
+                            : "Scan with the official platform app, then confirm there. QR expires locally after 3 minutes.";
                 }
                 schedule(operation);
             } catch (Exception | LinkageError error) { fail(operation, error); }
@@ -94,13 +98,14 @@ public final class AccountLoginController implements AutoCloseable {
         if (store == null) throw new IllegalStateException("Secure storage unavailable");
         startRestore(begin(), false);
     }
-    public void startWebLogin(boolean remember) { startWebLogin(remember, WindowsNeteaseWebLogin::login); }
+    public void startWebLogin(boolean remember) { startWebLogin(remember,platform==AccountPlatform.QQMUSIC?WindowsQqMusicWebLogin::login:WindowsNeteaseWebLogin::login); }
     void startWebLogin(boolean remember, WebLogin web) {
-        if(platform!=AccountPlatform.NETEASE) throw new IllegalArgumentException("Web login is NetEase-only");
+        if(platform==AccountPlatform.BILIBILI) throw new IllegalArgumentException("Web login unavailable for Bilibili");
         Operation operation;
         synchronized(this) {
             rememberEnabled=remember; startupAttempted=true; operation=begin(); phase=Phase.WEB_LOGIN;
             status="\u8bf7\u5728\u65b0\u6253\u5f00\u7684\u7f51\u6613\u4e91\u5b98\u65b9\u9875\u9762\u70b9\u51fb\u767b\u5f55\uff0c\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u3002\u4ec5\u4f7f\u7528\u72ec\u7acb\u4e34\u65f6\u7a97\u53e3\uff0c\u4e0d\u8bfb\u53d6\u6d4f\u89c8\u5668\u5df2\u6709\u8d26\u53f7\uff1b5\u5206\u949f\u5185\u6709\u6548\u3002";
+            if(platform==AccountPlatform.QQMUSIC) status="\u8bf7\u5728 QQ \u97f3\u4e50\u5b98\u65b9\u9875\u9762\u9009\u62e9 QQ \u6216\u5fae\u4fe1\u767b\u5f55\u5e76\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u3002\u4f7f\u7528\u72ec\u7acb\u4e34\u65f6 Edge\uff0c\u4e0d\u8bfb\u53d6\u73b0\u6709\u8d26\u53f7\uff1b5 \u5206\u949f\u5185\u6709\u6548\u3002";
         }
         changed();
         submit(operation,()->{
@@ -169,6 +174,9 @@ public final class AccountLoginController implements AutoCloseable {
                 if (!valid(operation)) return;
                 phase = result.state() == QrAuthClient.State.WAITING_SCAN ? Phase.WAITING_SCAN : Phase.WAITING_CONFIRMATION;
                 status = phase == Phase.WAITING_SCAN ? "Waiting for scan in the official app." : "Scanned. Confirm login in the official app.";
+                if(platform==AccountPlatform.QQMUSIC)status=phase==Phase.WAITING_SCAN
+                        ?"\u8bf7\u4f7f\u7528\u624b\u673a QQ \u626b\u7801\uff1b\u4e8c\u7ef4\u7801\u6709\u6548\u671f 2 \u5206\u949f\u3002"
+                        :"\u5df2\u626b\u7801\uff0c\u8bf7\u5728\u624b\u673a QQ \u4e0a\u786e\u8ba4\u767b\u5f55\u3002";
             }
             schedule(operation);
         } catch (Exception | LinkageError error) { fail(operation, error); }
@@ -202,7 +210,18 @@ public final class AccountLoginController implements AutoCloseable {
         if (!valid(operation)) return; operation.cancel(); phase = Phase.EXPIRED; status = "QR expired. Create a new QR explicitly; no automatic retries.";
     }
     private synchronized void fail(Operation operation, Throwable error) {
-        if (!valid(operation)) return; operation.cancel();
+        if (!valid(operation)) return;
+        if(platform==AccountPlatform.QQMUSIC) {
+            var stage=phase==Phase.WEB_LOGIN?AuthFailure.Stage.QQ_WEB:phase==Phase.CREATING?AuthFailure.Stage.QQ_CREATE:AuthFailure.Stage.QQ_POLL;
+            error=error instanceof AuthFailure known && known.getMessage().startsWith("QQ_")?known
+                    :error instanceof io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp.Rejected rejected
+                    ?AuthFailure.code(stage,AuthFailure.Reason.API,rejected.code())
+                    :error instanceof java.io.IOException io?AuthFailure.wrap(stage,AuthFailure.Reason.RESPONSE,io)
+                    :AuthFailure.of(stage,AuthFailure.Reason.RESPONSE);
+            if(error instanceof AuthFailure known && !known.getMessage().startsWith("QQ_"))
+                error=AuthFailure.of(stage,known.getMessage().contains("BROWSER_MISSING")?AuthFailure.Reason.BROWSER_MISSING:AuthFailure.Reason.RESPONSE);
+        }
+        operation.cancel();
         phase = error instanceof AuthFailure safe && safe.requiresWebVerification() ? Phase.VERIFICATION_REQUIRED : Phase.ERROR;
         status = AuthFailure.diagnostic(error);
     }
@@ -278,7 +297,8 @@ public final class AccountLoginController implements AutoCloseable {
     public synchronized AccountCredentials credentials() { return account != null && account.isActive() && permitted() && !closed ? account : null; }
     public Snapshot snapshot() {
         watch(); synchronized (this) { return new Snapshot(phase, status, current != null && current.active.get() && current.session != null ? current.session.qrContent() : null,
-                account == null ? "" : account.userId(), account == null ? new AccountCredentials.Profile("", null) : account.profile(), account == null ? "" : account.revision()); }
+                account == null ? "" : account.userId(), account == null ? new AccountCredentials.Profile("", null) : account.profile(), account == null ? "" : account.revision(),
+                current != null && current.active.get() && current.session != null ? current.client.qrImage(current.session) : null); }
     }
     private void discardOperation() { if (current != null) current.cancel(); current = null; }
     private void retireAccount() { if (account != null) account.retire(); account = null; }

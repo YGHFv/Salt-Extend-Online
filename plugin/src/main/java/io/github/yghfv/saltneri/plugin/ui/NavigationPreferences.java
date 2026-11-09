@@ -11,7 +11,7 @@ public final class NavigationPreferences {
     private final ConfigHelper config;
     public NavigationPreferences(ConfigHelper config) {this.config=Objects.requireNonNull(config);}
     public static boolean valid(String value) {
-        return value!=null && (Set.of(RESTORE,TRACK,"BILIBILI","NETEASE").contains(value)
+        return value!=null && (Set.of(RESTORE,TRACK,"BILIBILI","NETEASE","QQMUSIC").contains(value)
                 || value.startsWith("playlist:") && value.length()>9 && value.length()<200
                 && value.chars().noneMatch(Character::isISOControl));
     }
@@ -29,7 +29,7 @@ public final class NavigationPreferences {
         if(!config.save())config.set("ui.lastPage",previous);
     }
     public Catalog.View platformHome(AccountPlatform platform) {
-        return switch(string((platform==AccountPlatform.BILIBILI?"bili":"netease")+".home","DISCOVER")) {
+        return switch(string(platform.configPrefix()+".home","DISCOVER")) {
             case "MINE" -> Catalog.View.MINE;
             case "SAVED" -> Catalog.View.SAVED;
             default -> Catalog.View.DISCOVER;

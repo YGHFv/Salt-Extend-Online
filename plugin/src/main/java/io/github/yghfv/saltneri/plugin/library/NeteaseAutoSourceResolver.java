@@ -43,16 +43,16 @@ final class NeteaseAutoSourceResolver {
     }
     static OnlinePlaybackController.Audio resolve(AccountCredentials original,OnlinePlaybackController.Target target,
             String scope,RequestScope request,Function<AccountPlatform,AccountCredentials> accounts,AccountCredentials biliAccount,
-            NeteaseClient.TrackUnavailable unavailable,Backend backend) throws IOException {
+            IOException unavailable,Backend backend) throws IOException {
         request.check();
-        if(target.platform()!=AccountPlatform.NETEASE || original!=null && !scope.equals(original.accountScope()))
+        if(target.platform()!=AccountPlatform.NETEASE && target.platform()!=AccountPlatform.QQMUSIC || original!=null && !scope.equals(original.accountScope()))
             throw new SecurityException("Alternative source original identity mismatch");
         if(biliAccount==null || !biliAccount.isActive())throw unavailable;
         Set<String> visited=new HashSet<>();
         try(var work=new RequestScope(()->{
             request.check();
             return accounts.apply(AccountPlatform.BILIBILI)==biliAccount && biliAccount.isActive()
-                    && accounts.apply(AccountPlatform.NETEASE)==original && (original==null || original.isActive());
+                    && accounts.apply(target.platform())==original && (original==null || original.isActive());
         },20000)) {
             var info=backend.songInfo(work);
             var song=new AutoSourceMatcher.Song(info.metadata().title(),info.metadata().artist(),info.durationMillis());
@@ -81,9 +81,9 @@ final class NeteaseAutoSourceResolver {
                             throw new SecurityException("Alternative source account mismatch");
                         var lease=resolved.lease().bindTo(scope,()->biliAccount.isActive()
                                 && accounts.apply(AccountPlatform.BILIBILI)==biliAccount
-                                && accounts.apply(AccountPlatform.NETEASE)==original && (original==null || original.isActive()));
+                                && accounts.apply(target.platform())==original && (original==null || original.isActive()));
                         // Queue identity/lyrics/title stay NetEase; transport/cache policy stay Bilibili.
-                        return new OnlinePlaybackController.Audio(TrackKey.netease(target.id()),info.metadata(),lease,
+                        return new OnlinePlaybackController.Audio(target.platform()==AccountPlatform.NETEASE?TrackKey.netease(target.id()):TrackKey.qqmusic(target.id()),info.metadata(),lease,
                                 resolved.expiresAt(),target,resolved.key());
                     } catch(IOException candidateFailure) {work.check();}
                 }

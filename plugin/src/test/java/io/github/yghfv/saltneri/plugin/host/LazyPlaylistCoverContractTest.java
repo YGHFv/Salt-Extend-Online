@@ -68,9 +68,17 @@ public final class LazyPlaylistCoverContractTest {
                 };
                 try(var session=new LazyPlaylistSession(profile,adapter,server,queue,rows,"fixture",allowed::get,(row,scope,request)->{
                     resolutions.incrementAndGet(); int number=Integer.parseInt(row.target());
-                    TrackKey key=platform==MediaLease.Platform.NETEASE?TrackKey.netease(row.target()):TrackKey.bilibili("BV17x411w7KC",number);
+                    TrackKey key=switch(platform) {
+                        case NETEASE -> TrackKey.netease(row.target());
+                        case BILIBILI -> TrackKey.bilibili("BV17x411w7KC",number);
+                        case QQMUSIC -> TrackKey.qqmusic(String.format(Locale.ROOT,"00%012d",number));
+                    };
                     Instant expiry=time.instant().plusSeconds(60);
-                    URI source=URI.create(platform==MediaLease.Platform.NETEASE?"https://m7.music.126.net/fixture":"https://test.bilivideo.com/fixture");
+                    URI source=URI.create(switch(platform) {
+                        case NETEASE -> "https://m7.music.126.net/fixture";
+                        case BILIBILI -> "https://test.bilivideo.com/fixture";
+                        case QQMUSIC -> "https://dl.stream.qqmusic.qq.com/fixture";
+                    });
                     return new OnlinePlaybackController.Audio(key,new Salt1193PlaybackSession.Metadata("Resolved "+row.target(),"Artist","","",pictures.get(number-1)),
                             new MediaLease(platform,source,Map.of(),scope,expiry,100),expiry);
                 },row->request->"[00:01.000]"+row.title())) {

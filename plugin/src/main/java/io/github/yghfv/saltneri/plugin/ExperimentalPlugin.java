@@ -37,7 +37,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile NeteaseResolutionController netease;
     private ConfigManager configManager;
     private Consumer<ConfigHelper> configListener;
-    private volatile AccountLoginController biliLogin, neteaseLogin;
+    private volatile AccountLoginController biliLogin, neteaseLogin, qqmusicLogin;
     private volatile OnlinePlaybackController online;
     private volatile LibraryController library;
     private volatile SaltNativeUi nativeUi;
@@ -52,7 +52,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private io.github.yghfv.saltneri.plugin.ui.NavigationPreferences navigationPreferences;
     private void applySettings(ConfigHelper config) {
         var parsed=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
-        settings=new PlaybackSettings(parsed.bili(),parsed.netease(),parsed.cacheBytes(),parsed.coverMode(),config.get("netease.autoSourceSwitch",false));
+        settings=new PlaybackSettings(parsed.bili(),parsed.netease(),parsed.cacheBytes(),parsed.coverMode(),config.get("netease.autoSourceSwitch",false),
+                io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.fromKey(config.get("qqmusic.quality","standard")),config.get("qqmusic.autoSourceSwitch",false));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
         LibraryController catalog=library; if(catalog!=null) catalog.pageLimit(CatalogPaging.parse(config.get("catalog.pageLimit","30")));
         SaltNativeUi ui=nativeUi; if(ui!=null) applySidebarSettings(ui,config);
@@ -79,6 +80,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         EncryptedAccountStore accounts = new EncryptedAccountStore(configManager.getConfig().getConfigPath().getParent());
         biliLogin = new AccountLoginController(AccountPlatform.BILIBILI, this::granted, accounts, () -> accountChanged(AccountPlatform.BILIBILI));
         neteaseLogin = new AccountLoginController(AccountPlatform.NETEASE, this::granted, accounts, () -> accountChanged(AccountPlatform.NETEASE));
+        qqmusicLogin = new AccountLoginController(AccountPlatform.QQMUSIC, this::granted, accounts, () -> accountChanged(AccountPlatform.QQMUSIC));
         bili = new BiliResolutionController(this::granted, () -> biliLogin == null ? null : biliLogin.credentials());
         netease = new NeteaseResolutionController(this::granted, () -> neteaseLogin == null ? null : neteaseLogin.credentials());
         online = new OnlinePlaybackController(this::credentials, this::granted, this::adapterArmed, new OnlinePlaybackController.Player() {
@@ -139,6 +141,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             AccountLoginController a = biliLogin, b = neteaseLogin;
             if (a != null) a.setRememberEnabled(remember);
             if (b != null) b.setRememberEnabled(remember);
+            if (qqmusicLogin != null) qqmusicLogin.setRememberEnabled(remember);
             if(!previous.qualityKey().equals(settings.qualityKey())) {
                 startedBili.invalidate("Quality changed; prepare again explicitly.");
                 startedNetease.invalidate("Quality changed; prepare again explicitly.");
@@ -192,12 +195,12 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if (platform == AccountPlatform.BILIBILI) {
             BiliResolutionController resolver = bili;
             if (resolver != null) resolver.invalidate("Bilibili account revision changed; old prepared resolution retired. Resolve explicitly again.");
-        } else {
+        } else if(platform==AccountPlatform.NETEASE) {
             NeteaseResolutionController resolver = netease;
             if (resolver != null) resolver.invalidate("NetEase account revision changed; old prepared resolution retired. Resolve explicitly again.");
         }
     }
-    private AccountLoginController login(AccountPlatform platform) { return platform == AccountPlatform.BILIBILI ? biliLogin : neteaseLogin; }
+    private AccountLoginController login(AccountPlatform platform) { return switch(platform) {case BILIBILI -> biliLogin;case NETEASE -> neteaseLogin;case QQMUSIC -> qqmusicLogin;}; }
     private AccountCredentials credentials(AccountPlatform platform) { AccountLoginController controller = login(platform); return controller == null ? null : controller.credentials(); }
     private boolean adapterArmed() { Salt1193DiagnosticRuntime current = runtime; return current != null && !current.isClosed(); }
     private synchronized void ensureNativeUi() throws Exception {
@@ -213,6 +216,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         boolean remember = true;
         biliLogin.restoreOnStartup(remember);
         neteaseLogin.restoreOnStartup(remember);
+        qqmusicLogin.restoreOnStartup(remember);
     }
     private synchronized void openListeningDesk() throws Exception {
         ensureNativeUi(); nativeUi.open(AccountPlatform.NETEASE);
@@ -230,7 +234,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
     private synchronized void startLogin(AccountPlatform platform) throws Exception {
         ensureNativeUi(); nativeUi.requestLogin(platform);
-        status = (platform == AccountPlatform.BILIBILI ? "Bilibili" : "\u7f51\u6613\u4e91")
+        status = platform.label()
                 + "\uff1a\u5df2\u8bf7\u6c42\u626b\u7801\u9875\uff1b\u9875\u9762\u51fa\u73b0\u540e\u624d\u7533\u8bf7\u4e8c\u7ef4\u7801\u3002";
     }
     private synchronized void nativeAction(AccountPlatform platform, NativeDesk.Action operation) throws Exception {
@@ -258,6 +262,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private synchronized void cancelPendingLogins() {
         if (nativeUi != null) nativeUi.cancelPendingLogin(null);
         if (biliLogin != null) biliLogin.cancelLogin(); if (neteaseLogin != null) neteaseLogin.cancelLogin();
+        if (qqmusicLogin != null) qqmusicLogin.cancelLogin();
         status = "Pending QR logins cancelled; verified memory accounts, if any, remain. Use explicit logout to remove them.";
     }
 
@@ -278,7 +283,11 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 return OnlinePlaybackController.resolveAudio(account,entry.target(),account==null?"anonymous:saved:"+java.util.UUID.randomUUID():account.accountScope(),request,settings,ExperimentalPlugin.this::credentials);
             }
             public io.github.yghfv.saltneri.plugin.host.OnlineLyrics.Source lyrics(io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry) {
-                return entry.target().platform()==AccountPlatform.NETEASE?request->new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(credentials(AccountPlatform.NETEASE)).load(Long.parseLong(entry.target().id()),request):null;
+                return switch(entry.target().platform()) {
+                    case NETEASE -> request->new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(credentials(AccountPlatform.NETEASE)).load(Long.parseLong(entry.target().id()),request);
+                    case QQMUSIC -> request->new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient(credentials(AccountPlatform.QQMUSIC)).lyrics(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(entry.target().id()),request);
+                    case BILIBILI -> null;
+                };
             }
         });
         status = "Experimental adapter armed. No audio enqueued. NetEase lyrics load only for owned playing items.";
@@ -317,6 +326,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 if (savedTracks != null) {savedTracks.close();savedTracks=null;}
                 if (biliLogin != null) { biliLogin.close(); biliLogin = null; }
                 if (neteaseLogin != null) { neteaseLogin.close(); neteaseLogin = null; }
+                if (qqmusicLogin != null) { qqmusicLogin.close(); qqmusicLogin = null; }
                 if (bili != null) { bili.close(); bili = null; }
                 if (netease != null) { netease.close(); netease = null; }
                 if (configManager != null && configListener != null) configManager.removeConfigChangeListener(configListener);
@@ -346,6 +356,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 AccountLoginController biliAccount = plugin.biliLogin, neteaseAccount = plugin.neteaseLogin;
                 if (biliAccount != null) detail += "\nBilibili: " + biliAccount.snapshot().status();
                 if (neteaseAccount != null) detail += "\nNetEase: " + neteaseAccount.snapshot().status();
+                if (plugin.qqmusicLogin != null) detail += "\nQQ Music: " + plugin.qqmusicLogin.snapshot().status();
             }
             toast(detail, WorkshopApi.Ui.ToastType.Warning);
         }
@@ -364,6 +375,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         plugin.status = (ui == null ? "Native UI: not installed" : ui.diagnostics())
                 + "\nBilibili=" + (plugin.biliLogin == null ? "OFF" : plugin.biliLogin.snapshot().phase().name())
                 + ", NetEase=" + (plugin.neteaseLogin == null ? "OFF" : plugin.neteaseLogin.snapshot().phase().name())
+                + ", QQMusic=" + (plugin.qqmusicLogin == null ? "OFF" : plugin.qqmusicLogin.snapshot().phase().name())
                 + ", adapter=" + plugin.adapterArmed()
                 + "\nWindows media app: " + plugin.mediaIdentityStatus;
     }); }

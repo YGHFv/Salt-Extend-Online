@@ -172,6 +172,7 @@ public final class SavedTrackStore implements AutoCloseable {
         return value;
     }
     private static Target canonical(Target target) {
+        if(target.platform()==AccountPlatform.QQMUSIC) return new Target(target.platform(),io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(target.id()).mid());
         if(target.platform()==AccountPlatform.NETEASE) {
             long id=Long.parseLong(target.id()); if(id<=0) throw new IllegalArgumentException("Invalid song ID");
             return new Target(target.platform(),Long.toString(id));

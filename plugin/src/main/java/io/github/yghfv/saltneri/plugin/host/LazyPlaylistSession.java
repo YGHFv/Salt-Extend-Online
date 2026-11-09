@@ -91,7 +91,7 @@ public final class LazyPlaylistSession implements AutoCloseable {
         while(true) {
             check();
             try { resolve(entries.get(first),()->System.nanoTime()<deadline); break; }
-            catch(io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable unavailable) {
+            catch(io.github.yghfv.saltneri.plugin.netease.NeteaseClient.TrackUnavailable | io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.TrackUnavailable unavailable) {
                 check();
                 if(entries.size()==1 || ++skipped>=5 || System.nanoTime()>=deadline) throw unavailable;
                 Entry rejected=entries.remove(first); byId.remove(rejected.id);

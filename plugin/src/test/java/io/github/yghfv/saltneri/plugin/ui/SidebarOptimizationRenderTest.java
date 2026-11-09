@@ -43,6 +43,35 @@ public final class SidebarOptimizationRenderTest {
             check(count>10);
         }
     }
+    private static void brandSize(ImageComposeScene scene,float density) throws Exception {
+        try(var frame=scene.render(System.nanoTime());var data=frame.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
+            var pixels=javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data.getBytes()));
+            int smallest=Integer.MAX_VALUE,largest=0;
+            for(var platform:AccountPlatform.values()) {
+                SemanticsNode node=null;
+                for(var owner:scene.getSemanticsOwners()) {node=icon(owner.getUnmergedRootSemanticsNode(),platform.label());if(node!=null)break;}
+                check(node!=null);var bounds=node.getBoundsInRoot();
+                int left=Integer.MAX_VALUE,top=Integer.MAX_VALUE,right=-1,bottom=-1;
+                for(int y=(int)bounds.getTop();y<Math.ceil(bounds.getBottom());y++)for(int x=(int)bounds.getLeft();x<Math.ceil(bounds.getRight());x++) {
+                    int p=pixels.getRGB(x,y),r=(p>>16)&255,g=(p>>8)&255,b=p&255;
+                    if((p>>>24)>100 && Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))>40) {
+                        left=Math.min(left,x);top=Math.min(top,y);right=Math.max(right,x);bottom=Math.max(bottom,y);
+                    }
+                }
+                check(right>=left && bottom>=top);
+                int edge=Math.max(right-left+1,bottom-top+1);smallest=Math.min(smallest,edge);largest=Math.max(largest,edge);
+                check(edge>=18*density && edge<=21*density);
+                if(platform==AccountPlatform.QQMUSIC) {
+                    check(Math.abs(left+right+1-bounds.getLeft()-bounds.getRight())<=3*density);
+                    check(Math.abs(top+bottom+1-bounds.getTop()-bounds.getBottom())<=3*density);
+                }
+            }
+            check(smallest>=largest*0.9f);
+            var output=java.nio.file.Path.of(System.getProperty("java.io.tmpdir"),"brand-icons");
+            java.nio.file.Files.createDirectories(output);
+            java.nio.file.Files.write(output.resolve("sidebar-"+density+".png"),data.getBytes());
+        }
+    }
     private static class Hooks extends HookRegistrar {
         int installed, closed;
         private HookHandle handle() { return new HookHandle() {
@@ -171,6 +200,7 @@ public final class SidebarOptimizationRenderTest {
                                 check(HeaderSearchRenderTest.find(scene,"Fixture toggle",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getWidth()>0);
                                 check(Math.abs(visibleBili.getTop()-HeaderSearchRenderTest.find(scene,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot().getTop())<1);
                                 centeredIcon(scene,"Bilibili",true);centeredIcon(scene,"\u7f51\u6613\u4e91",true);
+                                centeredIcon(scene,AccountPlatform.QQMUSIC.label(),true);brandSize(scene,1f);
                                 float right=toggleNode.getBoundsInRoot().getRight();
                                 for(var entry:binding.entries()) {
                                     String label=nativeLabels.get(entry.route());
@@ -228,6 +258,7 @@ public final class SidebarOptimizationRenderTest {
                                     });
                                     try {
                                         HeaderSearchRenderTest.render(scaled);
+                                        brandSize(scaled,scale);
                                         var shown=HeaderSearchRenderTest.find(scaled,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();
                                         ui.sidebarSettings(true,true,true,Set.of());HeaderSearchRenderTest.render(scaled);
                                         var concealed=HeaderSearchRenderTest.find(scaled,"Bilibili",SemanticsActions.INSTANCE.getOnClick()).getBoundsInRoot();

@@ -43,11 +43,12 @@ public final class TrackContextMenuRenderTest {
             }
         },clock,a->(target,quality,scope,request)->{
             resolves.incrementAndGet(); var expiry=clock.instant().plusSeconds(600); boolean net=target.platform()==AccountPlatform.NETEASE;
-            return new OnlinePlaybackController.Audio(net?TrackKey.netease(target.id()):TrackKey.bilibili(target.id(),123),new Metadata("Fixture track","Artist","",""),
-                    new MediaLease(net?MediaLease.Platform.NETEASE:MediaLease.Platform.BILIBILI,URI.create(net?"https://m7.music.126.net/fixture":"https://test.bilivideo.com/fixture"),Map.of(),scope,expiry,4096),expiry);
+            boolean qq=target.platform()==AccountPlatform.QQMUSIC;
+            return new OnlinePlaybackController.Audio(qq?TrackKey.qqmusic(target.id()):net?TrackKey.netease(target.id()):TrackKey.bilibili(target.id(),123),new Metadata("Fixture track","Artist","",""),
+                    new MediaLease(qq?MediaLease.Platform.QQMUSIC:net?MediaLease.Platform.NETEASE:MediaLease.Platform.BILIBILI,URI.create(qq?"https://dl.stream.qqmusic.qq.com/fixture":net?"https://m7.music.126.net/fixture":"https://test.bilivideo.com/fixture"),Map.of(),scope,expiry,4096),expiry);
         }); var library=new LibraryController(p->null,()->true,t->{},()->player.invalidate("Navigation"),clock,a->(query,quality,scope,request)->{
             requests.incrementAndGet(); return new Catalog.Page("Fixture list",List.of(
-                    new Catalog.Item(Catalog.Kind.TRACK,query.platform()==AccountPlatform.NETEASE?"123":"BV17x411w7KC","Fixture track","Artist",1000,true),
+                    new Catalog.Item(Catalog.Kind.TRACK,query.platform()==AccountPlatform.QQMUSIC?"00123456789abc":query.platform()==AccountPlatform.NETEASE?"123":"BV17x411w7KC","Fixture track","Artist",1000,true),
                     new Catalog.Item(Catalog.Kind.FOLDER,"77","Fixture folder","Artist",2,true)),false,clock.instant().plusSeconds(300),1);
         })) {
             var desk=new NativeDesk(library,player,p->null,(p,a)->{if(a==NativeDesk.Action.ARM) armed.set(true);},()->true);

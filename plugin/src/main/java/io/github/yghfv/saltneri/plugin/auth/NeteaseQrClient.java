@@ -39,14 +39,17 @@ public final class NeteaseQrClient implements QrAuthClient {
         cookies.clear();
         NeteaseDeviceSnapshot prepared;
         try { prepared = devices.load(request); if (prepared == null) throw invalid(); prepared.validate(clock); }
-        catch (IOException error) { throw AuthFailure.of(AuthFailure.Stage.NET_DEVICE, AuthFailure.Reason.DEVICE); }
+        catch (IOException error) {
+            if(error instanceof AuthFailure safe)throw safe.atStage(AuthFailure.Stage.NET_DEVICE);
+            throw AuthFailure.wrap(AuthFailure.Stage.NET_DEVICE,AuthFailure.Reason.DEVICE,error);
+        }
         synchronized (this) { checkOpen(request); device = prepared; cookies.restore(prepared.cookies()); }
         Map<String, Object> root = post("/weapi/login/qrcode/unikey", Map.of("type", 1, "noCheckToken", true), Map.of(), request).json();
         requireCode(root, 200, AuthFailure.Stage.NET_CREATE); String key = BoundedJson.string(root.get("unikey"));
         if (!key.matches("[a-zA-Z0-9_-]{16,256}")) throw invalid();
         String chain = "v1_" + prepared.deviceId() + "_web_login_" + clock.millis();
         URI url = URI.create(BASE + "/st/platform/scanlogin?codekey=" + URLEncoder.encode(key, StandardCharsets.UTF_8)
-                + "&chainId=" + chain + "&hdw_device=web&hdw_appid=web&hitExp=1");
+                + "&chainId=" + URLEncoder.encode(chain, StandardCharsets.UTF_8) + "&hdw_device=web&hdw_appid=web&hitExp=1");
         synchronized (this) {
             checkOpen(request); activeSession = new Session(key, url, chain, clock.instant().plusSeconds(180)); return activeSession;
         }

@@ -86,10 +86,11 @@ public final class SidebarSettingsContractTest {
             config=group.getConstructor(String.class,String.class,String.class,List.class).newInstance("fixture","Settings","config.json",List.of(optimization,hidden,settings));
             check(((List<?>)group.getMethod("\u0529").invoke(bindings.filteredGroup(config,SaltNativeUi.PLUGIN_ID,true))).equals(List.of(optimization,hidden)));
             var managed=(List<?>)group.getMethod("\u0529").invoke(bindings.sidebarGroup());
-            check(managed.size()==11);
+            check(managed.size()==SidebarPolicy.BUTTONS.size()-1);
             var keys=new HashSet<String>();
             for(var item:managed)keys.add((String)item.getClass().getMethod("\u037f").invoke(item));
-            check(!keys.contains("ui.sidebar.Settings") && keys.contains("ui.sidebar.NETEASE"));
+            check(!keys.contains("ui.sidebar.Settings") && keys.containsAll(
+                    Arrays.stream(AccountPlatform.values()).map(p->"ui.sidebar."+p.name()).toList()));
             var list=Class.forName("androidx.compose.ui.\u077b$\u0529");
             Object home=list.getConstructor(String.class,String.class,String.class,String.class,List.class,List.class,String.class,String.class)
                     .newInstance("home","ui.home","Home","",List.of("Restore"),List.of("restore"),"restore","config.json");
@@ -97,8 +98,8 @@ public final class SidebarSettingsContractTest {
             bindings.playlistChoices(List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("one","Playlist one",new Object()),
                     new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("two","Playlist two",new Object())));
             var options=((List<?>)group.getMethod("\u0529").invoke(bindings.filteredGroup(config,SaltNativeUi.PLUGIN_ID,true))).getFirst();
-            check(list.getMethod("\u052b").invoke(options).equals(List.of("restore","Track","BILIBILI","NETEASE","playlist:one","playlist:two")));
-            check(((List<?>)list.getMethod("\u052a").invoke(options)).size()==6);
+            check(list.getMethod("\u052b").invoke(options).equals(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","playlist:one","playlist:two")));
+            check(((List<?>)list.getMethod("\u052a").invoke(options)).size()==AccountPlatform.values().length+4);
             Object settingsRoute=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.SIDEBAR_CONFIG);
             check(ui.settingsPage(settingsRoute) && ui.platform(settingsRoute)==null);
             Class<?> stateType=Class.forName("androidx.compose.ui.\u09b8");

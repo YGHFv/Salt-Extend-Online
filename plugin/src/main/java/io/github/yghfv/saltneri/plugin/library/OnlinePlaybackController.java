@@ -17,16 +17,26 @@ import java.util.concurrent.*;
 /** Preparation is inert; an explicit double-click owns a cancellable, one-use resolve-and-play intent. */
 public final class OnlinePlaybackController implements AutoCloseable {
     public record Target(AccountPlatform platform, String id) { }
-    public record Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target, TrackKey sourceKey) {
+    public record Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target, TrackKey sourceKey,
+                        java.net.URI coverSource, io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode) {
+        public Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target, TrackKey sourceKey) {
+            this(key,metadata,lease,expiresAt,target,sourceKey,null,io.github.yghfv.saltneri.plugin.ui.CoverMode.FIT);
+        }
+        public Audio {
+            coverSource=CoverSource.original(coverSource);
+            coverMode=coverMode==null?io.github.yghfv.saltneri.plugin.ui.CoverMode.FIT:coverMode;
+        }
         public Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt, Target target) {this(key,metadata,lease,expiresAt,target,key);}
         public Audio(TrackKey key, Metadata metadata, MediaLease lease, Instant expiresAt) { this(key,metadata,lease,expiresAt,null); }
         public static Audio from(BiliClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
         public static Audio from(NeteaseClient.Resolved r) { return new Audio(r.key(), r.metadata(), r.lease(), r.expiresAt()); }
+        public static Audio from(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Resolved r) {return new Audio(r.key(),r.metadata(),r.lease(),r.expiresAt());}
         public boolean transportMatches() {
             return sourceKey!=null && sourceKey.platform().name().equals(lease.platform().name()) && lease.isActive()
-                    && (sourceKey.equals(key) || key.platform()==TrackKey.Platform.NETEASE
+                    && (sourceKey.equals(key) || (key.platform()==TrackKey.Platform.NETEASE || key.platform()==TrackKey.Platform.QQMUSIC)
                         && sourceKey.platform()==TrackKey.Platform.BILIBILI && target!=null
-                        && target.platform()==AccountPlatform.NETEASE && key.equals(TrackKey.netease(target.id())));
+                        && key.platform().name().equals(target.platform().name())
+                        && key.equals(target.platform()==AccountPlatform.NETEASE?TrackKey.netease(target.id()):TrackKey.qqmusic(target.id())));
         }
         @Override public String toString() { return "PreparedAudio[" + key.stableId() + ", URL redacted]"; }
     }
@@ -85,6 +95,15 @@ public final class OnlinePlaybackController implements AutoCloseable {
             if (target.platform() == AccountPlatform.BILIBILI) {
                 var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
                 audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
+            } else if(target.platform()==AccountPlatform.QQMUSIC) {
+                try {
+                    var resolved=new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient(account).resolve(
+                            io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(target.id()),settings.qqmusic(),scope,request);
+                    audio=withCover(Audio.from(resolved),resolved.coverCandidate(),request,settings.coverMode());
+                } catch(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.TrackUnavailable unavailable) {
+                    if(!settings.qqmusicAutoSourceSwitch())throw unavailable;
+                    audio=QqMusicAutoSourceResolver.resolve(account,target,scope,request,settings,accounts,unavailable);
+                }
             } else {
                 try {
                     var resolved = new NeteaseClient(account).resolve(NeteaseTarget.parse(target.id()), settings.netease(), scope, request);
@@ -94,7 +113,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
                     audio=NeteaseAutoSourceResolver.resolve(account,target,scope,request,settings,accounts,unavailable);
                 }
             }
-            return new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),target,audio.sourceKey());
+            return new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),target,audio.sourceKey(),audio.coverSource(),audio.coverMode());
     }
     @FunctionalInterface public interface PlaylistPlayer { void play(LibraryController.Playlist list, BooleanSupplier active) throws Exception; }
     public synchronized void playPlaylist(LibraryController.Playlist list, Runnable setup, PlaylistPlayer submit) {
@@ -111,22 +130,38 @@ public final class OnlinePlaybackController implements AutoCloseable {
             } catch(Exception | LinkageError failure) {
                 synchronized(this) { if(token.equals(expected)) {
                     submissionFailed=true;
-                    String reason=failure instanceof NeteaseClient.PlatformRejected denied
-                            ? (denied instanceof NeteaseClient.TrackUnavailable ? "TRACK_UNAVAILABLE=" : "NETEASE_REJECTED=")+denied.code()
-                            : failure.getClass().getSimpleName();
+                    String reason=playbackFailureReason(failure);
                     status="\u5408\u96c6\u64ad\u653e\u5931\u8d25 [PLAYLIST/"+reason+"]";
                 } }
             }
         });
     }
+    static String playbackFailureReason(Throwable failure) {
+        if(failure instanceof AuthFailure safe)return safe.getMessage();
+        if(failure instanceof io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.MediaRejected rejected)
+            return "QQ_MEDIA_"+rejected.reason().name();
+        if(failure instanceof io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp.Rejected denied)
+            return (denied instanceof io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.TrackUnavailable
+                    ? "QQ_TRACK_UNAVAILABLE=":denied.httpStatus()?"QQ_HTTP=":"QQ_API=")+denied.code();
+        if(failure instanceof io.github.yghfv.saltneri.plugin.net.MediaRangeProbe.Rejected denied)
+            return "MEDIA_HTTP="+denied.status();
+        if(failure instanceof NeteaseClient.PlatformRejected denied)
+            return (denied instanceof NeteaseClient.TrackUnavailable?"TRACK_UNAVAILABLE=":"NETEASE_REJECTED=")+denied.code();
+        if(failure instanceof java.net.SocketTimeoutException)return "NETWORK_TIMEOUT";
+        if(failure instanceof java.net.UnknownHostException)return "NETWORK_DNS";
+        if(failure instanceof javax.net.ssl.SSLException)return "NETWORK_TLS";
+        return failure.getClass().getSimpleName();
+    }
     static Audio withCover(Audio audio, java.net.URI source, io.github.yghfv.saltneri.plugin.net.RequestScope request, io.github.yghfv.saltneri.plugin.ui.CoverMode mode) {
+        source=CoverSource.original(source);
         if (source == null) return audio;
+        Audio pending=new Audio(audio.key(),audio.metadata(),audio.lease(),audio.expiresAt(),audio.target(),audio.sourceKey(),source,mode);
         try (var images = new io.github.yghfv.saltneri.plugin.ui.CoverLoader();
              var coverRequest = new io.github.yghfv.saltneri.plugin.net.RequestScope(() -> { request.check(); return true; }, 3000)) {
             byte[] png = images.loadPlayback(source, coverRequest,mode);
             Metadata old = audio.metadata();
-            return new Audio(audio.key(), new Metadata(old.title(), old.artist(), old.album(), old.albumArtist(), png), audio.lease(), audio.expiresAt(),audio.target(),audio.sourceKey());
-        } catch (java.io.IOException | RuntimeException ignored) { request.check(); return audio; }
+            return new Audio(audio.key(), new Metadata(old.title(), old.artist(), old.album(), old.albumArtist(), png), audio.lease(), audio.expiresAt(),audio.target(),audio.sourceKey(),source,mode);
+        } catch (java.io.IOException | RuntimeException ignored) { request.check(); return pending; }
     }
     public synchronized void prepare(Target target) {
         invalidate("Preparing selected track; no queue changes."); platform = target.platform(); selected = accounts.apply(platform);

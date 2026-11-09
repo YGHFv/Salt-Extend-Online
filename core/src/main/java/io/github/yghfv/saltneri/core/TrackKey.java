@@ -8,11 +8,14 @@ public record TrackKey(Platform platform, String remoteId, long cid) {
     private static final Pattern BVID = Pattern.compile("BV[0-9A-Za-z]{10}");
     private static final Pattern SONG_ID = Pattern.compile("[1-9][0-9]*");
 
-    public enum Platform { NETEASE, BILIBILI }
+    public enum Platform { NETEASE, BILIBILI, QQMUSIC }
 
     public TrackKey {
         Objects.requireNonNull(platform, "platform");
         Objects.requireNonNull(remoteId, "remoteId");
+        if (platform == Platform.QQMUSIC && (!remoteId.matches("[A-Za-z0-9]{14}") || cid != 0)) {
+            throw new IllegalArgumentException("QQ Music requires a song MID and no cid");
+        }
         if (platform == Platform.NETEASE && (!SONG_ID.matcher(remoteId).matches() || cid != 0)) {
             throw new IllegalArgumentException("NetEase requires a positive song ID and no cid");
         }
@@ -29,10 +32,13 @@ public record TrackKey(Platform platform, String remoteId, long cid) {
         return new TrackKey(Platform.BILIBILI, bvid, cid);
     }
 
+    public static TrackKey qqmusic(String mid) { return new TrackKey(Platform.QQMUSIC, mid, 0); }
+
     public String stableId() {
         return switch (platform) {
             case NETEASE -> "netease:song:" + remoteId;
             case BILIBILI -> "bilibili:video:" + remoteId + ":cid:" + cid;
+            case QQMUSIC -> "qqmusic:song:" + remoteId;
         };
     }
 }

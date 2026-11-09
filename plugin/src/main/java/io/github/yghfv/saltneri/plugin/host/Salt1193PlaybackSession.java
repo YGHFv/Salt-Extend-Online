@@ -48,6 +48,8 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         }
         default NativePlaylistOrder.Plan upcoming() throws ReflectiveOperationException { return NativePlaylistOrder.Plan.EMPTY; }
         default void update(Object item) throws ReflectiveOperationException { }
+        default PlaybackCoverRefresh.Selection coverSelection() throws ReflectiveOperationException {return null;}
+        default void coverChanged(String id,String path,BooleanSupplier valid) throws ReflectiveOperationException { }
         default void cancelStart() { }
         default void close() { }
     }
@@ -285,6 +287,33 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         Objects.requireNonNull(authorized);
         return new QueueSink() {
           private SaltPlaybackStartBindings start;
+          private Salt1193EngineLink.HostAccess coverAccess;
+          private java.lang.reflect.Method coverCurrent;
+          private java.lang.reflect.Method coverState;
+          private PlaybackCoverRefresh coverRefresh;
+          public synchronized PlaybackCoverRefresh.Selection coverSelection() throws ReflectiveOperationException {
+            if(!authorized.getAsBoolean())return null;
+            if(coverAccess==null) {
+                coverAccess=Salt1193EngineLink.nativeHost(loader,profile);
+                coverCurrent=Class.forName(Salt1193EngineLink.PLAYER,false,loader).getMethod("\u0788");
+                coverState=Class.forName(Salt1193EngineLink.PLAYER,false,loader).getMethod("\u078a");
+            }
+            Object player=coverAccess.player(coverAccess.service());
+            if(player==null || !((Enum<?>)coverState.invoke(player)).name().equals("Ready"))return null;
+            Object item=coverCurrent.invoke(player);
+            if(item==null)return null;
+            String[] fields=profile.mediaFactory().read(item);
+            return new PlaybackCoverRefresh.Selection(fields[0],fields[5]);
+          }
+          public synchronized void coverChanged(String id,String path,BooleanSupplier valid) {
+            if(coverRefresh==null)coverRefresh=new PlaybackCoverRefresh(new PlaybackCoverRefresh.Host() {
+                public PlaybackCoverRefresh.Selection selection() throws ReflectiveOperationException {return coverSelection();}
+                public void refresh() throws ReflectiveOperationException {
+                    Object instance=controller();instance.getClass().getMethod("refreshCurrentCover").invoke(instance);
+                }
+            },javax.swing.SwingUtilities::invokeLater);
+            coverRefresh.changed(id,path,()->authorized.getAsBoolean() && valid.getAsBoolean());
+          }
           private synchronized SaltPlaybackStartBindings start() throws ReflectiveOperationException {
             if(hooks!=null && start==null)start=new SaltPlaybackStartBindings(loader,profile,hooks,authorized);
             return start;

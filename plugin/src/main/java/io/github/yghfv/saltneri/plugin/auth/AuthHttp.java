@@ -34,7 +34,7 @@ public final class AuthHttp {
         for (var header : extras.entrySet()) {
             String name = header.getKey().toLowerCase(Locale.ROOT), value = header.getValue();
             if (!netease || value == null || !(name.equals("x-loginmethod") && value.equals("QrCode")
-                    || name.equals("x-login-chain-id") && value.matches("[a-zA-Z0-9_-]{1,256}")))
+                    || name.equals("x-login-chain-id") && NeteaseDeviceSnapshot.validDeviceValue(value, 256)))
                 throw AuthFailure.of(stage, AuthFailure.Reason.RESPONSE);
         }
         scope.check(); HttpURLConnection connection;

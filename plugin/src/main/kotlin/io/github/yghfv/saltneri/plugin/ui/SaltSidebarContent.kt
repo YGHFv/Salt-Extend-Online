@@ -99,7 +99,7 @@ class SaltSidebarContent(private val binding: SaltSidebarBindings, private val u
                             AccountPlatform.entries.forEach { platform ->
                                 if(ui.sidebarVisible(platform.name)) {
                                 key(platform) {
-                                    SidebarShortcut(binding, ui, if (platform == AccountPlatform.BILIBILI) "Bilibili" else "\u7f51\u6613\u4e91",
+                                    SidebarShortcut(binding, ui, platform.label(),
                                         ui.platform(selectedRoute) == platform, { if (ui.available()) ui.open(platform) }) {
                                         PlatformIcon(ui, platform)
                                     }

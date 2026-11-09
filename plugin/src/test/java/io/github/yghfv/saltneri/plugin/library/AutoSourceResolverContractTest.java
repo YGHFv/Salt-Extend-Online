@@ -19,8 +19,7 @@ public final class AutoSourceResolverContractTest {
     private static void check(boolean ok) {checks++;if(!ok)throw new AssertionError("Auto source resolver "+checks);}
     private static AccountCredentials account(AccountPlatform platform) throws IOException {
         var jar=new ScopedCookies(platform,java.time.Clock.systemUTC());
-        jar.accept(URI.create(platform==AccountPlatform.BILIBILI?"https://api.bilibili.com/":"https://music.163.com/"),
-                List.of((platform==AccountPlatform.BILIBILI?"SESSDATA":"MUSIC_U")+"=fixture; Path=/; Secure"));
+        jar.accept(platform.accountUri(),List.of(platform.loginCookie()+"=fixture; Path=/; Secure"));
         return new AccountCredentials(platform,"42",jar.snapshot(),java.time.Clock.systemUTC());
     }
     private static final class Backend implements NeteaseAutoSourceResolver.Backend {
@@ -79,6 +78,17 @@ public final class AutoSourceResolverContractTest {
             backend=new Backend(bili);backend.beforeAudio=()->currentBili.set(null);
             try {NeteaseAutoSourceResolver.resolve(net,target,net.accountScope(),request,accounts,bili,unavailable,backend);throw new AssertionError();}
             catch(java.util.concurrent.CancellationException expected) {checks++;}
+            currentBili.set(bili);
+            var qq=account(AccountPlatform.QQMUSIC);var currentQq=new AtomicReference<>(qq);
+            Function<AccountPlatform,AccountCredentials> qqAccounts=p->p==AccountPlatform.BILIBILI?currentBili.get():p==AccountPlatform.QQMUSIC?currentQq.get():null;
+            var qqTarget=new OnlinePlaybackController.Target(AccountPlatform.QQMUSIC,"00123456789abc");
+            var qqUnavailable=new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.TrackUnavailable(104003);
+            try {
+                var qqAudio=NeteaseAutoSourceResolver.resolve(qq,qqTarget,qq.accountScope(),request,qqAccounts,bili,qqUnavailable,new Backend(bili));
+                check(qqAudio.key().equals(TrackKey.qqmusic(qqTarget.id())) && qqAudio.transportMatches());
+                check(qqAudio.lease().belongsTo(qq.accountScope()) && qqAudio.metadata().title().equals("Original song"));
+                currentQq.set(null);check(!qqAudio.lease().isActive() && !qqAudio.transportMatches());
+            } finally {qq.retire();}
         } finally {bili.retire();net.retire();}
         System.out.println("PASS: "+checks+" bounded fallback/page matching/retry/logical identity/two-account fences; no live traffic");
     }

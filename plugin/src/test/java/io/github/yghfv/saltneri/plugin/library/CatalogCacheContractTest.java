@@ -78,7 +78,7 @@ public final class CatalogCacheContractTest {
         System.out.println("PASS: "+checks+" catalog cache TTL/LRU/account/refresh/failure/cancellation/navigation checks; no network or audio");
     }
     private static void sessions() throws Exception {
-        for(AccountPlatform platform:AccountPlatform.values()) {
+        for(AccountPlatform platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE)) {
             var clock=new Time(); var cache=new CatalogPageCache(clock); var fixture=new CatalogContractTest.Fixture();
             var account=CatalogContractTest.account(platform);
             try(var request=new RequestScope(()->true)) {

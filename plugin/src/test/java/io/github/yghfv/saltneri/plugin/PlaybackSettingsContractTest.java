@@ -12,6 +12,12 @@ public final class PlaybackSettingsContractTest {
         check(PlaybackSettings.parse("high","standard","2048","invalid").coverMode()==io.github.yghfv.saltneri.plugin.ui.CoverMode.FIT);
         check(PlaybackSettings.DEFAULT.cacheBytes()==2L*1024*1024*1024);
         check(!PlaybackSettings.DEFAULT.neteaseAutoSourceSwitch());
+        check(!PlaybackSettings.DEFAULT.qqmusicAutoSourceSwitch());
+        for(var q:io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.values()) {
+            check(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.fromKey(q.key())==q);
+            var qq=new PlaybackSettings(PlaybackSettings.DEFAULT.bili(),PlaybackSettings.DEFAULT.netease(),PlaybackSettings.DEFAULT.cacheBytes(),PlaybackSettings.DEFAULT.coverMode(),false,q,true);
+            check(!qq.qualityKey().equals(PlaybackSettings.DEFAULT.qualityKey()));
+        }
         var original=PlaybackSettings.DEFAULT;
         var automatic=new PlaybackSettings(original.bili(),original.netease(),original.cacheBytes(),original.coverMode(),true);
         check(!automatic.qualityKey().equals(original.qualityKey()));

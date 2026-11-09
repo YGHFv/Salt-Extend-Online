@@ -118,10 +118,13 @@ public final class NativePageRenderTest {
                          return new Catalog.Page("Synthetic playlist", items, offset + 20 < total, clock.instant().plusSeconds(300), Math.max(1,(total+19)/20));
                      })) {
             library.pageLimit(20); // Legacy pager/layout fixtures; configurable limits have separate coverage.
+            byte[] qrFixture=CoverLoaderContractTest.jpeg();
             NativeDesk desk = new NativeDesk(library, player,
                     p -> new AccountLoginController.Snapshot(qr.get() == 0 ? AccountLoginController.Phase.IDLE : AccountLoginController.Phase.WAITING_SCAN,
                             qr.get() == 0 ? "Offline fixture - not logged in" : "Offline synthetic QR - do not scan",
-                            qr.get() == 0 ? null : URI.create("https://example.invalid/offline-render-fixture"), ""),
+                            qr.get() == 0 || p==AccountPlatform.QQMUSIC ? null : URI.create("https://example.invalid/offline-render-fixture"), "",
+                            new AccountCredentials.Profile("",null),"",
+                            qr.get()!=0 && p==AccountPlatform.QQMUSIC?qrFixture:null),
                     (p,a) -> { actions.incrementAndGet(); if (a == NativeDesk.Action.ARM) armed.set(true); }, () -> true);
             byte[] fixture = CoverLoaderContractTest.jpeg();
             // This suite exercises long single-column scrolling; card/double layouts have their own render suite.
@@ -174,7 +177,7 @@ public final class NativePageRenderTest {
                         finally { scene.close(); }
                     });
                 }
-                check(requests.get() == 2 && queues.get() == 0 && actions.get() == 0);
+                check(requests.get() == AccountPlatform.values().length && queues.get() == 0 && actions.get() == 0);
                 library.browse(AccountPlatform.NETEASE, Catalog.View.DISCOVER);
                 long deadline = System.nanoTime() + 3_000_000_000L;
                 while (((List<?>)library.snapshot().get("items")).isEmpty() && System.nanoTime() < deadline) Thread.sleep(10);
@@ -233,7 +236,7 @@ public final class NativePageRenderTest {
                     } catch (Exception error) { throw new AssertionError(error); }
                     finally { scene.close(); }
                 });
-                check(requests.get() == 2 && queues.get() == 1 && actions.get() == 1);
+                check(requests.get() == AccountPlatform.values().length && queues.get() == 1 && actions.get() == 1);
                 check(ui.cover(token)==warmedCover && imageRequests.get()==warmRequests);
                 for (int width : new int[]{740, 420}) for (int count : new int[]{0, 2, 20, 21}) {
                     catalogSize.set(count);
@@ -267,7 +270,7 @@ public final class NativePageRenderTest {
                             (composer, flags) -> { PlatformIconsKt.PlatformIcon(ui, platform, composer, 0); return Unit.INSTANCE; });
                     try (Image image = scene.render(16_000_000L); Data png = image.encodeToData(EncodedImageFormat.PNG,100,0)) {
                         var pixels = ImageIO.read(new ByteArrayInputStream(png.getBytes())); int branded = 0;
-                        int color = platform == AccountPlatform.BILIBILI ? 0x00a1d6 : 0xd43c33;
+                        int color = switch(platform) {case BILIBILI -> 0x00a1d6;case NETEASE -> 0xd43c33;case QQMUSIC -> 0x31c27c;};
                         for (int y=0; y<20; y++) for (int x=0; x<20; x++) if ((pixels.getRGB(x,y) & 0xffffff) == color && (pixels.getRGB(x,y) >>> 24) > 200) branded++;
                         check(branded > 70);
                     } catch (Exception error) { throw new AssertionError(error); }

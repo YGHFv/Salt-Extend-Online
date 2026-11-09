@@ -80,6 +80,24 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
         setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
     }
 
+    /** QQ Music uses JSON POST, restricted to its single official gateway. */
+    public static PinnedHttpsConnection qqMusicPost(URI target, byte[] json) throws IOException {
+        if (!"u.y.qq.com".equals(target.getHost()) || !"/cgi-bin/musicu.fcg".equals(target.getPath())
+                || target.getRawQuery() != null || json.length < 1 || json.length > 32768)
+            throw new IOException("Invalid QQ Music POST");
+        BoundedJson.object(BoundedJson.parse(json));
+        var connection = new PinnedHttpsConnection(target);
+        connection.formBody = json.clone(); connection.setRequestMethod("POST");
+        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        return connection;
+    }
+
+    public static PinnedHttpsConnection qqAuthorizePost(URI target, byte[] form) throws IOException {
+        if (!"graph.qq.com".equals(target.getHost()) || !"/oauth2.0/authorize".equals(target.getPath())
+                || target.getRawQuery() != null) throw new IOException("Invalid QQ authorization POST");
+        var connection = new PinnedHttpsConnection(target); connection.loginForm(form); return connection;
+    }
+
     public PinnedHttpsConnection(URI target) throws IOException {
         this(target, InetAddress::getAllByName, tlsSockets());
     }

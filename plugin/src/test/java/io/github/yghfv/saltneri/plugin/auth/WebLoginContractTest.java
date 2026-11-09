@@ -35,6 +35,62 @@ public final class WebLoginContractTest {
             try { WindowsNeteaseWebLogin.readCookies(bytes("{\"error\":\""+error+"\"}"),CLOCK); throw new AssertionError("Expected helper failure"); }
             catch(AuthFailure expected) { check(expected.getMessage().startsWith("NET_WEB/") && !AuthFailure.diagnostic(expected).contains("SECRET")); }
         }
+        var helperReasons=Map.ofEntries(
+            Map.entry("EDGE_MISSING",AuthFailure.Reason.BROWSER_MISSING),
+            Map.entry("EDGE_POLICY",AuthFailure.Reason.BROWSER_POLICY),
+            Map.entry("EDGE_LAUNCH",AuthFailure.Reason.BROWSER_LAUNCH),
+            Map.entry("EDGE_EARLY_EXIT",AuthFailure.Reason.BROWSER_EXIT),
+            Map.entry("EDGE_CDP",AuthFailure.Reason.BROWSER_CONNECT),
+            Map.entry("EDGE_START_TIMEOUT",AuthFailure.Reason.BROWSER_TIMEOUT),
+            Map.entry("EDGE_PROFILE",AuthFailure.Reason.PROFILE),
+            Map.entry("HELPER_POLICY",AuthFailure.Reason.HELPER_POLICY),
+            Map.entry("HELPER_VERSION",AuthFailure.Reason.HELPER_VERSION),
+            Map.entry("HELPER_SCRIPT",AuthFailure.Reason.HELPER_SCRIPT),
+            Map.entry("HELPER_IO",AuthFailure.Reason.HELPER_IO),
+            Map.entry("WEB_TIMEOUT",AuthFailure.Reason.TIMEOUT),
+            Map.entry("WEB_CLOSED",AuthFailure.Reason.CANCELLED),
+            Map.entry("COOKIE_SECRET",AuthFailure.Reason.RESPONSE));
+        for(var error:helperReasons.entrySet()) {
+            byte[] output=bytes("{\"error\":\""+error.getKey()+"\"}");
+            try { WindowsNeteaseWebLogin.readCookies(output,CLOCK); throw new AssertionError("NetEase helper failure lost"); }
+            catch(AuthFailure safe) { check(safe.getMessage().equals("NET_WEB/"+error.getValue())); }
+            try { QqMusicWebCookies.decode(output,CLOCK); throw new AssertionError("QQ helper failure lost"); }
+            catch(AuthFailure safe) {
+                check(safe.getMessage().equals("QQ_WEB/"+error.getValue()));
+                check(!AuthFailure.diagnostic(safe).contains("SECRET") && safe.getCause()==null);
+            }
+            try { NeteaseDeviceSnapshot.read(output,CLOCK); throw new AssertionError("Device helper failure lost"); }
+            catch(AuthFailure safe) {
+                check(safe.getMessage().equals("NET_DEVICE/"+(error.getValue()==AuthFailure.Reason.RESPONSE?AuthFailure.Reason.DEVICE:error.getValue())));
+            }
+        }
+        for(var reason:AuthFailure.Reason.values()) {
+            var safe=AuthFailure.of(AuthFailure.Stage.NET_WEB,reason);
+            check(safe.atStage(AuthFailure.Stage.QQ_WEB).getMessage().equals("QQ_WEB/"+reason));
+            check(!AuthFailure.diagnostic(safe).contains("SECRET"));
+        }
+        check(AuthFailure.code(AuthFailure.Stage.NET_WEB,AuthFailure.Reason.HTTP,403)
+            .atStage(AuthFailure.Stage.QQ_WEB).getMessage().equals("QQ_WEB/HTTP=403"));
+        var directory=java.nio.file.Path.of(System.getProperty("java.io.tmpdir")).toAbsolutePath();
+        var nativeBinary=directory.resolve("Sysnative/WindowsPowerShell/v1.0/powershell.exe");
+        var normalBinary=directory.resolve("System32/WindowsPowerShell/v1.0/powershell.exe");
+        check(WindowsWebLoginHelper.findBinary(Map.of("SystemRoot",directory.toString()),nativeBinary::equals).equals(nativeBinary));
+        check(WindowsWebLoginHelper.findBinary(Map.of("windir",directory.toString()),normalBinary::equals).equals(normalBinary));
+        check(WindowsWebLoginHelper.findBinary(Map.of("SystemRoot","relative","windir",directory.toString()),normalBinary::equals).equals(normalBinary));
+        try {WindowsWebLoginHelper.findBinary(Map.of(),p->true);throw new AssertionError("Missing helper accepted");}
+        catch(AuthFailure safe) {check(safe.getMessage().equals("NET_WEB/HELPER_MISSING"));}
+        String loader=WindowsWebLoginHelper.loader(directory.resolve("space quote' \u6d4b\u8bd5/helper.ps1"));
+        check(loader.contains("quote''") && loader.contains("FullLanguage") && loader.contains("HELPER_POLICY"));
+        var command=WindowsWebLoginHelper.command(normalBinary,directory.resolve("helper.ps1"));
+        check(command.get(command.size()-2).equals("-Command") && command.getLast().length()<4000);
+        check(command.stream().noneMatch(s->s.equals("-EncodedCommand") || s.equals("-ExecutionPolicy")));
+        for(String identifier:List.of("ScriptContainedMaliciousContent","PSSecurityException","ScriptsNotAllowed",
+                "MethodInvocationNotSupportedInConstrainedLanguage","CannotCreateTypeConstrainedLanguage")) {
+            var safe=WindowsWebLoginHelper.exited(1,bytes("SYNTHETIC_SECRET "+identifier+" C:\\secret"));
+            check(safe.getMessage().equals("NET_WEB/HELPER_POLICY=1") && safe.getCause()==null);
+            check(!AuthFailure.diagnostic(safe).contains("SECRET") && !AuthFailure.diagnostic(safe).contains("C:\\"));
+        }
+        check(WindowsWebLoginHelper.exited(-1,bytes("SYNTHETIC_SECRET")).getMessage().equals("NET_WEB/HELPER_EXIT=-1"));
         var verificationCalls=new AtomicInteger();
         try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->{
             verificationCalls.incrementAndGet(); check(uri.getPath().equals("/weapi/w/nuser/account/get"));

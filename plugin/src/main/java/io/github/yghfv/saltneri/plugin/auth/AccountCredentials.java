@@ -35,7 +35,7 @@ public final class AccountCredentials {
         cookies = new ScopedCookies(platform, clock); cookies.restore(entries);
         if (cookies.value(accountUri(), platform.loginCookie()).isEmpty()) throw new IOException("Confirmed login has no usable account credential");
     }
-    private URI accountUri() { return URI.create(platform == AccountPlatform.BILIBILI ? "https://api.bilibili.com/" : "https://music.163.com/"); }
+    private URI accountUri() { return platform.accountUri(); }
     public AccountPlatform platform() { return platform; }
     public String userId() { return userId; }
     public Profile profile() { return profile; }

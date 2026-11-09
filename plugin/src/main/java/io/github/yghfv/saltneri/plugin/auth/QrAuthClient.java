@@ -16,5 +16,6 @@ public interface QrAuthClient extends AutoCloseable {
     Session create(RequestScope request) throws IOException;
     Poll poll(Session session, RequestScope request) throws IOException;
     AccountCredentials verify(AccountCredentials saved, RequestScope request) throws IOException;
+    default byte[] qrImage(Session session) { return null; }
     @Override void close();
 }

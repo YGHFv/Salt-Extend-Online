@@ -54,6 +54,18 @@ public final class PlaybackCoverFile implements AutoCloseable {
                 && (!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().equals(file)))) throw new IOException("Artwork retired");
         if(!Files.exists(file,LinkOption.NOFOLLOW_LINKS)) replace(null);
     }
+    public synchronized boolean hasPicture() {
+        try {
+            if(closed || !directory.toRealPath().equals(directory) || !Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)
+                    || !file.toRealPath().equals(file) || Files.size(file)<=46 || Files.size(file)>MAX_PNG_BYTES+128) return false;
+            try(var in=new DataInputStream(Files.newInputStream(file))) {
+                if(in.readInt()!=0x664c6143 || in.readInt()!=34)return false;
+                in.skipNBytes(34);
+                int block=in.readInt();
+                return ((block>>>24)&127)==6 && (block&0xffffff)>0;
+            }
+        } catch(IOException | RuntimeException ignored) {return false;}
+    }
     private static byte[] picture(byte[] png) throws IOException {
         if (png == null || png.length < 24 || png.length > MAX_PNG_BYTES
                 || !java.util.Arrays.equals(java.util.Arrays.copyOf(png, 8), new byte[]{(byte)137,80,78,71,13,10,26,10})) {

@@ -30,6 +30,7 @@ public final class CatalogClient {
         this.account = account; this.clock = clock; this.opener = opener; this.discovery = discovery; this.sessions=sessions;
     }
     public Page load(Query query, RequestScope request) throws IOException {
+        if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open).load(query,request);
         boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL;
         boolean personal = query.view() == View.MINE || query.view() == View.SAVED || query.platform() == AccountPlatform.BILIBILI && !discover;
         if (personal && (account == null || account.platform() != query.platform())) {
@@ -64,6 +65,7 @@ public final class CatalogClient {
     CollectionContents loadAll(Query query, RequestScope request, CatalogPageCache cache,
                                java.util.function.BiConsumer<Integer,Integer> progress) throws IOException {
         if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
+        if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open).loadAll(query,request);
         if(account!=null && account.platform()!=query.platform() || query.platform()==AccountPlatform.BILIBILI && account==null)
             throw CatalogFailure.of(Stage.SESSION,Reason.LOGIN_REQUIRED);
         try(CatalogHttp http=new CatalogHttp(query.platform(),account,clock,opener,sessions)) {

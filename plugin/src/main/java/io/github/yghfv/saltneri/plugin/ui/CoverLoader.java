@@ -150,7 +150,12 @@ public final class CoverLoader implements AutoCloseable {
     public byte[] loadPlayback(URI source, RequestScope scope) throws IOException {
         URI original = CoverSource.original(source);
         if (original == null) throw invalid();
-        return load(original, scope, 1024, 8 * MAX_BYTES);
+        try {return load(original, scope, 1024, 8 * MAX_BYTES);}
+        catch(IOException unavailable) {
+            scope.check();URI fallback=CoverSource.playbackFallback(original);
+            if(fallback==null)throw unavailable;
+            return load(fallback,scope,1024,8*MAX_BYTES);
+        }
     }
     public byte[] loadPlayback(URI source,RequestScope scope,CoverMode mode) throws IOException {
         byte[] png=loadPlayback(source,scope);
@@ -169,7 +174,8 @@ public final class CoverLoader implements AutoCloseable {
             connection.setRequestMethod("GET"); connection.setRequestProperty("Accept", "image/jpeg,image/jpg,image/png,image/webp");
             connection.setRequestProperty("Accept-Encoding", "identity");
             connection.setRequestProperty("User-Agent", "Mozilla/5.0 SaltExtendOnline/0.7.8");
-            connection.setRequestProperty("Referer", source.getHost().endsWith(".music.126.net") ? "https://music.163.com/" : "https://www.bilibili.com/");
+            connection.setRequestProperty("Referer", CoverSource.parse(io.github.yghfv.saltneri.plugin.auth.AccountPlatform.QQMUSIC,source.toString())!=null
+                    ? "https://y.qq.com/" : source.getHost().endsWith(".music.126.net") ? "https://music.163.com/" : "https://www.bilibili.com/");
             if (connection.getResponseCode() != 200 || connection.getContentLengthLong() > maxBytes) throw invalid();
             String type = connection.getHeaderField("Content-Type"), encoding = connection.getHeaderField("Content-Encoding");
             // NetEase's image CDN labels real JPEGs image/jpg; the bounded decoder still validates the bytes.

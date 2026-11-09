@@ -5,7 +5,9 @@ import io.github.yghfv.saltneri.plugin.netease.NeteaseClient;
 import java.util.Set;
 
 /** Immutable settings snapshot; callers capture it once per resolution. */
-public record PlaybackSettings(BiliAudioSelector.Quality bili, NeteaseClient.Quality netease, long cacheBytes, io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode, boolean neteaseAutoSourceSwitch) {
+public record PlaybackSettings(BiliAudioSelector.Quality bili, NeteaseClient.Quality netease, long cacheBytes, io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode, boolean neteaseAutoSourceSwitch, io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic, boolean qqmusicAutoSourceSwitch) {
+    public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode,boolean neteaseAutoSourceSwitch,io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic) {this(bili,netease,cacheBytes,coverMode,neteaseAutoSourceSwitch,qqmusic,false);}
+    public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode,boolean neteaseAutoSourceSwitch) {this(bili,netease,cacheBytes,coverMode,neteaseAutoSourceSwitch,io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.STANDARD);}
     public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode) {this(bili,netease,cacheBytes,coverMode,false);}
     public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes) { this(bili,netease,cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode.FIT); }
     public static final long MIB=1024L*1024;
@@ -20,5 +22,5 @@ public record PlaybackSettings(BiliAudioSelector.Quality bili, NeteaseClient.Qua
         if(cacheMiB!=null && Set.of("0","512","1024","2048","4096","8192").contains(cacheMiB)) limit=Long.parseLong(cacheMiB)*MIB;
         return new PlaybackSettings(BiliAudioSelector.Quality.fromKey(bili),quality,limit,io.github.yghfv.saltneri.plugin.ui.CoverMode.parse(cover));
     }
-    public String qualityKey() { return bili.name()+"/"+netease.key()+"/"+coverMode.name()+"/auto="+neteaseAutoSourceSwitch; }
+    public String qualityKey() { return bili.name()+"/"+netease.key()+"/"+coverMode.name()+"/auto="+neteaseAutoSourceSwitch+"/qq="+qqmusic.key()+"/qqauto="+qqmusicAutoSourceSwitch; }
 }

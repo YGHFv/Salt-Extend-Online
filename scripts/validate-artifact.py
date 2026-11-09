@@ -54,15 +54,15 @@ def validate(path, experimental):
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(prefs) != {"bili.home", "netease.home", "ui.home", "bili.quality", "netease.quality", "netease.autoSourceSwitch", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 16:
+            if set(prefs) != {"bili.home", "netease.home", "qqmusic.home", "ui.home", "bili.quality", "netease.quality", "qqmusic.quality", "qqmusic.autoSourceSwitch", "netease.autoSourceSwitch", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 19:
                 raise ValueError("Unexpected condensed settings menu")
-            if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "ui.hideSidebarToggle")):
+            if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "ui.hideSidebarToggle")):
                 raise ValueError("Automatic source switching and toggle hiding must be opt-in")
             if prefs["ui.hiddenSidebar"]["default_value"] is not False:
                 raise ValueError("Sidebar hiding must be opt-in")
-            if prefs["ui.home"]["entry_values"] != ["restore", "Track", "BILIBILI", "NETEASE"] or prefs["ui.home"]["default_value"] != "restore":
+            if prefs["ui.home"]["entry_values"] != ["restore", "Track", "BILIBILI", "NETEASE", "QQMUSIC"] or prefs["ui.home"]["default_value"] != "restore":
                 raise ValueError("Wrong Salt startup home options")
-            for key in ("bili.home", "netease.home"):
+            for key in ("bili.home", "netease.home", "qqmusic.home"):
                 if prefs[key]["entry_values"] != ["DISCOVER", "MINE", "SAVED"] or prefs[key]["default_value"] != "DISCOVER":
                     raise ValueError("Wrong platform startup home options")
             if prefs["ui.sidebarOptimization"]["type"] != "switch" or prefs["ui.sidebarOptimization"]["default_value"] is not False:
@@ -75,6 +75,8 @@ def validate(path, experimental):
                 raise ValueError("Wrong Bilibili quality order")
             if prefs["netease.quality"]["entry_values"] != ["standard", "higher", "exhigh", "lossless", "hires", "jyeffect", "sky", "jymaster"] or prefs["netease.quality"]["default_value"] != "standard":
                 raise ValueError("Wrong NetEase quality options")
+            if prefs["qqmusic.quality"]["entry_values"] != ["standard", "higher", "exhigh", "lossless", "hires", "atmos51", "atmos71", "dolby", "dtsx", "master"] or prefs["qqmusic.quality"]["default_value"] != "standard":
+                raise ValueError("Wrong QQ Music quality options")
             if prefs["cache.limitMiB"]["entry_values"] != ["0", "512", "1024", "2048", "4096", "8192"] or prefs["cache.limitMiB"]["default_value"] != "2048":
                 raise ValueError("Wrong audio cache limits/default")
         profile = archive.read("classes/host-profiles/windows-steam-1.19.3.properties").decode("ascii")
@@ -91,6 +93,11 @@ def validate(path, experimental):
             raise ValueError("Missing compiled native Compose content")
         if "classes/auth/netease-web-login.ps1" not in names:
             raise ValueError("Missing official NetEase web-login helper")
+        for required in ("auth/NativeWindowsLogin", "auth/WindowsEdgeDiscovery", "auth/WindowsEdgeProcess",
+                         "auth/WindowsEdgeWebLogin", "auth/WindowsNativeDpapi", "host/PlaybackCoverRefresh",
+                         "host/SavedTrackSession"):
+            if "classes/io/github/yghfv/saltneri/plugin/" + required + ".class" not in names:
+                raise ValueError("Missing native login/artwork implementation: " + required)
         extension = "io.github.yghfv.saltneri.plugin.OnlineLyricsExtension"
         if archive.read("classes/META-INF/extensions.idx").decode("ascii").splitlines() != [extension]:
             raise ValueError("Missing lyric extension registration")
@@ -98,7 +105,7 @@ def validate(path, experimental):
             raise ValueError("Missing lyric extension class")
         if any("LibraryPage" in name or "LoginQrPage" in name for name in names):
             raise ValueError("Obsolete browser server bundled")
-        for license_name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "QR-Code-generator-MIT.txt", "Kotlin-Compose-Apache-2.0.txt", "Simple-Icons-CC0.txt"):
+        for license_name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "QR-Code-generator-MIT.txt", "Kotlin-Compose-Apache-2.0.txt", "Simple-Icons-CC0.txt", "Mygo-Qyin-AGPL-3.0.txt", "Go-DES-BSD-3-Clause.txt"):
             if "classes/META-INF/licenses/" + license_name not in names:
                 raise ValueError("Missing license: " + license_name)
         print(f"PASS: {'experimental' if experimental else 'passive'} artifact isolation/configuration; {len(names)} entries / {path.stat().st_size} bytes")

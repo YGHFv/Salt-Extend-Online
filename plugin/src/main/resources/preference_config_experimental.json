@@ -34,13 +34,15 @@
             "恢复上次",
             "歌曲",
             "Bilibili",
-            "网易云"
+            "网易云",
+            "QQ 音乐"
           ],
           "entry_values": [
             "restore",
             "Track",
             "BILIBILI",
-            "NETEASE"
+            "NETEASE",
+            "QQMUSIC"
           ],
           "default_value": "restore"
         },
@@ -143,6 +145,61 @@
           "default_value": false
         },
         {
+          "key": "qqmusic.home",
+          "type": "list",
+          "title": "QQ 音乐 默认首页",
+          "summary": "首次进入平台时打开的栏目。",
+          "entries": [
+            "发现",
+            "收藏",
+            "订阅"
+          ],
+          "entry_values": [
+            "DISCOVER",
+            "MINE",
+            "SAVED"
+          ],
+          "default_value": "DISCOVER"
+        },
+        {
+          "key": "qqmusic.quality",
+          "type": "list",
+          "title": "QQ 音乐音质",
+          "summary": "参考 NeriPlayer，按当前账号授权降级；只播放完整音轨，不播放试听。下次打开曲目生效。",
+          "entries": [
+            "标准",
+            "较高",
+            "极高",
+            "无损",
+            "Hi-Res",
+            "臻品全景声 5.1",
+            "臻品全景声 7.1",
+            "杜比",
+            "DTS:X",
+            "臻品母带"
+          ],
+          "entry_values": [
+            "standard",
+            "higher",
+            "exhigh",
+            "lossless",
+            "hires",
+            "atmos51",
+            "atmos71",
+            "dolby",
+            "dtsx",
+            "master"
+          ],
+          "default_value": "standard"
+        },
+        {
+          "key": "qqmusic.autoSourceSwitch",
+          "type": "switch",
+          "title": "QQ 音乐自动换源",
+          "summary": "仅完整音轨不可用时按歌名、歌手、时长匹配 Bilibili。需要已登录 B 站，保留 QQ 歌曲身份与歌词；不对登录、网络或风控失败换源。默认关闭。",
+          "default_value": false
+        },
+        {
           "key": "cover.mode",
           "type": "list",
           "title": "封面裁切",
@@ -165,7 +222,7 @@
           "key": "catalog.pageLimit",
           "type": "list",
           "title": "单页上限",
-          "summary": "Bilibili 与网易云共用，默认 30。无上限先显示前 30 项，向下滚动时继续加载；搜索、排序和全部播放仍覆盖完整合集。修改后当前列表回到开头，保留搜索与排序。",
+          "summary": "Bilibili、网易云与 QQ 音乐共用，默认 30。无上限先显示前 30 项，向下滚动时继续加载；搜索、排序和全部播放仍覆盖完整合集。修改后当前列表回到开头，保留搜索与排序。",
           "entries": [
             "20",
             "30（默认）",
@@ -217,7 +274,7 @@
         {
           "type": "button",
           "title": "修复侧栏入口",
-          "summary": "仅当 Bilibili / 网易云入口未出现时使用。",
+          "summary": "仅当 Bilibili / 网易云 / QQ 音乐入口未出现时使用。",
           "arrow_type": "none",
           "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.installNativeUi"
         },

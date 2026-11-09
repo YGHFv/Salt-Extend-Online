@@ -88,6 +88,7 @@ tasks.processResources {
     from(rootProject.files("licenses/QR-Code-generator-MIT.txt")) { into("META-INF/licenses") }
     from(rootProject.files("licenses/Kotlin-Compose-Apache-2.0.txt")) { into("META-INF/licenses") }
     from(rootProject.files("licenses/Simple-Icons-CC0.txt")) { into("META-INF/licenses") }
+    from(rootProject.files("licenses/Mygo-Qyin-AGPL-3.0.txt", "licenses/Go-DES-BSD-3-Clause.txt")) { into("META-INF/licenses") }
 }
 
 spmod {

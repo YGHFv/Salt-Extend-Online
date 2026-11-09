@@ -131,7 +131,7 @@ private fun SidebarEntries(ui: SaltNativeUi) {
     }
 }
 
-private fun name(platform: AccountPlatform) = if (platform == AccountPlatform.BILIBILI) "Bilibili" else "\u7f51\u6613\u4e91"
+private fun name(platform: AccountPlatform) = platform.label()
 
 @Composable
 private fun NativeText(ui: SaltNativeUi, text: String, secondary: Boolean = false, modifier: Modifier = Modifier, heading: Boolean = false,
@@ -347,7 +347,7 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
                 action {ui.desk().reload()}
             }
         }
-        val searchLabel = if(platform == AccountPlatform.BILIBILI) "\u641c\u7d22B\u7ad9" else "\u641c\u7d22\u7f51\u6613\u4e91"
+        val searchLabel = "\u641c\u7d22" + if(platform == AccountPlatform.BILIBILI) "B\u7ad9" else platform.label()
         SearchControl(ui,memory.searchField,memory.searching,{memory.searching=it},label=searchLabel) { keyword ->
             action {ui.desk().search(platform,keyword);memory.view=Catalog.View.SEARCH;memory.localSearch=false;memory.localText=""}
         }
@@ -680,7 +680,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         if (login?.phase()?.name in listOf("CREATING", "WAITING_SCAN", "WAITING_CONFIRMATION", "VERIFICATION_REQUIRED", "WEB_LOGIN", "EXPIRED", "ERROR")) {
                             NativeText(ui, login?.status() ?: "", modifier = Modifier.padding(8.dp))
                         }
-                        if (platform == AccountPlatform.NETEASE && login?.phase()?.name in listOf("VERIFICATION_REQUIRED", "ERROR", "EXPIRED")) {
+                        if (platform == AccountPlatform.QQMUSIC || platform == AccountPlatform.NETEASE && login?.phase()?.name in listOf("VERIFICATION_REQUIRED", "ERROR", "EXPIRED")) {
                             NativeRow(ui, "\u5b98\u65b9\u7f51\u9875\u767b\u5f55", click = { action { ui.desk().action(platform, NativeDesk.Action.WEB_LOGIN) } })
                         }
                         if (login?.phase() in listOf(AccountLoginController.Phase.CREATING, AccountLoginController.Phase.WEB_LOGIN)) {
@@ -689,6 +689,14 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         }
                         login?.qrContent()?.let { uri ->
                             Qr(ui, uri.toASCIIString())
+                            NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
+                                action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) }
+                            })
+                        }
+                        login?.qrImage()?.let { bytes ->
+                            val image = remember(bytes.contentHashCode()) { runCatching { ui.thumbnail(bytes) }.getOrNull() }
+                            DisposableEffect(image) { onDispose { image?.close() } }
+                            if(image != null) Image(image.bitmap(), "\u624b\u673a QQ \u767b\u5f55\u4e8c\u7ef4\u7801", Modifier.size(240.dp).background(Color.White), contentScale = ContentScale.Fit)
                             NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
                                 action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) }
                             })

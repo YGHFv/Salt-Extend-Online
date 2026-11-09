@@ -67,6 +67,7 @@ public final class CatalogHttp implements AutoCloseable {
     }
     public static HttpURLConnection openPinned(URI uri, byte[] form) throws IOException {
         if (form == null) return new PinnedHttpsConnection(uri);
+        if (io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp.GATEWAY.equals(uri)) return PinnedHttpsConnection.qqMusicPost(uri,form);
         if ("/weapi/w/nuser/account/get".equals(uri.getPath())) return PinnedHttpsConnection.neteaseFormPost(uri, form);
         return PinnedHttpsConnection.neteaseCatalogPost(uri, form);
     }

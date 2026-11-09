@@ -47,7 +47,7 @@ public final class SavedPlaylistContractTest {
         List<String> paths=new ArrayList<>(),ids=new ArrayList<>();
         try(var store=new SavedTrackStore(root)) {
             for(var platform:AccountPlatform.values()) {
-                String remote=platform==AccountPlatform.NETEASE?"123":"BV17x411w7KC";
+                String remote=platform==AccountPlatform.QQMUSIC?"00123456789abc":platform==AccountPlatform.NETEASE?"123":"BV17x411w7KC";
                 var row=new Catalog.Item(Catalog.Kind.TRACK,remote,"Fixture title","Fixture artist",120000,true);
                 var entry=store.save(new Target(platform,remote),row);
                 check(store.save(new Target(platform,remote),new Catalog.Item(Catalog.Kind.TRACK,remote,"Changed","Changed",1,true))==entry,"Duplicate save changed metadata");
@@ -75,12 +75,13 @@ public final class SavedPlaylistContractTest {
                 public Audio resolve(SavedTrackStore.Entry entry,io.github.yghfv.saltneri.plugin.net.RequestScope request) {
                     calls.incrementAndGet();request.check();var target=entry.target();boolean net=target.platform()==AccountPlatform.NETEASE;
                     Instant expiry=clock.instant().plusSeconds(600);
-                    return new Audio(net?TrackKey.netease(target.id()):TrackKey.bilibili(target.id(),123),new Salt1193PlaybackSession.Metadata("Fixture","Artist","","",png),
-                            new MediaLease(net?MediaLease.Platform.NETEASE:MediaLease.Platform.BILIBILI,URI.create(net?"https://m7.music.126.net/fixture":"https://test.bilivideo.com/fixture"),Map.of(),"fixture-"+revision.get(),expiry,100),expiry,target);
+                    boolean qq=target.platform()==AccountPlatform.QQMUSIC;
+                    return new Audio(qq?TrackKey.qqmusic(target.id()):net?TrackKey.netease(target.id()):TrackKey.bilibili(target.id(),123),new Salt1193PlaybackSession.Metadata("Fixture","Artist","","",png),
+                            new MediaLease(qq?MediaLease.Platform.QQMUSIC:net?MediaLease.Platform.NETEASE:MediaLease.Platform.BILIBILI,URI.create(qq?"https://dl.stream.qqmusic.qq.com/fixture":net?"https://m7.music.126.net/fixture":"https://test.bilivideo.com/fixture"),Map.of(),"fixture-"+revision.get(),expiry,100),expiry,target);
                 }
                 public OnlineLyrics.Source lyrics(SavedTrackStore.Entry entry) {return r->"[00:01.000]Fixture lyrics";}
             })) {
-            check(store.entries().size()==2,"Restart lost entries");
+            check(store.entries().size()==AccountPlatform.values().length,"Restart lost entries");
             store.entries().forEach(session::register);check(calls.get()==0,"Registering saved playlist resolved audio");
             for(var entry:store.entries()) {
                 check(paths.contains(entry.path()) && ids.contains(entry.trackId()),"Restart changed logical identity");

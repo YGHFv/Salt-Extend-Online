@@ -134,6 +134,12 @@ public final class BoundedJson {
     private static void encode(Object value, StringBuilder text, int depth) throws IOException {
         if (depth > 32 || text.length() > MAX_BYTES) throw invalid();
         if (value == null || value instanceof Boolean || value instanceof Integer || value instanceof Long) { text.append(value); return; }
+        if (value instanceof BigDecimal number) {
+            if (number.precision() > 128 || number.scale() < -128 || number.scale() > 128) throw invalid();
+            String literal = number.toString();
+            if (literal.length() > 128) throw invalid();
+            text.append(literal); return;
+        }
         if (value instanceof String string) {
             if (string.length() > 65536) throw invalid(); text.append('"');
             for (int i = 0; i < string.length(); i++) {

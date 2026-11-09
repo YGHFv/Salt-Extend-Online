@@ -22,6 +22,9 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     public interface StreamFactory {
         /** Raw Kotlin Result<Int> representation from HttpRangeBassStream, not a boxed Result. */
         Object create(URI localUri, int flags) throws Exception;
+        default Object create(URI localUri, int flags, BooleanSupplier active) throws Exception {
+            return create(localUri, flags);
+        }
         default void revoke(URI localUri) { }
         default void close() { }
     }
@@ -71,7 +74,10 @@ public final class Salt1193StreamAdapter implements StreamBinding {
                 }
                 if (local == null) throw new IllegalStateException("Online stream lease unavailable");
                 if ((long)args[2] != 0 || (long)args[3] != 0) throw new IllegalArgumentException("Subfile streams unsupported");
-                raw = factory.create(local, (int)args[4]);
+                raw = factory.create(local, (int)args[4], () -> {
+                    try { JobKt.ensureActive(((Continuation<?>)args[5]).getContext()); return true; }
+                    catch (CancellationException cancelled) { return false; }
+                });
                 if (!(raw instanceof Integer handle && handle != 0) && !(raw instanceof kotlin.Result.Failure)) {
                     throw new IllegalStateException("Invalid native stream result");
                 }

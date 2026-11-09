@@ -180,7 +180,8 @@ public final class LibraryWorkflowContractTest {
         }
     }
     private static void retainedCoverSources() throws Exception {
-        for(AccountPlatform platform:AccountPlatform.values())for(boolean missing:List.of(true,false)) {
+        // QQ supplies album artwork directly; it has no legacy missing-cover lookup.
+        for(AccountPlatform platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE))for(boolean missing:List.of(true,false)) {
             URI original=URI.create(platform==AccountPlatform.BILIBILI?"https://i0.hdslb.com/old.jpg":"https://p1.music.126.net/old.jpg");
             URI alternate=URI.create(platform==AccountPlatform.BILIBILI?"https://i1.hdslb.com/new.jpg":"https://p2.music.126.net/new.jpg");
             var lookups=new AtomicInteger();

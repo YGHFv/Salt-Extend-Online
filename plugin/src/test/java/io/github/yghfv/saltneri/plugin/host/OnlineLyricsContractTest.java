@@ -35,6 +35,19 @@ public final class OnlineLyricsContractTest {
             active.set(false); check(extension.onBeforeLoadLyrics(nativeItem)==null);
         }
         active.set(true); check(extension.onBeforeLoadLyrics(nativeItem)==null);
+        String qrc=io.github.yghfv.saltneri.plugin.qqmusic.QqMusicLyricsContractTest.nativeFixture();
+        try(var qq=OnlineLyrics.bind("saltneri:qq-qrc","qq-qrc",active::get,r->qrc)) {
+            String supplied=extension.onBeforeLoadLyrics(item("saltneri:qq-qrc","qq-qrc"));
+            check(supplied.equals(qrc));
+            var parse=Class.forName("androidx.compose.ui.\u0b0f").getMethod("\u037f",String.class);
+            var document=parse.invoke(null,supplied);
+            var lines=(List<?>)document.getClass().getMethod("\u0528").invoke(document);
+            check(lines.size()==2);
+            String first=lines.getFirst().toString();
+            check(first.contains("startTime=1000") && first.contains("endTime=2300"));
+            check(first.contains("endTime=1400, text=One") && first.contains("startTime=1600, endTime=2300"));
+            check(first.contains("pureSubText=Translation"));
+        }
         var started=new CountDownLatch(1); var release=new CountDownLatch(1);
         var binding=OnlineLyrics.bind("saltneri:late","late",active::get,r->{
             started.countDown(); try { release.await(3,TimeUnit.SECONDS); } catch(InterruptedException error) { Thread.currentThread().interrupt(); }

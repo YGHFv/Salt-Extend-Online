@@ -201,3 +201,9 @@ Fixture 不保存真实 Cookie、token、签名 URL 或用户私有歌单；测�
 
 当前实验包为`0.6.0-library-playback-preview`，新增本机发现/个人歌单/收藏分页与独立明确单曲播放提交；原有解析入口仍不自动入队。
 这里的0.4/0.5实现与实网证据为阶段记录，最新边界见 [听歌桌与单曲播放](LIBRARY_PLAYBACK_PROGRESS.md)。真实账号列表和平台BASS实播仍未验收。
+
+## QQ 音乐（0.8.38）
+
+QQ MusicClient／SearchApi／QrLoginClient 已适配到现有 Salt 原生界面、账号隔离、播放队列及持久化框架。协议来源、接入功能、与 Android 实现差异和未验收范围见 [QQ 音乐接入](QQMUSIC_0.8.38.md)。
+
+0.8.39 参考 mygo-qyin 补充 QQ 登录响应兼容与官方 QRC 逐字歌词，不移植 QIMEI 设备模拟、全局会话或估算字轴；详见 [登录与逐字歌词](QQMUSIC_LOGIN_QRC_0.8.39.md)。

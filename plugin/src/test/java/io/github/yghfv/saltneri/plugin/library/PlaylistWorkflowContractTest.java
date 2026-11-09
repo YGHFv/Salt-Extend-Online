@@ -70,7 +70,36 @@ public final class PlaylistWorkflowContractTest {
         }
         searchAndRetry();
         failedFullLoad();
+        playbackDiagnostics();
         System.out.println("PASS: "+checks+" platform-local navigation, whole-list filter/sort, search/retry, unfiltered replacement intent and revocation checks");
+    }
+    private static void playbackDiagnostics() throws Exception {
+        var cases=new LinkedHashMap<Throwable,String>();
+        cases.put(new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.MediaRejected(
+                io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.MediaRejected.Reason.PATH),"QQ_MEDIA_PATH");
+        cases.put(new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.MediaRejected(
+                io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.MediaRejected.Reason.AUTHORIZATION),"QQ_MEDIA_AUTHORIZATION");
+        cases.put(new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp.Rejected(1000),"QQ_API=1000");
+        cases.put(new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp.Rejected(403,true),"QQ_HTTP=403");
+        cases.put(new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.TrackUnavailable(104003),"QQ_TRACK_UNAVAILABLE=104003");
+        cases.put(AuthFailure.code(AuthFailure.Stage.QQ_VERIFY,AuthFailure.Reason.API,1000),"QQ_VERIFY/API=1000");
+        cases.put(new io.github.yghfv.saltneri.plugin.net.MediaRangeProbe.Rejected(403),"MEDIA_HTTP=403");
+        cases.put(new java.net.SocketTimeoutException("URL_SECRET"),"NETWORK_TIMEOUT");
+        cases.put(new java.io.IOException("COOKIE_SECRET https://secret.invalid"),"IOException");
+        try(var player=new OnlinePlaybackController(p->null,()->true,()->true,(audio,active)->{throw new AssertionError("No playback");})) {
+            for(var test:cases.entrySet()) {
+                check(OnlinePlaybackController.playbackFailureReason(test.getKey()).equals(test.getValue()));
+                var list=new LibraryController.Playlist(AccountPlatform.QQMUSIC,
+                        List.of(new Item(Kind.TRACK,"00123456789abc","Fixture","Artist",120000,true)),null);
+                player.playPlaylist(list,()->{},(playlist,active)->{throw (Exception)test.getKey();});
+                long until=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);String status="";
+                while(System.nanoTime()<until) {
+                    status=String.valueOf(player.snapshot().get("error"));
+                    if(status.contains("PLAYLIST/"))break;Thread.sleep(10);
+                }
+                check(status.contains("[PLAYLIST/"+test.getValue()+"]") && !status.contains("SECRET") && !status.contains("https://"));
+            }
+        }
     }
     private static void failedFullLoad() throws Exception {
         var fail=new AtomicBoolean();

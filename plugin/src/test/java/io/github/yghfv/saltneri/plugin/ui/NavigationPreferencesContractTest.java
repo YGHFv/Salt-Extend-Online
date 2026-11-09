@@ -23,7 +23,7 @@ public final class NavigationPreferencesContractTest {
         check(preferences.home().equals("restore") && preferences.initial().equals("Track"));
         for(String bad:Arrays.asList(null,"","restore/invalid","playlist:","playlist:\n","playlist:"+"x".repeat(200)))
             check(!NavigationPreferences.valid(bad));
-        for(String value:List.of("Track","BILIBILI","NETEASE","playlist:one")) {
+        for(String value:List.of("Track","BILIBILI","NETEASE","QQMUSIC","playlist:one")) {
             preferences.remember(value);check(preferences.initial().equals(value));
             int saved=config.saves;preferences.remember(value);check(config.saves==saved);
             config.set("ui.home","NETEASE");check(preferences.initial().equals("NETEASE"));config.set("ui.home","restore");
@@ -32,7 +32,7 @@ public final class NavigationPreferencesContractTest {
         int saves=config.saves;preferences.remember(null);preferences.remember("restore");check(config.saves==saves);
         config.set("ui.home",true);config.set("ui.lastPage",true);check(preferences.initial().equals("Track"));
         for(var platform:AccountPlatform.values())for(var home:List.of(Catalog.View.DISCOVER,Catalog.View.MINE,Catalog.View.SAVED)) {
-            config.set((platform==AccountPlatform.BILIBILI?"bili":"netease")+".home",home.name());
+            config.set(platform.configPrefix()+".home",home.name());
             check(preferences.platformHome(platform)==home);
             try(var library=new LibraryController(p->null,()->true,t->{throw new AssertionError("Playback");},()->{})) {
                 check(library.enter(platform,home));

@@ -22,6 +22,7 @@ public final class NativeStreamLifecycleTest {
         revokeAndUnload();
         openingRace();
         blockedRead();
+        sealedDecoderInput();
         System.out.println("PASS: " + checks + " actual host callback lifecycle checks; no BASS output/account accessed");
     }
 
@@ -123,6 +124,80 @@ public final class NativeStreamLifecycleTest {
         }
     }
 
+    private static void sealedDecoderInput() throws Exception {
+        check(SealedMediaFile.needsSealing(new byte[]{0,0,0,24,'f','t','y','p'}), "MP4 header missed");
+        check(SealedMediaFile.needsSealing(new byte[]{(byte)255,(byte)241}), "ADTS header missed");
+        check(SealedMediaFile.needsSealing(new byte[]{0x30,0x26,(byte)0xb2,0x75}), "ASF header missed");
+        check(!SealedMediaFile.needsSealing(new byte[]{(byte)255,(byte)251}), "MP3 incorrectly staged");
+        check(!SealedMediaFile.needsSealing("fLaC".getBytes(java.nio.charset.StandardCharsets.US_ASCII)), "FLAC incorrectly staged");
+        try (Fixture http = new Fixture(); Native runtime = new Native()) {
+            http.mp4 = true;
+            java.util.concurrent.atomic.AtomicReference<java.nio.file.Path> file = new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<Runnable> free = new java.util.concurrent.atomic.AtomicReference<>();
+            AtomicInteger opens = new AtomicInteger();
+            ScopedNativeStreams factory = new ScopedNativeStreams(NativeStreamLifecycleTest.class.getClassLoader(),
+                    runtime.runtime, uri -> { }, (path, flags, onFree) -> {
+                        check(flags == 42, "Local native flags changed");
+                        check(java.nio.file.Files.size(path) == Fixture.LENGTH, "Incomplete file transferred to decoder");
+                        byte[] bytes = java.nio.file.Files.readAllBytes(path);
+                        check(SealedMediaFile.needsSealing(bytes), "Staging lost header");
+                        check(bytes[Fixture.LENGTH - 1] == (byte)(Fixture.LENGTH - 1), "Staging lost file tail");
+                        file.set(path); free.set(onFree); opens.incrementAndGet(); return 10000000;
+                    });
+            try {
+                check(handle(factory.create(http.uri(), 42)) == 10000000, "Sealed native handle lost");
+                check(opens.get() == 1 && runtime.callbacks.isEmpty(), "MP4 still used revocable user callbacks");
+                factory.revoke(http.uri());
+                factory.close();
+                check(java.nio.file.Files.exists(file.get()), "Revocation deleted decoding input");
+                check(runtime.freed.get() == 0, "Revocation freed host-owned local handle");
+                free.get().run();
+                check(!java.nio.file.Files.exists(file.get()), "Host FREE did not release staging file");
+                free.get().run();
+                check(!java.nio.file.Files.exists(file.get()), "Double FREE recreated staging file");
+            } finally { factory.close(); if (free.get() != null) free.get().run(); }
+        }
+        try (Fixture http = new Fixture(); Native runtime = new Native()) {
+            http.mp4 = true; http.fail = true;
+            AtomicInteger opens = new AtomicInteger();
+            ScopedNativeStreams factory = new ScopedNativeStreams(NativeStreamLifecycleTest.class.getClassLoader(),
+                    runtime.runtime, uri -> { }, (path, flags, onFree) -> { opens.incrementAndGet(); return 1; });
+            try {
+                try { handle(factory.create(http.uri(), 0)); throw new AssertionError("Partial MP4 published"); }
+                catch (IllegalStateException expected) { check(opens.get() == 0, "Partial input reached Media Foundation"); }
+            } finally { factory.close(); }
+        }
+        try (Fixture http = new Fixture(); Native runtime = new Native()) {
+            http.mp4 = true;
+            AtomicInteger polls = new AtomicInteger(), opens = new AtomicInteger();
+            ScopedNativeStreams factory = new ScopedNativeStreams(NativeStreamLifecycleTest.class.getClassLoader(),
+                    runtime.runtime, uri -> { }, (path, flags, onFree) -> { opens.incrementAndGet(); return 1; });
+            try {
+                try {
+                    handle(factory.create(http.uri(), 0, () -> polls.incrementAndGet() < 5));
+                    throw new AssertionError("Superseded song published");
+                } catch (java.util.concurrent.CancellationException expected) {
+                    check(opens.get() == 0, "Cancelled staging opened native decoder");
+                    check(polls.get() >= 5, "Caller cancellation was not checked while copying");
+                }
+            } finally { factory.close(); }
+        }
+        BassFileProcs oversized = new BassFileProcs();
+        AtomicInteger reads = new AtomicInteger();
+        oversized.length = user -> SealedMediaFile.MAX_FILE_BYTES + 1;
+        oversized.seek = (position, user) -> true;
+        oversized.read = (buffer, length, user) -> {
+            reads.incrementAndGet();
+            byte[] header = new byte[length];
+            System.arraycopy(new byte[]{0,0,0,24,'f','t','y','p'}, 0, header, 0, 8);
+            buffer.write(0, header, 0, length); return length;
+        };
+        try { SealedMediaFile.prepare(oversized, () -> true); throw new AssertionError("Unbounded staging accepted"); }
+        catch (java.io.IOException expected) { check(reads.get() == 1, "Oversized media downloaded before budget check"); }
+        try { SealedMediaFile.prepare(oversized, () -> false); throw new AssertionError("Cancelled staging started"); }
+        catch (java.util.concurrent.CancellationException expected) { check(reads.get() == 1, "Cancelled staging read network"); }
+    }
+
     private static Object rawCreate(URI uri, BassFileStreamRuntime runtime) throws Exception {
         Class<?> stream = Class.forName("com.xuncorp.voxzen.cast.HttpRangeBassStream");
         Class<?> owner = Class.forName("com.xuncorp.voxzen.cast.HttpRangeStreamOwner");
@@ -174,7 +249,7 @@ public final class NativeStreamLifecycleTest {
         });
         final AtomicInteger requests = new AtomicInteger();
         final CountDownLatch entered = new CountDownLatch(1), release = new CountDownLatch(1);
-        volatile boolean fail, block;
+        volatile boolean fail, block, mp4;
         Fixture() throws Exception {
             server.setExecutor(threads);
             server.createContext("/media/", exchange -> {
@@ -188,6 +263,8 @@ public final class NativeStreamLifecycleTest {
                     if (first >= 524288 && fail) { exchange.sendResponseHeaders(502, -1); return; }
                     byte[] data = new byte[last - first + 1];
                     for (int i = 0; i < data.length; i++) data[i] = (byte)(first + i);
+                    if (mp4 && first == 0 && data.length >= 8)
+                        System.arraycopy(new byte[]{0,0,0,24,'f','t','y','p'}, 0, data, 0, 8);
                     exchange.getResponseHeaders().set("Content-Range", "bytes " + first + "-" + last + "/" + LENGTH);
                     exchange.sendResponseHeaders(206, data.length);
                     exchange.getResponseBody().write(data);

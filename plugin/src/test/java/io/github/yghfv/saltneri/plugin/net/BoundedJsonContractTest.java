@@ -28,6 +28,13 @@ public final class BoundedJsonContractTest {
         fails(() -> BoundedJson.integer(parse("1.1")));
         fails(() -> BoundedJson.integer(parse("\"1\"")));
         fails(() -> BoundedJson.array(parse("{}"))); fails(() -> BoundedJson.object(parse("[]")));
+        for(String number:java.util.List.of("-1","1731000000.25","1E+100","0.0001")) {
+            Object value=parse(number);
+            check(BoundedJson.parse(BoundedJson.encode(value)).equals(value));
+        }
+        fails(()->BoundedJson.encode(new java.math.BigDecimal("1E+1000000")));
+        fails(()->BoundedJson.encode(new java.math.BigDecimal("1E-1000000")));
+        fails(()->BoundedJson.encode(new java.math.BigDecimal("1".repeat(129))));
         System.out.println("PASS: " + checks + " bounded JSON checks");
     }
 }

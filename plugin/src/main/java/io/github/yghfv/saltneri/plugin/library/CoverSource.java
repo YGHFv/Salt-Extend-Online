@@ -17,7 +17,16 @@ public final class CoverSource {
     public static URI original(URI source) {
         if (source == null) return null;
         URI bili = parse(AccountPlatform.BILIBILI, source.toString());
-        return bili != null ? bili : parse(AccountPlatform.NETEASE, source.toString());
+        if(bili != null) return bili;
+        URI net = parse(AccountPlatform.NETEASE, source.toString());
+        return net != null ? net : parse(AccountPlatform.QQMUSIC, source.toString());
+    }
+    /** The same QQ album identity on its static CDN, not an arbitrary redirect or signed URL. */
+    public static URI playbackFallback(URI source) {
+        URI original=original(source);
+        if(original==null || !original.getHost().equals("y.qq.com")
+                || !original.getPath().matches("/music/photo_new/T002R[0-9]{2,4}x[0-9]{2,4}M000[A-Za-z0-9]{14}\\.jpg")) return null;
+        return URI.create("https://y.gtimg.cn"+original.getPath());
     }
     public static URI parse(AccountPlatform platform, String value) {
         if (value == null || value.isEmpty() || value.length() > 2048) return null;
@@ -25,16 +34,32 @@ public final class CoverSource {
             value = value.trim();
             URI uri = URI.create(value.startsWith("//") ? "https:" + value : value);
             if (uri.getScheme() == null || uri.getHost() == null || !Set.of("https", "http").contains(uri.getScheme()) || uri.getRawUserInfo() != null || uri.getRawFragment() != null
-                    || uri.getRawQuery() != null && !(platform == AccountPlatform.NETEASE && uri.getRawQuery().matches("param=[0-9]{1,4}y[0-9]{1,4}"))
+                    || uri.getRawQuery() != null && !(platform == AccountPlatform.NETEASE && uri.getRawQuery().matches("param=[0-9]{1,4}y[0-9]{1,4}")
+                        || platform == AccountPlatform.QQMUSIC && qqQuery(uri))
                     || uri.getPort() != -1 || uri.getRawPath() == null || uri.getRawPath().isEmpty()
                     || !uri.getRawPath().matches("/[A-Za-z0-9/_.@%=-]+")) return null;
             boolean allowed = platform == AccountPlatform.BILIBILI
                     ? Set.of("i0.hdslb.com", "i1.hdslb.com", "i2.hdslb.com", "i3.hdslb.com", "i0.biliimg.com", "i1.biliimg.com", "i2.biliimg.com").contains(uri.getHost())
-                    : Set.of("p1.music.126.net", "p2.music.126.net", "p3.music.126.net", "p4.music.126.net").contains(uri.getHost());
+                    : platform == AccountPlatform.NETEASE
+                        ? Set.of("p1.music.126.net", "p2.music.126.net", "p3.music.126.net", "p4.music.126.net").contains(uri.getHost())
+                        : Set.of("y.qq.com","qpic.y.qq.com","music-file.y.qq.com","y.gtimg.cn","p.qpic.cn","q.qlogo.cn","thirdqq.qlogo.cn").contains(uri.getHost());
             String path = uri.getRawPath();
             int at = path.lastIndexOf('@');
             if (platform == AccountPlatform.BILIBILI && at > path.lastIndexOf('/')) path = path.substring(0, at);
-            return allowed ? URI.create("https://" + uri.getHost() + path) : null;
+            String query=platform==AccountPlatform.QQMUSIC && uri.getHost().equals("q.qlogo.cn") && uri.getRawQuery()!=null
+                    ? "?"+uri.getRawQuery():"";
+            return allowed ? URI.create("https://" + uri.getHost() + path + query) : null;
         } catch (IllegalArgumentException error) { return null; }
+    }
+    private static boolean qqQuery(URI uri) {
+        String query=uri.getRawQuery(),host=uri.getHost(),path=uri.getRawPath();
+        if(host.equals("music-file.y.qq.com") && path.startsWith("/songlist/"))
+            return query.matches("imageView2/[0-5]/w/[0-9]{1,4}/h/[0-9]{1,4}");
+        if(Set.of("qpic.y.qq.com","p.qpic.cn").contains(host))
+            return query.matches("(n=[01]|max_age=[0-9]{1,10})(&(n=[01]|max_age=[0-9]{1,10}))?");
+        if(host.equals("y.gtimg.cn") && path.startsWith("/music/photo_new/"))
+            return query.matches("max_age=[0-9]{1,10}");
+        return host.equals("q.qlogo.cn") && path.equals("/headimg_dl")
+                && query.matches("dst_uin=[1-9][0-9]{0,18}&spec=(40|64|100|140|640)(&img_type=jpg)?");
     }
 }

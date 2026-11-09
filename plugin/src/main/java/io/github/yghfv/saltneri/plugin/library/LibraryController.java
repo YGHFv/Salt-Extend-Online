@@ -398,6 +398,7 @@ public final class LibraryController implements AutoCloseable {
             if (item.cover() != null && !fallback) return item.cover();
             if (fallback && item.cover() == null) return null;
             platform=s.platform;
+            if(platform==AccountPlatform.QQMUSIC) return null;
             if(platform==AccountPlatform.BILIBILI && (item.kind()!=Kind.COLLECTION || item.owner()<=0)) return null;
             if(platform==AccountPlatform.NETEASE && item.kind()!=Kind.TRACK && item.kind()!=Kind.FOLDER) return null;
             account = accounts.apply(s.platform);

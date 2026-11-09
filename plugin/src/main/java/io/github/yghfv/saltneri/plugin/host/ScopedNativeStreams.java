@@ -2,9 +2,16 @@ package io.github.yghfv.saltneri.plugin.host;
 
 import com.xuncorp.voxzen.cast.BassFileProcs;
 import com.xuncorp.voxzen.cast.BassFileStreamRuntime;
+import com.sun.jna.Callback;
+import com.sun.jna.Function;
+import com.sun.jna.Library;
+import com.sun.jna.NativeLibrary;
+import com.sun.jna.Pointer;
+import com.sun.jna.WString;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.net.URI;
 import java.util.HashSet;
 import java.util.Set;
@@ -16,9 +23,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Wrap only callbacks created by this factory. The host retains native-handle ownership. */
 final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
+    @FunctionalInterface interface LocalFactory {
+        int create(java.nio.file.Path path, int flags, Runnable onFree) throws Exception;
+    }
+    public interface FreeSync extends Callback { void invoke(int sync, int channel, int data, Pointer user); }
     private final ClassLoader loader;
     private final BassFileStreamRuntime injected;
     private final java.util.function.Consumer<URI> failed;
+    private final LocalFactory localFiles;
     private final Set<Scope> scopes = new HashSet<>();
     private final ThreadPoolExecutor aborts = new ThreadPoolExecutor(0, 2, 10, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(), runnable -> {
@@ -32,12 +44,20 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
         this(loader, injected, uri -> { });
     }
     ScopedNativeStreams(ClassLoader loader, BassFileStreamRuntime injected, java.util.function.Consumer<URI> failed) {
+        this(loader, injected, failed, null);
+    }
+    ScopedNativeStreams(ClassLoader loader, BassFileStreamRuntime injected, java.util.function.Consumer<URI> failed,
+                        LocalFactory localFiles) {
         this.loader = loader; this.injected = injected; this.failed = failed;
+        this.localFiles = localFiles;
         aborts.setCorePoolSize(2);
         aborts.allowCoreThreadTimeOut(true);
     }
 
     @Override public Object create(URI uri, int flags) throws Exception {
+        return create(uri, flags, () -> true);
+    }
+    @Override public Object create(URI uri, int flags, java.util.function.BooleanSupplier active) throws Exception {
         Scope scope = new Scope(uri);
         synchronized (this) {
             if (closed) throw new CancellationException("Online streams stopped");
@@ -53,6 +73,20 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
             BassFileStreamRuntime guarded = new BassFileStreamRuntime((nativeFlags, procs) -> {
                 scope.bind(abi, procs);
                 if (scope.terminal.get()) return 0;
+                try {
+                    scope.sealed = SealedMediaFile.prepare(procs, () -> !scope.terminal.get() && active.getAsBoolean());
+                    if (scope.sealed != null) {
+                        if (scope.terminal.get() || !active.getAsBoolean()) throw new CancellationException("Stream open cancelled");
+                        // BASS keeps a complete local file alive until its own handle is freed.
+                        // Revocation can no longer strand MF in a short-read loop under the mixer lock.
+                        if (localFiles != null) return localFiles.create(scope.sealed.path, nativeFlags, () -> procs.close.invoke(null));
+                        return scope.createLocal(abi, procs, nativeFlags, runtime);
+                    }
+                } catch (CancellationException cancelled) {
+                    throw cancelled;
+                } catch (Exception failure) {
+                    throw new IllegalStateException("Online media staging failed", failure);
+                }
                 return runtime.getCreateStream().invoke(nativeFlags, procs);
             }, runtime.getFreeChannel(), runtime.getGetErrorCode());
             Object result = abi.create.invoke(abi.singleton, uri.toString(), flags, guarded, abi.owner);
@@ -78,6 +112,7 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
     }
 
     private synchronized void retire(Scope scope) {
+        if (scope.sealed != null) scope.sealed.close();
         scopes.remove(scope);
         if (closed && scopes.isEmpty()) aborts.shutdown();
     }
@@ -88,7 +123,30 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
         final AtomicBoolean abortQueued = new AtomicBoolean();
         final AtomicBoolean readFailed = new AtomicBoolean();
         volatile Runnable abort;
+        volatile SealedMediaFile sealed;
+        FreeSync nativeFree;
         Scope(URI uri) { this.uri = uri; }
+
+        int createLocal(Abi abi, BassFileProcs procs, int flags, BassFileStreamRuntime runtime) throws Exception {
+            Object library = abi.library.invoke(abi.singleton);
+            if (!(Proxy.getInvocationHandler(library) instanceof Library.Handler handler))
+                throw new IllegalStateException("Native file library unavailable");
+            NativeLibrary nativeLibrary = handler.getNativeLibrary();
+            Function create = nativeLibrary.getFunction("BASS_StreamCreateFile");
+            Function setSync = nativeLibrary.getFunction("BASS_ChannelSetSync");
+            nativeFree = (sync, channel, data, user) -> procs.close.invoke(null);
+            int handle = create.invokeInt(new Object[]{0, new WString(sealed.path.toString()), 0L, 0L, flags | 0x80000000});
+            if (handle == 0) return 0;
+            boolean registered = false;
+            try {
+                registered = setSync.invokeInt(new Object[]{handle, 8, 0L, nativeFree, null}) != 0;
+                if (!registered) throw new IllegalStateException("Native file lifetime sync unavailable");
+                return handle;
+            } finally {
+                // Before transfer only: otherwise the host exclusively owns native freeing.
+                if (!registered) runtime.getFreeChannel().invoke(handle);
+            }
+        }
 
         void cancel() {
             terminal.set(true);
@@ -145,7 +203,7 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
     private static final class Abi {
         final Object singleton, owner;
         final Field opening, source;
-        final Method create, defaultRuntime, procs, abort, position, length;
+        final Method create, defaultRuntime, library, procs, abort, position, length;
         Abi(ClassLoader loader) throws ReflectiveOperationException {
             Class<?> stream = Class.forName("com.xuncorp.voxzen.cast.HttpRangeBassStream", true, loader);
             Class<?> ownerType = Class.forName("com.xuncorp.voxzen.cast.HttpRangeStreamOwner", true, loader);
@@ -154,6 +212,7 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
             owner = ownerType.getField("Unspecified").get(null);
             create = stream.getMethod("create-BWLJW6A$Voxzen_composeApp", String.class, int.class, BassFileStreamRuntime.class, ownerType);
             defaultRuntime = accessible(stream.getDeclaredMethod("defaultRuntime"));
+            library = accessible(stream.getDeclaredMethod("getLibrary"));
             opening = accessible(stream.getDeclaredField("openingStreams"));
             source = accessible(active.getDeclaredField("source"));
             procs = accessible(active.getMethod("getProcs"));

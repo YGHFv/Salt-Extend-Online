@@ -3,6 +3,8 @@ package io.github.yghfv.saltneri.plugin.auth;
 import io.github.yghfv.saltneri.plugin.net.RequestScope;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.util.*;
@@ -50,6 +52,35 @@ public final class NeteaseQrSecurityContractTest {
                 SNAPSHOT.replace(COOKIE, COOKIE + "," + COOKIE.replace("sDeviceId", "MUSIC_U")),
                 SNAPSHOT.replace("\"session\":true", "\"session\":false,\"expires\":1"),
                 "{\"error\":\"SYNTHETIC_ERROR\"}", "SYNTHETIC_INVALID_JSON", "x".repeat(65537))) rejected(() -> read(bad));
+
+        for (String badId : List.of("bad%", "bad%2", "bad%ZZ", "bad%25id", "bad%252Bid", "bad%0Did", "bad%0aid",
+                "bad%09id", "bad%3Bid", "bad%2Cid", "bad%22id", "bad%5Cid", "bad%26id", "bad%3Fid",
+                "bad%23id", "bad%00id", "bad%7Fid", "bad%FFid", "bad id", "bad;id", "bad,id", "bad&id"))
+            rejected(() -> read(SNAPSHOT.replace("fixture-device", badId)));
+        for (String id : List.of("fixture%2Bdevice%2Fpart%3D", "fixture%2bdevice%2fpart%3d", "fixture+device/part=",
+                "x".repeat(128), "x".repeat(125) + "%2B")) {
+            var escaped = read(SNAPSHOT.replace("fixture-device", id));
+            check(escaped.deviceId().equals(id));
+            var exchanges = new ArrayList<AuthProtocolContractTest.Response>();
+            var fake = new AuthHttp((uri, body) -> {
+                var reply = response(uri, uri.getPath().endsWith("unikey") ? "{\"code\":200,\"unikey\":\"" + KEY + "\"}"
+                        : "{\"code\":801}");
+                exchanges.add(reply); return reply;
+            });
+            try (var client = new NeteaseQrClient(CLOCK, fake, r -> escaped); var request = new RequestScope(() -> true)) {
+                var session = client.create(request);
+                String chain = "v1_" + id + "_web_login_" + CLOCK.millis();
+                check(session.chainId().equals(chain));
+                String rawChain = Arrays.stream(session.qrContent().getRawQuery().split("&"))
+                        .filter(p -> p.startsWith("chainId=")).findFirst().orElseThrow().substring(8);
+                check(rawChain.equals(URLEncoder.encode(chain, StandardCharsets.UTF_8)));
+                check(URLDecoder.decode(rawChain, StandardCharsets.UTF_8).equals(chain));
+                check(client.poll(session, request).state() == QrAuthClient.State.WAITING_SCAN);
+                check(exchanges.size() == 2 && exchanges.stream().allMatch(r ->
+                        r.getRequestProperty("Cookie").contains("sDeviceId=" + id)));
+                check(chain.equals(exchanges.getLast().getRequestProperty("x-login-chain-id")));
+            }
+        }
 
         var calls = new ArrayList<AuthProtocolContractTest.Response>(); var preparations = new AtomicInteger(); var polls = new AtomicInteger();
         var http = new AuthHttp((uri, body) -> {
@@ -150,7 +181,10 @@ public final class NeteaseQrSecurityContractTest {
         var headers = new AuthHttp((uri, body) -> { throw new AssertionError("Invalid header reached HTTP"); });
         try (var request = new RequestScope(() -> true)) {
             var jar = new ScopedCookies(AccountPlatform.NETEASE, CLOCK); URI target = URI.create("https://music.163.com/weapi/login/qrcode/client/login");
-            for (var extra : List.of(Map.of("x-login-chain-id", "bad\r\nSYNTHETIC"), Map.of("x-loginmethod", "other"), Map.of("Cookie", "SYNTHETIC")))
+            for (var extra : List.of(Map.of("x-login-chain-id", "bad\r\nSYNTHETIC"),
+                    Map.of("x-login-chain-id", "bad%0D%0ASYNTHETIC"), Map.of("x-login-chain-id", "bad%252Bid"),
+                    Map.of("x-login-chain-id", "bad%20id"), Map.of("x-login-chain-id", "x".repeat(257)),
+                    Map.of("x-loginmethod", "other"), Map.of("Cookie", "SYNTHETIC")))
                 rejected(() -> headers.exchange(target, new byte[0], jar, extra, request));
             rejected(() -> headers.exchange(target, new byte[0], jar, Map.of(), UA + "\r\nSYNTHETIC", request));
         }

@@ -97,7 +97,8 @@ public final class CatalogContractTest {
         Page publicSongs = new Fixture().load(new Query(AccountPlatform.NETEASE, View.FOLDER, 10, 1), null);
         check(publicSongs.items().size() == 3); check(publicSongs.items().get(0).target().equals("1") && publicSongs.items().get(0).enabled());
         check(!publicSongs.items().get(1).enabled() && !publicSongs.items().get(2).enabled()); check(publicSongs.items().get(2).title().contains("Unavailable"));
-        for (AccountPlatform platform : AccountPlatform.values()) {
+        // QQ's distinct gateway/OAuth protocol is covered by QqMusicContractTest.
+        for (AccountPlatform platform : List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE)) {
             AccountCredentials account = account(platform);
             try {
                 Fixture fixture = new Fixture(); Page mine = fixture.load(new Query(platform, View.MINE, 0, 1), account);

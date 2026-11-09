@@ -55,6 +55,7 @@ Copy-Item -LiteralPath (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD_PART
 Copy-Item -LiteralPath (Join-Path $root 'licenses/QR-Code-generator-MIT.txt') -Destination $licenseDirectory
 Copy-Item -LiteralPath (Join-Path $root 'licenses/Kotlin-Compose-Apache-2.0.txt') -Destination $licenseDirectory
 Copy-Item -LiteralPath (Join-Path $root 'licenses/Simple-Icons-CC0.txt') -Destination $licenseDirectory
+Copy-Item -LiteralPath (Join-Path $root 'licenses/Mygo-Qyin-AGPL-3.0.txt'), (Join-Path $root 'licenses/Go-DES-BSD-3-Clause.txt') -Destination $licenseDirectory
 $testSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'plugin/src/test/java') -Filter '*.java' -Recurse | ForEach-Object { $_.FullName })
 & $javac --release 25 -encoding UTF-8 -proc:none -classpath "$classes;$hostPackage" -d $tests @testSources
 if ($LASTEXITCODE -ne 0) { throw 'Host smoke test compilation failed.' }
