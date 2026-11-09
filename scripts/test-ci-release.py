@@ -35,12 +35,12 @@ class PublicationTest(unittest.TestCase):
 
                 def github(*args, **kwargs):
                     calls.append(args)
-                    if args[:2] == ("api", "repos/YGHFv/Salt-Extend-Online/releases/tags/v0.8.46-netease-device"):
+                    if args[:2] == ("release", "view"):
                         if existing:
-                            return json.dumps({"draft": False})
+                            return json.dumps({"isDraft": False})
                         if len(calls) == 1:
                             return None
-                        return json.dumps({"draft": True, "assets": [
+                        return json.dumps({"isDraft": True, "assets": [
                             {"name": artifact.name, "size": artifact.stat().st_size},
                             {"name": checksum.name, "size": checksum.stat().st_size}]})
                     if args[0] == "api" and "/git/ref/tags/" in args[1]:
@@ -68,8 +68,8 @@ class PublicationTest(unittest.TestCase):
 
                 def github(*args, **kwargs):
                     calls.append(args)
-                    if args[0] == "api" and "/releases/tags/" in args[1]:
-                        return json.dumps({"draft": True, "assets": []})
+                    if args[:2] == ("release", "view"):
+                        return json.dumps({"isDraft": True, "assets": []})
                     if args[0] == "api" and "/git/ref/tags/" in args[1]:
                         return json.dumps({"object": {"type": "commit", "sha": "c" * 40 if conflict else COMMIT}})
                     return ""
@@ -78,6 +78,29 @@ class PublicationTest(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         release.publish(root, root)
                 self.assertFalse(any(c[:2] == ("release", "edit") for c in calls))
+
+    def test_resume_existing_draft(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            artifact, checksum = root / "fixture.spmod", root / "fixture.sha256"
+            artifact.write_bytes(b"x")
+            checksum.write_bytes(b"y")
+            verified = ({"version": "1.2.3"}, artifact, checksum, "b" * 64)
+            calls = []
+
+            def github(*args, **kwargs):
+                calls.append(args)
+                if args[:2] == ("release", "view"):
+                    return json.dumps({"isDraft": True, "assets": [
+                        {"name": artifact.name, "size": 1}, {"name": checksum.name, "size": 1}]})
+                if args[0] == "api" and "/git/ref/tags/" in args[1]:
+                    return json.dumps({"object": {"type": "commit", "sha": COMMIT}})
+                return ""
+
+            with patch.dict(os.environ, ENV), patch.object(release, "verify", return_value=verified), patch.object(release, "gh", side_effect=github):
+                release.publish(root, root)
+            self.assertFalse(any(c[:2] == ("release", "create") for c in calls))
+            self.assertEqual(calls[-1][:2], ("release", "edit"))
 
     def test_checksum_and_extra_files(self):
         with tempfile.TemporaryDirectory() as temporary:

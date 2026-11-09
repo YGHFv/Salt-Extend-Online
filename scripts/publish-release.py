@@ -58,8 +58,9 @@ def publish(root, directory):
         raise ValueError("Invalid build commit")
     values, artifact, checksum, digest = verify(root, directory)
     tag = "v" + values["version"]
-    release = gh("api", f"repos/{repo}/releases/tags/{tag}", allow_missing=True)
-    if release is not None and not json.loads(release)["draft"]:
+    # The REST releases/tags endpoint omits drafts; gh release view resolves them by ID.
+    release = gh("release", "view", tag, "--repo", repo, "--json", "isDraft,assets", allow_missing=True)
+    if release is not None and not json.loads(release)["isDraft"]:
         print(f"Version {tag} is already published; no assets replaced. Bump plugin.properties to publish new changes.")
         return
     ref = gh("api", f"repos/{repo}/git/ref/tags/{tag}", allow_missing=True)
@@ -85,7 +86,7 @@ def publish(root, directory):
             gh("release", "create", tag, "--repo", repo, "--verify-tag", "--draft", "--prerelease",
                "--title", f"Salt Extend Online {values['version']}", "--notes-file", str(note_file))
         gh("release", "upload", tag, str(artifact), str(checksum), "--repo", repo, "--clobber")
-        uploaded = json.loads(gh("api", f"repos/{repo}/releases/tags/{tag}"))
+        uploaded = json.loads(gh("release", "view", tag, "--repo", repo, "--json", "isDraft,assets"))
         assets = {a["name"]: a["size"] for a in uploaded["assets"]}
         if assets != {artifact.name: artifact.stat().st_size, checksum.name: checksum.stat().st_size}:
             raise ValueError("Draft release assets are incomplete; left unpublished")
