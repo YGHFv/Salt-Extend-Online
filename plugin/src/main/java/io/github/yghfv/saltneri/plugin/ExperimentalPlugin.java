@@ -37,11 +37,12 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile NeteaseResolutionController netease;
     private ConfigManager configManager;
     private Consumer<ConfigHelper> configListener;
-    private volatile AccountLoginController biliLogin, neteaseLogin, qqmusicLogin;
+    private volatile AccountLoginController biliLogin, neteaseLogin, qqmusicLogin, appleMusicLogin;
     private volatile OnlinePlaybackController online;
     private volatile LibraryController library;
     private volatile SaltNativeUi nativeUi;
     private NativeDesk desk;
+    private io.github.yghfv.saltneri.plugin.applemusic.AppleMusicPlayback applePlayback;
     private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
     private SavedPlaylistController savedPlaylists;
     private java.util.concurrent.ScheduledExecutorService savedRestore;
@@ -81,6 +82,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         biliLogin = new AccountLoginController(AccountPlatform.BILIBILI, this::granted, accounts, () -> accountChanged(AccountPlatform.BILIBILI));
         neteaseLogin = new AccountLoginController(AccountPlatform.NETEASE, this::granted, accounts, () -> accountChanged(AccountPlatform.NETEASE));
         qqmusicLogin = new AccountLoginController(AccountPlatform.QQMUSIC, this::granted, accounts, () -> accountChanged(AccountPlatform.QQMUSIC));
+        appleMusicLogin = new AccountLoginController(AccountPlatform.APPLEMUSIC, this::granted, accounts, () -> accountChanged(AccountPlatform.APPLEMUSIC));
         bili = new BiliResolutionController(this::granted, () -> biliLogin == null ? null : biliLogin.credentials());
         netease = new NeteaseResolutionController(this::granted, () -> neteaseLogin == null ? null : neteaseLogin.credentials());
         online = new OnlinePlaybackController(this::credentials, this::granted, this::adapterArmed, new OnlinePlaybackController.Player() {
@@ -105,6 +107,15 @@ public final class ExperimentalPlugin extends SpwPlugin {
             catch (RuntimeException failure) { throw failure; }
             catch (Exception failure) { throw new IllegalStateException("Native action failed", failure); }
         }, () -> generation == started && granted());
+        desk.cookieLogin((platform,cookie)->{
+            synchronized(ExperimentalPlugin.this) {
+                if(generation!=started || !granted())throw new java.util.concurrent.CancellationException();
+                if(nativeUi!=null)nativeUi.cancelPendingLogin(platform);
+                login(platform).startCookieLogin(cookie,true);
+            }
+        });
+        applePlayback=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicPlayback(this::granted,text->desk.error(text));
+        desk.externalPlayback((target,item)->applePlayback.play(target.id(),item.title(),item.subtitle()));
         desk.errorToast(text -> toast(text,WorkshopApi.Ui.ToastType.Error));
         desk.coverMode(()->settings.coverMode());
         desk.platformHome(navigationPreferences::platformHome);
@@ -188,10 +199,11 @@ public final class ExperimentalPlugin extends SpwPlugin {
         return !stopped && WorkshopApi.manager().isPermissionGranted(PluginPermission.CLASS_TRANSFORM);
     }
     private void accountChanged(AccountPlatform platform) {
+        if(platform==AccountPlatform.APPLEMUSIC && applePlayback!=null)applePlayback.cancel();
         OnlinePlaybackController player = online; if (player != null) player.accountChanged(platform);
         LibraryController browser = library; if (browser != null) browser.accountChanged(platform);
         Salt1193DiagnosticRuntime currentRuntime = runtime;
-        if (currentRuntime != null) currentRuntime.revokePlatform(MediaLease.Platform.valueOf(platform.name()));
+        if (currentRuntime != null && platform!=AccountPlatform.APPLEMUSIC) currentRuntime.revokePlatform(MediaLease.Platform.valueOf(platform.name()));
         if (platform == AccountPlatform.BILIBILI) {
             BiliResolutionController resolver = bili;
             if (resolver != null) resolver.invalidate("Bilibili account revision changed; old prepared resolution retired. Resolve explicitly again.");
@@ -200,7 +212,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             if (resolver != null) resolver.invalidate("NetEase account revision changed; old prepared resolution retired. Resolve explicitly again.");
         }
     }
-    private AccountLoginController login(AccountPlatform platform) { return switch(platform) {case BILIBILI -> biliLogin;case NETEASE -> neteaseLogin;case QQMUSIC -> qqmusicLogin;}; }
+    private AccountLoginController login(AccountPlatform platform) { return switch(platform) {case BILIBILI -> biliLogin;case NETEASE -> neteaseLogin;case QQMUSIC -> qqmusicLogin;case APPLEMUSIC -> appleMusicLogin;}; }
     private AccountCredentials credentials(AccountPlatform platform) { AccountLoginController controller = login(platform); return controller == null ? null : controller.credentials(); }
     private boolean adapterArmed() { Salt1193DiagnosticRuntime current = runtime; return current != null && !current.isClosed(); }
     private synchronized void ensureNativeUi() throws Exception {
@@ -217,6 +229,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         biliLogin.restoreOnStartup(remember);
         neteaseLogin.restoreOnStartup(remember);
         qqmusicLogin.restoreOnStartup(remember);
+        appleMusicLogin.restoreOnStartup(remember);
     }
     private synchronized void openListeningDesk() throws Exception {
         ensureNativeUi(); nativeUi.open(AccountPlatform.NETEASE);
@@ -263,6 +276,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if (nativeUi != null) nativeUi.cancelPendingLogin(null);
         if (biliLogin != null) biliLogin.cancelLogin(); if (neteaseLogin != null) neteaseLogin.cancelLogin();
         if (qqmusicLogin != null) qqmusicLogin.cancelLogin();
+        if (appleMusicLogin != null) appleMusicLogin.cancelLogin();
         status = "Pending QR logins cancelled; verified memory accounts, if any, remain. Use explicit logout to remove them.";
     }
 
@@ -286,7 +300,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 return switch(entry.target().platform()) {
                     case NETEASE -> request->new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(credentials(AccountPlatform.NETEASE)).load(Long.parseLong(entry.target().id()),request);
                     case QQMUSIC -> request->new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient(credentials(AccountPlatform.QQMUSIC)).lyrics(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(entry.target().id()),request);
-                    case BILIBILI -> null;
+                    case BILIBILI, APPLEMUSIC -> null;
                 };
             }
         });
@@ -327,6 +341,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 if (biliLogin != null) { biliLogin.close(); biliLogin = null; }
                 if (neteaseLogin != null) { neteaseLogin.close(); neteaseLogin = null; }
                 if (qqmusicLogin != null) { qqmusicLogin.close(); qqmusicLogin = null; }
+                if (appleMusicLogin != null) { appleMusicLogin.close(); appleMusicLogin = null; }
+                if (applePlayback != null) {applePlayback.close();applePlayback=null;}
                 if (bili != null) { bili.close(); bili = null; }
                 if (netease != null) { netease.close(); netease = null; }
                 if (configManager != null && configListener != null) configManager.removeConfigChangeListener(configListener);

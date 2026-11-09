@@ -65,7 +65,8 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
     }
     public static PinnedHttpsConnection neteaseCatalogPost(URI target, byte[] form) throws IOException {
         if (!"music.163.com".equals(target.getHost()) || !Set.of("/weapi/personalized/playlist", "/weapi/user/playlist",
-                "/api/v6/playlist/detail", "/weapi/cloudsearch/get/web").contains(target.getPath())) throw new IOException("Invalid catalog POST target");
+                "/api/v6/playlist/detail", "/weapi/cloudsearch/get/web", "/weapi/v3/discovery/recommend/songs",
+                "/weapi/v1/discovery/recommend/resource", "/weapi/v1/radio/get", "/weapi/personalized/newsong").contains(target.getPath())) throw new IOException("Invalid catalog POST target");
         PinnedHttpsConnection connection = new PinnedHttpsConnection(target); connection.loginForm(form); return connection;
     }
     public static PinnedHttpsConnection neteaseLyricPost(URI target, byte[] form) throws IOException {

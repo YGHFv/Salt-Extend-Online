@@ -48,6 +48,7 @@ $configName = if ($Experimental) { 'preference_config_experimental.json' } else 
 Copy-Item -LiteralPath (Join-Path $root "plugin/src/main/resources/$configName") -Destination (Join-Path $classes 'preference_config.json')
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/host-profiles') -Destination $classes -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/auth') -Destination $classes -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/applemusic') -Destination $classes -Recurse
 $licenseDirectory = Join-Path $classes 'META-INF/licenses'
 New-Item -ItemType Directory -Path $licenseDirectory -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/META-INF/extensions.idx') -Destination (Join-Path $classes 'META-INF/extensions.idx')
@@ -55,6 +56,7 @@ Copy-Item -LiteralPath (Join-Path $root 'LICENSE'), (Join-Path $root 'THIRD_PART
 Copy-Item -LiteralPath (Join-Path $root 'licenses/QR-Code-generator-MIT.txt') -Destination $licenseDirectory
 Copy-Item -LiteralPath (Join-Path $root 'licenses/Kotlin-Compose-Apache-2.0.txt') -Destination $licenseDirectory
 Copy-Item -LiteralPath (Join-Path $root 'licenses/Simple-Icons-CC0.txt') -Destination $licenseDirectory
+Copy-Item -LiteralPath (Join-Path $root 'licenses/MineRadio-GPL-3.0.txt') -Destination $licenseDirectory
 Copy-Item -LiteralPath (Join-Path $root 'licenses/Mygo-Qyin-AGPL-3.0.txt'), (Join-Path $root 'licenses/Go-DES-BSD-3-Clause.txt') -Destination $licenseDirectory
 $testSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'plugin/src/test/java') -Filter '*.java' -Recurse | ForEach-Object { $_.FullName })
 & $javac --release 25 -encoding UTF-8 -proc:none -classpath "$classes;$hostPackage" -d $tests @testSources

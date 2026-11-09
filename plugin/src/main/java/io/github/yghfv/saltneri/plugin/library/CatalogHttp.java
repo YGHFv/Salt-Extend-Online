@@ -18,7 +18,8 @@ public final class CatalogHttp implements AutoCloseable {
             "/x/web-interface/nav", "/x/web-interface/view", "/x/polymer/web-space/seasons_archives_list", "/x/web-interface/wbi/search/type",
             "/x/space/wbi/arc/search", "/x/polymer/web-space/seasons_series_list",
             "/x/copyright-music-publicity/toplist/all_period", "/x/copyright-music-publicity/toplist/music_list");
-    private static final Set<String> NET = Set.of("/weapi/personalized/playlist", "/weapi/user/playlist", "/api/v6/playlist/detail", "/api/song/detail", "/weapi/cloudsearch/get/web");
+    private static final Set<String> NET = Set.of("/weapi/personalized/playlist", "/weapi/user/playlist", "/api/v6/playlist/detail", "/api/song/detail", "/weapi/cloudsearch/get/web",
+            "/weapi/v3/discovery/recommend/songs", "/weapi/v1/discovery/recommend/resource", "/weapi/v1/radio/get", "/weapi/personalized/newsong");
     private final Opener opener;
     private final ScopedCookies cookies;
     private final AccountCredentials account;
@@ -136,7 +137,8 @@ public final class CatalogHttp implements AutoCloseable {
             case "/x/web-interface/view", "/x/polymer/web-space/seasons_archives_list", "/x/polymer/web-space/seasons_series_list", "/x/space/wbi/arc/search" -> Stage.BILI_COLLECTION;
             case "/x/web-interface/wbi/search/type" -> Stage.BILI_SEARCH;
             case "/x/v2/rank/region", "/x/copyright-music-publicity/toplist/all_period", "/x/copyright-music-publicity/toplist/music_list" -> Stage.BILI_DISCOVER;
-            case "/weapi/personalized/playlist" -> Stage.NET_DISCOVER;
+            case "/weapi/personalized/playlist", "/weapi/v3/discovery/recommend/songs", "/weapi/v1/discovery/recommend/resource",
+                    "/weapi/v1/radio/get", "/weapi/personalized/newsong" -> Stage.NET_DISCOVER;
             case "/weapi/user/playlist" -> Stage.NET_PLAYLISTS;
             case "/api/v6/playlist/detail" -> Stage.NET_CONTENTS;
             case "/api/song/detail" -> Stage.NET_SONGS;

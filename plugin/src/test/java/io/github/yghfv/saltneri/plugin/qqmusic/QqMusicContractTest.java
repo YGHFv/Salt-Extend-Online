@@ -74,6 +74,7 @@ public final class QqMusicContractTest {
                                 "songmid",vkeyMid,"result",reject?104003:0,"vkey","TOKEN_SECRET","filename",badEcho?"FOREIGN_SECRET":filename,
                                 "purl",reject?"":preview.isEmpty()?returned+"?guid=1234567890&vkey=TOKEN_SECRET&uin=42&fromtag=0&src=M500":preview)));
                     }
+                    case "get_radio_track" -> Map.of("tracks",List.of(Map.of("Track",song(0)),Map.of("Track",song(1))));
                     case "GetPlayLyricInfo" -> Map.of("lyric",Base64.getEncoder().encodeToString("[00:01.00]Original\n".getBytes(StandardCharsets.UTF_8)),
                             "trans",Base64.getEncoder().encodeToString("[00:01.00]Translation\n[00:02.00]//\n".getBytes(StandardCharsets.UTF_8)));
                     case "DoSearchForQQMusicDesktop" -> Map.of("meta",Map.of("sum",23),"body",Map.of("song",Map.of("list",List.of(song(0)))));
@@ -81,6 +82,10 @@ public final class QqMusicContractTest {
                             "coverUrl","https://y.qq.com/cover.jpg","cover",discoveryCover)))));
                     case "GetPlaylistByUin" -> Map.of("v_playlist",List.of(Map.of("tid",123,"dirId",201,"dirName","Liked")));
                     case "CgiGetDiss" -> {
+                        if(number(param.get("dirid"),0)==202) {
+                            var daily=new ArrayList<Object>();for(int i=0;i<30;i++)daily.add(Map.of("songInfo",song(i)));
+                            yield Map.of("songlist",daily);
+                        }
                         int offset=(int)number(param.get("song_begin"),0);
                         var songs=new ArrayList<Object>();
                         for(int i=offset;i<Math.min(offset+20,playlistTotal-(truncated?1:0));i++)songs.add(song(i));
@@ -213,6 +218,25 @@ public final class QqMusicContractTest {
                 check(mine.items().getFirst().target().equals(Long.toString(Long.MAX_VALUE)));
                 check(requests.catalog(a.value).load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.SAVED,0,1),r).items().isEmpty());
             }
+            try(var a=new AutoCloseableAccount(account())) {
+                var cache=new QqMusicCatalog.Recommendations();
+                var catalog=new QqMusicCatalog(a.value,CLOCK,requests,cache);
+                int start=requests.bodies.size();
+                var daily=catalog.load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.DAILY,0,1),r);
+                var second=new QqMusicCatalog(a.value,CLOCK,requests,cache).load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.DAILY,0,2),r);
+                check(daily.items().size()==20 && daily.hasMore() && second.items().size()==10 && !second.hasMore());
+                check(second.items().getFirst().title().equals("QQ fixture 20") && requests.bodies.size()==start+1);
+                var radio=catalog.load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.PERSONAL_RADIO,0,1),r);
+                check(radio.items().size()==2 && radio.hasMore());
+                var last=object(requests.bodies.getLast().get("req_0"));
+                check(number(object(last.get("param")).get("id"),0)==99 && number(object(requests.bodies.getLast().get("comm")).get("ct"),0)==19);
+                check(number(object(requests.bodies.getLast().get("comm")).get("g_tk"),0)==QqMusicQrClient.hash("COOKIE_SECRET",5381));
+                cache.clear();catalog.load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.DAILY,0,1),r);
+                check(requests.bodies.size()==start+3);
+                a.value.retire();fails(()->catalog.load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.DAILY,0,1),r));
+            }
+            fails(()->requests.catalog(null).load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.DAILY,0,1),r));
+            fails(()->requests.catalog(null).load(new Catalog.Query(AccountPlatform.QQMUSIC,Catalog.View.PERSONAL_RADIO,0,1),r));
             var lyric=requests.client(null).lyrics(QqMusicTarget.parse(MID),r);
             check(lyric.contains("[00:01.000]Original") && lyric.contains("[00:01.000]Translation") && !lyric.contains("//"));
         }

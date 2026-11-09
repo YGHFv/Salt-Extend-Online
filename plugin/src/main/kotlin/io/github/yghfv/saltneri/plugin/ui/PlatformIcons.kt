@@ -22,14 +22,16 @@ internal fun PlatformIcon(ui: SaltNativeUi, platform: AccountPlatform) {
         AccountPlatform.BILIBILI -> BILIBILI
         AccountPlatform.NETEASE -> NETEASE
         AccountPlatform.QQMUSIC -> QQMUSIC
+        AccountPlatform.APPLEMUSIC -> "M 9 3 L 9 16 C 3 13 2 22 8 21 C 11 21 12 19 12 16 L 12 7 L 20 5 L 20 14 C 14 11 13 20 19 19 C 22 19 23 17 23 14 L 23 1 Z"
     }).toPath() }
     val color = when(platform) {
         AccountPlatform.BILIBILI -> Color(0xFF00A1D6)
         AccountPlatform.NETEASE -> Color(0xFFD43C33)
         AccountPlatform.QQMUSIC -> Color(0xFF31C27C)
+        AccountPlatform.APPLEMUSIC -> Color(0xFFFA375A)
     }
     val draw: (DrawScope) -> Unit = { scope -> with(scope) {
-        if (platform == AccountPlatform.QQMUSIC) {
+        if (platform == AccountPlatform.QQMUSIC || platform == AccountPlatform.APPLEMUSIC) {
             // The upstream 1024 viewport includes large margins; fit the visible brand mark.
             val bounds = path.getBounds()
             val factor = minOf(size.width / bounds.width, size.height / bounds.height)

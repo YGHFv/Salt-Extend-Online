@@ -78,7 +78,7 @@ public final class LibraryController implements AutoCloseable {
             State s = new State(p); states.put(p,s);
             s.cache = new CatalogPageCache(clock);
             Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> factory = account ->
-                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions).load(q,r) : testLoader.apply(account);
+                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions,s.cache.qqRecommendations,s.cache.appleHttp,s.cache.netRecommendations).load(q,r) : testLoader.apply(account);
             // Catalog metadata has no signed audio URL; retain it until explicit refresh/account revocation.
             s.loader = new PlatformResolutionController<>("Catalog", account -> {
                 var resolver = factory.apply(account);
@@ -87,13 +87,13 @@ public final class LibraryController implements AutoCloseable {
                     page -> Instant.MAX, page -> "", CatalogFailure::diagnostic);
             s.complete = new PlatformResolutionController<>("Playlist", account -> (q,k,scope,r) -> {
                 if(testLoader==null) {
-                    var result=s.cache.all(account,q,r,()->new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions)
+                    var result=s.cache.all(account,q,r,()->new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions,s.cache.qqRecommendations,s.cache.appleHttp,s.cache.netRecommendations)
                             .loadAll(q,r,s.cache,(done,total)->{s.completedPages=done;s.requestedPages=total;}));
                     return new Contents(result.title(),result.items().stream().filter(i->i.enabled() && i.kind()==Kind.TRACK).toList());
                 }
                 var resolver = factory.apply(account); List<Item> all = new ArrayList<>(); Set<String> ids = new HashSet<>(); String title = "";
                 for (int page = 1; page <= 500; page++) {
-                    r.check(); Page result = resolver.resolve(new Query(q.platform(),q.view(),q.folder(),page,q.owner()),k,scope,r);
+                    r.check(); Page result = resolver.resolve(new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword(),false,Sort.DEFAULT,q.resource()),k,scope,r);
                     if(result.totalCount()>10000 || page==500 && result.totalCount()<0 && result.items().size()==20) throw new java.io.IOException("Playlist exceeds bounded catalog");
                     title = result.title();
                     for (Item item : result.items()) if (item.enabled() && item.kind() == Kind.TRACK && ids.add(item.target())) all.add(item);
@@ -161,8 +161,8 @@ public final class LibraryController implements AutoCloseable {
         navigation.run(); s.rows.clear(); s.visible = null; s.delivered=null; s.appending=false; s.chunks=1;s.visibleChunks=1;
         s.loadToken=UUID.randomUUID().toString();s.error = ""; s.query = next; s.account=accounts.apply(s.platform); s.loader.start(next,CatalogPaging.width(pageLimit));
     }
-    private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword(),q.reverse(),q.order()); }
-    private static Query allQuery(Query q) {return new Query(q.platform(),q.view(),q.folder(),1,q.owner(),q.keyword());}
+    private static Query at(Query q, int page) { return new Query(q.platform(),q.view(),q.folder(),page,q.owner(),q.keyword(),q.reverse(),q.order(),q.resource()); }
+    private static Query allQuery(Query q) {return new Query(q.platform(),q.view(),q.folder(),1,q.owner(),q.keyword(),false,Sort.DEFAULT,q.resource());}
     public synchronized void turn(int direction) {
         State s = current(); refresh(s);
         if(pageLimit==0)throw new IllegalStateException("Continuous catalog has no page buttons");
@@ -183,8 +183,8 @@ public final class LibraryController implements AutoCloseable {
         Item item = s.rows.get(token); if (item == null || !item.enabled()) throw new IllegalStateException("Stale row"); platform = s.platform;
         if (item.kind() != Kind.TRACK) {
             remember(s); reset(s); s.totalCount = item.count(); s.creator = item.subtitle(); s.title=item.title();
-            load(s,new Query(platform,item.kind() == Kind.COLLECTION ? View.COLLECTION : View.FOLDER,Long.parseLong(item.target()),1,item.owner()));
-        } else prepare.accept(new OnlinePlaybackController.Target(platform,item.target()));
+            load(s,platform==AccountPlatform.APPLEMUSIC?new Query(platform,View.FOLDER,1,1,0,"",false,Sort.DEFAULT,item.target()):new Query(platform,item.kind() == Kind.COLLECTION ? View.COLLECTION : View.FOLDER,Long.parseLong(item.target()),1,item.owner()));
+        } else if(platform!=AccountPlatform.APPLEMUSIC)prepare.accept(new OnlinePlaybackController.Target(platform,item.target()));
     }
     private void remember(State s) {
         if(s.query==null) return;
@@ -347,7 +347,7 @@ public final class LibraryController implements AutoCloseable {
         complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
     public synchronized void requestPlaylist() {
-        State s=current(); requireFolder(s); s.playPending=true; s.error="";
+        State s=current(); requireFolder(s); if(s.platform==AccountPlatform.APPLEMUSIC)throw new IllegalStateException("Apple Music uses official-client single-song playback"); s.playPending=true; s.error="";
         if(!s.fullMode) {s.preserveWindow=true;s.resultPage=s.query.page();}
         complete(s);
     }
@@ -398,7 +398,7 @@ public final class LibraryController implements AutoCloseable {
             if (item.cover() != null && !fallback) return item.cover();
             if (fallback && item.cover() == null) return null;
             platform=s.platform;
-            if(platform==AccountPlatform.QQMUSIC) return null;
+            if(platform==AccountPlatform.QQMUSIC || platform==AccountPlatform.APPLEMUSIC) return null;
             if(platform==AccountPlatform.BILIBILI && (item.kind()!=Kind.COLLECTION || item.owner()<=0)) return null;
             if(platform==AccountPlatform.NETEASE && item.kind()!=Kind.TRACK && item.kind()!=Kind.FOLDER) return null;
             account = accounts.apply(s.platform);

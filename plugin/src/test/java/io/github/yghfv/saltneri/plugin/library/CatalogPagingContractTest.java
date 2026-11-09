@@ -59,7 +59,7 @@ public final class CatalogPagingContractTest {
         }
     }
     private static void navigation() throws Exception {
-        for(AccountPlatform platform:AccountPlatform.values()) {
+        for(AccountPlatform platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) {
             var calls=new AtomicInteger();
             try(var c=new LibraryController(p->null,()->true,t->{throw new AssertionError("No play");},()->{},Clock.systemUTC(),a->(q,k,s,r)->{
                 calls.incrementAndGet();

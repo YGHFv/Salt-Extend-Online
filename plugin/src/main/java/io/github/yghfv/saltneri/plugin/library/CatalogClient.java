@@ -21,22 +21,41 @@ public final class CatalogClient {
     private final CatalogHttp.Opener opener;
     private final BiliDiscovery.Cache discovery;
     private final CatalogHttp.SessionCache sessions;
+    private final QqMusicCatalog.Recommendations qqRecommendations;
+    private final NeteaseRecommendations netRecommendations;
+    private final io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp appleHttp;
     public CatalogClient(AccountCredentials account) { this(account, Clock.systemUTC(), CatalogHttp::openPinned); }
     public CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener) { this(account,clock,opener,new BiliDiscovery.Cache(clock)); }
     CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery) {
         this(account,clock,opener,discovery,null);
     }
     CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery,CatalogHttp.SessionCache sessions) {
+        this(account,clock,opener,discovery,sessions,new QqMusicCatalog.Recommendations());
+    }
+    CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery,CatalogHttp.SessionCache sessions,QqMusicCatalog.Recommendations qqRecommendations) {
+        this(account,clock,opener,discovery,sessions,qqRecommendations,new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp(uri->opener.open(uri,null),clock));
+    }
+    CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener, BiliDiscovery.Cache discovery,CatalogHttp.SessionCache sessions,QqMusicCatalog.Recommendations qqRecommendations,
+                  io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp appleHttp) {
+        this(account,clock,opener,discovery,sessions,qqRecommendations,appleHttp,new NeteaseRecommendations());
+    }
+    CatalogClient(AccountCredentials account,Clock clock,CatalogHttp.Opener opener,BiliDiscovery.Cache discovery,CatalogHttp.SessionCache sessions,
+                  QqMusicCatalog.Recommendations qqRecommendations,io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp appleHttp,NeteaseRecommendations netRecommendations) {
         this.account = account; this.clock = clock; this.opener = opener; this.discovery = discovery; this.sessions=sessions;
+        this.qqRecommendations=qqRecommendations;
+        this.appleHttp=appleHttp;
+        this.netRecommendations=netRecommendations;
     }
     public Page load(Query query, RequestScope request) throws IOException {
-        if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open).load(query,request);
-        boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL;
-        boolean personal = query.view() == View.MINE || query.view() == View.SAVED || query.platform() == AccountPlatform.BILIBILI && !discover;
+        if(query.platform()==AccountPlatform.APPLEMUSIC)return new AppleMusicCatalog(account,clock,appleHttp).load(query,request);
+        if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open,qqRecommendations).load(query,request);
+        boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL || query.view()==View.NEW_SONGS;
+        boolean personal = query.view() == View.MINE || query.view() == View.SAVED || query.view()==View.DAILY || query.view()==View.PERSONAL_RADIO
+                || query.view()==View.PERSONAL_PLAYLISTS || query.platform() == AccountPlatform.BILIBILI && !discover;
         if (personal && (account == null || account.platform() != query.platform())) {
             Stage stage = query.platform() == AccountPlatform.BILIBILI
                     ? query.view() == View.SEARCH ? Stage.BILI_SEARCH : query.view() == View.MINE ? Stage.BILI_CREATED : query.view() == View.SAVED ? Stage.BILI_SAVED : Stage.BILI_CONTENTS
-                    : Stage.NET_PLAYLISTS;
+                    : query.view()==View.MINE || query.view()==View.SAVED?Stage.NET_PLAYLISTS:Stage.NET_DISCOVER;
             throw CatalogFailure.of(stage, Reason.LOGIN_REQUIRED);
         }
         try (CatalogHttp http = new CatalogHttp(query.platform(), discover ? null : account, clock, opener,sessions)) {
@@ -65,6 +84,7 @@ public final class CatalogClient {
     CollectionContents loadAll(Query query, RequestScope request, CatalogPageCache cache,
                                java.util.function.BiConsumer<Integer,Integer> progress) throws IOException {
         if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
+        if(query.platform()==AccountPlatform.APPLEMUSIC)return new AppleMusicCatalog(account,clock,appleHttp).loadAll(query,request);
         if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open).loadAll(query,request);
         if(account!=null && account.platform()!=query.platform() || query.platform()==AccountPlatform.BILIBILI && account==null)
             throw CatalogFailure.of(Stage.SESSION,Reason.LOGIN_REQUIRED);
@@ -160,6 +180,8 @@ public final class CatalogClient {
         catch(Exception error) { throw new IOException("Catalog batch failed"); }
     }
     private Page netease(Query query, CatalogHttp http, RequestScope request) throws IOException {
+        if(query.view()==View.DAILY || query.view()==View.PERSONAL_RADIO || query.view()==View.PERSONAL_PLAYLISTS || query.view()==View.NEW_SONGS)
+            return netRecommendations.load(account,query,clock,request,()->neteaseRecommendationBatch(query,http,request));
         if (query.view() == View.SEARCH) {
             String csrf = http.csrf(request);
             var root = success(http.json(URI.create("https://music.163.com/weapi/cloudsearch/get/web?csrf_token=" + encode(csrf)),
@@ -211,6 +233,48 @@ public final class CatalogClient {
                 || flag(root.get("more"),total>=0?query.page()*20L<total:upstream.size()==20));
         if(more && total>=0 && total<=query.page()*20L) total=-1;
         return page(viewTitle(query),items,more,total);
+    }
+    private List<Item> neteaseRecommendationBatch(Query query,CatalogHttp http,RequestScope request) throws IOException {
+        String path=switch(query.view()) {
+            case DAILY -> "/weapi/v3/discovery/recommend/songs";
+            case PERSONAL_RADIO -> "/weapi/v1/radio/get";
+            case PERSONAL_PLAYLISTS -> "/weapi/v1/discovery/recommend/resource";
+            case NEW_SONGS -> "/weapi/personalized/newsong";
+            default -> throw invalid();
+        };
+        String csrf=http.csrf(request);
+        Map<String,Object> parameters=new LinkedHashMap<>();
+        parameters.put("csrf_token",csrf);
+        if(query.view()==View.PERSONAL_RADIO || query.view()==View.NEW_SONGS) parameters.put("limit",20);
+        var root=success(http.json(URI.create("https://music.163.com"+path+"?csrf_token="+encode(csrf)),NeteaseWeapi.form(parameters),request),200,http.stage());
+        Object raw=switch(query.view()) {
+            case DAILY -> root.get("data") instanceof Map<?,?> data ? data.get("dailySongs") : root.get("recommend");
+            case PERSONAL_RADIO -> root.get("data");
+            case PERSONAL_PLAYLISTS -> root.get("recommend");
+            case NEW_SONGS -> root.get("result");
+            default -> null;
+        };
+        if(!(raw instanceof List<?>)) throw invalid();
+        var items=new ArrayList<Item>();var seen=new HashSet<String>();
+        for(Object value:bounded(array(raw),100)) {
+            request.check();
+            if(!(value instanceof Map<?,?>)) continue;
+            try {
+                var row=object(value);Item item;
+                if(query.view()==View.PERSONAL_PLAYLISTS) {
+                    long target=id(row.get("id"));String title=display(row.get("name"));
+                    if(title.isBlank())continue;
+                    item=new Item(Kind.FOLDER,Long.toString(target),title,neteaseAuthor(row),optionalNumber(row.get("trackCount"),-1),true,
+                            firstCover(AccountPlatform.NETEASE,row,"picUrl","coverImgUrl"));
+                } else {
+                    if(row.get("song") instanceof Map<?,?>)row=object(row.get("song"));
+                    item=neteaseSong(row);
+                    if(item.title().isBlank())continue;
+                }
+                if(seen.add(item.target()))items.add(item);
+            } catch(IOException | IllegalArgumentException malformed) { /* Isolate malformed recommendations. */ }
+        }
+        return List.copyOf(items);
     }
     private CollectionContents neteaseFolder(Query query,CatalogHttp http,RequestScope request,boolean full) throws IOException {
             Map<String, Object> root = success(http.json(URI.create("https://music.163.com/api/v6/playlist/detail"), form(Map.of("id", Long.toString(query.folder()), "n", full ? "100" : query.page() == 1 ? "20" : "0", "s", "0")), request), 200, http.stage());
@@ -534,6 +598,10 @@ public final class CatalogClient {
     }
     private static String viewTitle(Query query) {
         return switch (query.view()) {
+            case DAILY -> "\u6bcf\u65e5\u63a8\u8350";
+            case PERSONAL_RADIO -> "\u731c\u4f60\u559c\u6b22";
+            case PERSONAL_PLAYLISTS -> "私人推荐歌单";
+            case NEW_SONGS -> "推荐新歌";
             case DISCOVER -> "\u53d1\u73b0";
             case MUSIC_HOT -> "\u97f3\u4e50\u70ed\u95e8\u699c";
             case MUSIC_ORIGINAL -> "\u97f3\u4e50\u539f\u521b\u699c";

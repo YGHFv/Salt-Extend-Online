@@ -46,7 +46,7 @@ public final class SavedPlaylistContractTest {
         byte[] png=PlaybackCoverContractTest.png();
         List<String> paths=new ArrayList<>(),ids=new ArrayList<>();
         try(var store=new SavedTrackStore(root)) {
-            for(var platform:AccountPlatform.values()) {
+            for(var platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) {
                 String remote=platform==AccountPlatform.QQMUSIC?"00123456789abc":platform==AccountPlatform.NETEASE?"123":"BV17x411w7KC";
                 var row=new Catalog.Item(Catalog.Kind.TRACK,remote,"Fixture title","Fixture artist",120000,true);
                 var entry=store.save(new Target(platform,remote),row);
@@ -81,7 +81,7 @@ public final class SavedPlaylistContractTest {
                 }
                 public OnlineLyrics.Source lyrics(SavedTrackStore.Entry entry) {return r->"[00:01.000]Fixture lyrics";}
             })) {
-            check(store.entries().size()==AccountPlatform.values().length,"Restart lost entries");
+            check(store.entries().size()==3,"Restart lost entries");
             store.entries().forEach(session::register);check(calls.get()==0,"Registering saved playlist resolved audio");
             for(var entry:store.entries()) {
                 check(paths.contains(entry.path()) && ids.contains(entry.trackId()),"Restart changed logical identity");

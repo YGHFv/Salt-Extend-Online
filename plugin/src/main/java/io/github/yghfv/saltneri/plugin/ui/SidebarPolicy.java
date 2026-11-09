@@ -7,7 +7,7 @@ import java.util.*;
 /** One observable policy for the native sidebar, caption shortcuts and settings. */
 public final class SidebarPolicy {
     public static final List<String> BUTTONS=List.of("Track","Genre","Album","Artist","Folder","MusicLibrary",
-            "SoundEffects","Settings","NewPlaylist","ImportPlaylist","BILIBILI","NETEASE","QQMUSIC");
+            "SoundEffects","Settings","NewPlaylist","ImportPlaylist","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC");
     private record Settings(boolean optimized,boolean hidden,boolean hideToggle,Set<String> invisible) { }
     private final MutableState<Settings> settings=SnapshotStateKt.mutableStateOf(
             new Settings(false,false,false,Set.of()),SnapshotStateKt.structuralEqualityPolicy());

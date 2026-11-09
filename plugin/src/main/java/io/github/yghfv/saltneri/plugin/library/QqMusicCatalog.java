@@ -17,22 +17,38 @@ public final class QqMusicCatalog {
     private final AccountCredentials account;
     private final QqMusicHttp http;
     private final Clock clock;
-    public QqMusicCatalog(AccountCredentials account,Clock clock,QqMusicHttp.Opener opener) {this.account=account;this.clock=clock;this.http=new QqMusicHttp(opener);}
+    private final Recommendations recommendations;
+    /** Account/day snapshots also stabilize the two API pages used by a 30-row presentation window. */
+    public static final class Recommendations {
+        private AccountCredentials owner;
+        private java.time.LocalDate day;
+        private List<Item> daily=List.of();
+        private final Map<Integer,List<Item>> radio=new LinkedHashMap<>();
+        private long revision;
+        public synchronized void clear() {revision++;owner=null;day=null;daily=List.of();radio.clear();}
+    }
+    public QqMusicCatalog(AccountCredentials account,Clock clock,QqMusicHttp.Opener opener) {this(account,clock,opener,new Recommendations());}
+    public QqMusicCatalog(AccountCredentials account,Clock clock,QqMusicHttp.Opener opener,Recommendations recommendations) {
+        this.account=account;this.clock=clock;this.http=new QqMusicHttp(opener);this.recommendations=recommendations;
+    }
     public Page load(Query query,RequestScope request) throws IOException {
         if(account!=null && account.platform()!=AccountPlatform.QQMUSIC)throw new IOException("Wrong QQ account");
-        if((query.view()==View.MINE || query.view()==View.SAVED) && account==null)
+        if((query.view()==View.MINE || query.view()==View.SAVED || query.view()==View.DAILY || query.view()==View.PERSONAL_RADIO) && account==null)
             throw CatalogFailure.of(CatalogFailure.Stage.QQ_PLAYLISTS,CatalogFailure.Reason.LOGIN_REQUIRED);
         try {
-            if(account!=null)try(var verifier=new QqMusicQrClient(clock,http)) {var verified=verifier.verify(account,request);verified.retire();}
+            if(account!=null && !account.isActive())throw CatalogFailure.of(CatalogFailure.Stage.QQ_CONTENTS,CatalogFailure.Reason.LOGIN_REQUIRED);
             return switch(query.view()) {
                 case SEARCH -> search(query,request);
                 case FOLDER -> folder(query,request);
                 case DISCOVER -> discover(query,request);
+                case DAILY -> personalized(query,request,false);
+                case PERSONAL_RADIO -> personalized(query,request,true);
                 case MINE -> owned(query,request);
                 case SAVED -> saved(query,request);
                 default -> throw new IOException("Unsupported QQ catalog");
             };
-        } catch(QqMusicHttp.Rejected rejected) {throw CatalogFailure.code(CatalogFailure.Stage.QQ_CONTENTS,CatalogFailure.Reason.API,rejected.code());}
+        } catch(QqMusicHttp.Rejected rejected) {throw CatalogFailure.code(CatalogFailure.Stage.QQ_CONTENTS,
+                rejected.httpStatus()?CatalogFailure.Reason.HTTP:CatalogFailure.Reason.API,rejected.code());}
         catch(IOException failure) {throw CatalogFailure.wrap(CatalogFailure.Stage.QQ_CONTENTS,CatalogFailure.Reason.RESPONSE,failure);}
     }
     private Page search(Query q,RequestScope r) throws IOException {
@@ -46,7 +62,8 @@ public final class QqMusicCatalog {
     }
     private Page discover(Query q,RequestScope r) throws IOException {
         var data=http.call("music.playlist.PlaylistSquare","GetRecommendFeed",Map.of("From",(q.page()-1)*20,"Size",20),
-                account,Map.of("ct",20,"cv",2276,"platform","wk_v17","g_tk",0,"g_tk_new_20200303",0),r);
+                account,account==null?Map.of("ct",20,"cv",2276,"platform","wk_v17","g_tk",0,"g_tk_new_20200303",0)
+                        :Map.of("ct",20,"cv",2276,"platform","wk_v17"),r);
         var rows=array(data.get("List"));if(rows.size()>20)throw new IOException("QQ discovery page too large");
         var items=new ArrayList<Item>();
         for(Object row:rows) {
@@ -56,6 +73,46 @@ public final class QqMusicCatalog {
             var basic=object(list.get("basic"));var item=playlist(basic);if(item!=null)items.add(item);
         }
         return page("\u53d1\u73b0",items,flag(data.get("HasMore")),-1);
+    }
+    private Page personalized(Query q,RequestScope r,boolean radio) throws IOException {
+        var today=java.time.LocalDate.now(clock.withZone(java.time.ZoneId.of("Asia/Shanghai")));
+        List<Item> items;long revision;
+        synchronized(recommendations) {
+            if(recommendations.owner!=account || !today.equals(recommendations.day)) {
+                recommendations.clear();recommendations.owner=account;recommendations.day=today;
+            }
+            revision=recommendations.revision;
+            items=radio?recommendations.radio.get(q.page()):recommendations.daily;
+        }
+        if(items==null || !radio && items.isEmpty()) {
+            Map<String,Object> data;
+            if(radio) data=http.call("music.radioProxy.MbTrackRadioSvr","get_radio_track",
+                    Map.of("id",99,"num",20,"from",0,"scene",0,"song_ids",List.of()),account,Map.of("ct",19),r);
+            else {
+                String encrypted=cookie(account,"euin");
+                data=http.call("music.srfDissInfo.DissInfo","CgiGetDiss",
+                        Map.of("new_format",1,"enc_host_uin",encrypted.isBlank()?account.userId():encrypted,"dirid",202,
+                                "onlysonglist",1,"optype",0,"orderlist",0,"guid",Long.toString(1000000000L+QqMusicQrClient.hash(account.accountScope(),5381)),
+                                "is_mobile",1,"local_time",clock.instant().getEpochSecond(),"update_rtime",0),account,r);
+            }
+            Object raw=data.get("songlist");if(raw==null && radio)raw=data.get("tracks");if(raw==null && radio)raw=data.get("track_list");
+            if(raw==null)throw new IOException("QQ recommendation tracks missing");
+            var rows=array(raw);if(rows.size()>(radio?20:100))throw new IOException("QQ recommendation bound");
+            items=songs(rows);if(!radio)items=items.stream().limit(30).toList();
+            if(items.isEmpty())throw new IOException("QQ recommendation empty");
+            r.check();
+            synchronized(recommendations) {
+                if(revision!=recommendations.revision || recommendations.owner!=account || !account.isActive())
+                    throw new IOException("QQ recommendation account changed");
+                if(radio) {
+                    recommendations.radio.put(q.page(),items);
+                    while(recommendations.radio.size()>500)recommendations.radio.remove(recommendations.radio.keySet().iterator().next());
+                } else recommendations.daily=items;
+            }
+        }
+        if(radio)return page("\u731c\u4f60\u559c\u6b22",items,q.page()<500,-1);
+        int start=Math.min(items.size(),(q.page()-1)*20),end=Math.min(items.size(),start+20);
+        return page("\u6bcf\u65e5\u63a8\u8350",items.subList(start,end),end<items.size(),items.size());
     }
     private Page owned(Query q,RequestScope r) throws IOException {
         var data=http.call("music.musicasset.PlaylistBaseRead","GetPlaylistByUin",Map.of("uin",account.userId()),account,r);
@@ -113,7 +170,7 @@ public final class QqMusicCatalog {
     }
     public CatalogClient.CollectionContents loadAll(Query q,RequestScope r) throws IOException {
         if(account==null && q.folder()!=Long.MAX_VALUE)return publicContents(q,r);
-        if(account!=null)try(var verifier=new QqMusicQrClient(clock,http)) {var verified=verifier.verify(account,r);verified.retire();}
+        if(account!=null && !account.isActive())throw CatalogFailure.of(CatalogFailure.Stage.QQ_CONTENTS,CatalogFailure.Reason.LOGIN_REQUIRED);
         var items=new ArrayList<Item>();var ids=new HashSet<String>();long total=-1;String title="";
         for(int index=1;index<=500;index++) {
             var page=folder(new Query(AccountPlatform.QQMUSIC,View.FOLDER,q.folder(),index),r);
@@ -130,7 +187,9 @@ public final class QqMusicCatalog {
     private static List<Item> songs(List<Object> rows) {
         var items=new ArrayList<Item>();var seen=new HashSet<String>();
         for(Object row:rows) try {
-            var song=QqMusicClient.parseSong(object(row));if(!seen.add(song.mid()))continue;
+            var raw=object(row);
+            for(String field:List.of("track","Track","songInfo","song","data"))if(raw.get(field) instanceof Map<?,?>) {raw=object(raw.get(field));break;}
+            var song=QqMusicClient.parseSong(raw);if(!seen.add(song.mid()))continue;
             items.add(new Item(Kind.TRACK,song.mid(),song.metadata().title(),song.metadata().artist(),song.duration(),true,song.cover()));
         } catch(IOException | IllegalArgumentException invalid) { /* Isolate malformed tracks; bulk completion still checks the total. */ }
         return items;

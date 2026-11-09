@@ -37,9 +37,28 @@
     "auth/WindowsQqMusicWebLogin.java",
     "auth/QqMusicLoginResponse.java",
     "auth/QqMusicPtui.java",
-    "auth/QqMusicWebCookies.java"
+    "auth/QqMusicWebCookies.java",
+    "applemusic/AppleMusicHttp.java",
+    "auth/AppleMusicAuthClient.java",
+    "auth/WindowsAppleMusicWebLogin.java",
+    "auth/CookieLogin.java"
   ],
   "tests": [
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.CookieLoginRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.auth.CookieLoginContractTest",
+      "baseOnly": true,
+      "offline": true
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.NeteaseRecommendationContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
     {
       "class": "io.github.yghfv.saltneri.plugin.auth.NeteaseDeviceCollectorContractTest",
       "baseOnly": true,
@@ -422,6 +441,11 @@
     },
     {
       "class": "io.github.yghfv.saltneri.plugin.qqmusic.QqMusicLyricsContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.AppleMusicContractTest",
       "baseOnly": true,
       "offline": false
     }

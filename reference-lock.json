@@ -1,5 +1,5 @@
 {
-  "reviewedOn": "2026-11-06",
+  "reviewedOn": "2026-11-09",
   "neriplayer": {
     "repository": "https://github.com/YGHFv/NeriPlayer",
     "commit": "fd7fdb757821fda7a62aee3a2b7cecf3a4b8bfe0",
@@ -25,7 +25,7 @@
   },
   "workshopReference": {
     "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=3829341669",
-    "title": "WebDAV 音乐库",
+    "title": "WebDAV \u97f3\u4e50\u5e93",
     "sourceOrBinaryObtained": true,
     "sourceObtained": false,
     "installedBinaryVersion": "0.2.2",
@@ -37,5 +37,39 @@
     "https://saltplayer.com/workshop/permissions.html",
     "https://saltplayer.com/workshop/configs.html",
     "https://saltplayer.com/workshop/hook.html"
-  ]
+  ],
+  "neteaseApiProtocol": {
+    "repository": "https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced",
+    "commit": "4a7d557326d16d2f1e5172ee69c9471eb3a50173",
+    "protocolOnly": true,
+    "files": ["module/personal_fm.js", "module/personal_fm_mode.js", "module/recommend_songs.js", "module/recommend_resource.js"]
+  },
+  "musicone": {
+    "repository": "https://github.com/HGODLK/MusicOne",
+    "commit": "2a9be828c8bac38b38c5bd8fabf8611e44c5c134",
+    "license": "GPL-3.0"
+  },
+  "mineradio": {
+    "repository": "https://github.com/FHJI-lgtm/MineRadio-Apple-Music-Specially-Customized-Edition",
+    "commit": "e0ddc69ff62d717515e804c3c2d9be7a5e4a35fd",
+    "license": "GPL-3.0",
+    "resources": {
+      "am-common.ps1": {
+        "upstreamSha256": "0911b577db01efa370c8f29d430e5c4e712ad5852208ea52e2345047bca500d3",
+        "adaptedSha256": "0911b577db01efa370c8f29d430e5c4e712ad5852208ea52e2345047bca500d3"
+      },
+      "am-play.ps1": {
+        "upstreamSha256": "5222963476e757089e3e2f32889461f74ef4b0c7a035603f57ebdcb6df4a62de",
+        "adaptedSha256": "5222963476e757089e3e2f32889461f74ef4b0c7a035603f57ebdcb6df4a62de"
+      },
+      "am-smtc.ps1": {
+        "upstreamSha256": "a9b9b10acf40f83fef79ded810fd8c9633b0e72b5f3577c489fa50b71677372e",
+        "adaptedSha256": "a9b9b10acf40f83fef79ded810fd8c9633b0e72b5f3577c489fa50b71677372e"
+      },
+      "am-uia.ps1": {
+        "upstreamSha256": "86dd2e294d3f641577d56f0f915752786c886cc654bb0b82b22976abbeceac66",
+        "adaptedSha256": "00024939ae926b6c475f9102a616cc28b72b22f521ea8d20f13a869b4ae22861"
+      }
+    }
+  }
 }

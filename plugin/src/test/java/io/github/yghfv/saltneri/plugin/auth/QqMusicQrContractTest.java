@@ -55,6 +55,7 @@ public final class QqMusicQrContractTest {
                     status=302;location="https://graph.qq.com/oauth2.0/login_jump";
                     cookies=List.of("p_uin=o00042; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600",
                             "p_skey=PSKEY_SECRET; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600");
+                    if(uri.getHost().equals("ssl.ptlogin2.qq.com"))cookies=cookies.stream().map(c->c.replace("Domain=graph.qq.com","Domain=qq.com")).toList();
                     if(parentDeletion)cookies=List.of(cookies.getFirst(),cookies.getLast(),"p_skey=; Domain=qq.com; Path=/; Secure; Max-Age=0");
                     if(parentConflict)cookies=List.of("p_skey=PARENT_SECRET; Domain=qq.com; Path=/; Secure; Max-Age=3600",
                             cookies.getFirst(),cookies.getLast(),"pt_oauth_token=OAUTH_SECRET; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600",
@@ -123,6 +124,13 @@ public final class QqMusicQrContractTest {
             var exchanged=f.requests.stream().filter(r->r.getURL().getHost().equals("u.y.qq.com")).findFirst().orElseThrow();
             check(exchanged.getRequestProperty("Cookie")==null && exchanged.getRequestProperty("User-Agent").equals("QQMusic"));
             account.retire();
+        }
+        var standardHost=new Fixture();standardHost.state="0";standardHost.redirect="https://ssl.ptlogin2.qq.com/check_sig?token=SECRET";
+        try(var verifier=standardHost.client();var request=new RequestScope(()->true)) {
+            var challenge=verifier.create(request);var result=verifier.poll(challenge,request);
+            check(result.state()==QrAuthClient.State.CONFIRMED);result.credentials().retire();
+            var poll=standardHost.requests.get(1).getURL().getQuery();
+            check(poll.contains("ptredirect=0") && poll.contains("action=0-0-") && poll.contains("pt_uistyle=40"));
         }
         for(String state:List.of("65","68")) {
             var expired=new Fixture();expired.state=state;

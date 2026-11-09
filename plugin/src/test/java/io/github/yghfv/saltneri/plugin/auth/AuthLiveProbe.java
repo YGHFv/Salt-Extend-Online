@@ -8,7 +8,7 @@ public final class AuthLiveProbe {
         if(args.length!=2||!(args[0].equals("--explicit-create-only") || args[0].equals("--explicit-session-check"))){System.err.println("Requires explicit create-only or session-check platform argument.");System.exit(2);return;}
         try {
             AccountPlatform platform=AccountPlatform.valueOf(args[1]);
-            try(QrAuthClient client=switch(platform) {case BILIBILI -> new BiliQrClient();case NETEASE -> new NeteaseQrClient();case QQMUSIC -> new QqMusicQrClient();};
+            try(QrAuthClient client=switch(platform) {case BILIBILI -> new BiliQrClient();case NETEASE -> new NeteaseQrClient();case QQMUSIC -> new QqMusicQrClient();case APPLEMUSIC -> new AppleMusicAuthClient();};
                 RequestScope scope=new RequestScope(()->true, platform==AccountPlatform.NETEASE?90000:30000)){
                 var session=client.create(scope);
                 if(platform==AccountPlatform.QQMUSIC) {

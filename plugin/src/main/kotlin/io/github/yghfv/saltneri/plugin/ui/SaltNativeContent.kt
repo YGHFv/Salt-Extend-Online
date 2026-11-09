@@ -51,6 +51,8 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -335,7 +337,7 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
         else Spacer(Modifier.weight(1f))
         if(!memory.searching || !narrow) {
             listOf(Triple(Catalog.View.DISCOVER,"\u53d1\u73b0",HeaderGlyph.DISCOVER),
-                Triple(Catalog.View.MINE,"\u6536\u85cf",HeaderGlyph.FAVORITES),Triple(Catalog.View.SAVED,"\u8ba2\u9605",HeaderGlyph.SUBSCRIPTIONS)).forEach { (destination,label,glyph) ->
+                Triple(Catalog.View.MINE,if(platform==AccountPlatform.APPLEMUSIC) "专辑" else "\u6536\u85cf",HeaderGlyph.FAVORITES),Triple(Catalog.View.SAVED,if(platform==AccountPlatform.APPLEMUSIC) "歌单" else "\u8ba2\u9605",HeaderGlyph.SUBSCRIPTIONS)).forEach { (destination,label,glyph) ->
                 HeaderIcon(ui,label,glyph,memory.view==destination) {
                     action {ui.desk().browse(platform,destination);memory.view=destination;memory.localSearch=false;memory.localText=""}
                 }
@@ -366,6 +368,7 @@ private fun AccountHeader(ui: SaltNativeUi, platform: AccountPlatform, login: Ac
                     val nickname = login.profile().name()
                     if (nickname.isNotEmpty()) NativeText(ui, nickname, modifier = Modifier.padding(8.dp))
                     NativeRow(ui, "\u5207\u6362\u8d26\u6237", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.SWITCH_ACCOUNT) } }) { AccountMenuIcon(ui,false) }
+                    if(platform==AccountPlatform.NETEASE || platform==AccountPlatform.QQMUSIC) NativeRow(ui,"填写 Cookie 登录",click={menu=false;memory.cookieLogin=true})
                     NativeRow(ui, "\u9000\u51fa\u767b\u5f55", click = { menu = false; action { ui.desk().action(platform, NativeDesk.Action.LOGOUT) } }) { AccountMenuIcon(ui,true) }
                 }
             }
@@ -429,7 +432,43 @@ private fun SearchInput(ui: SaltNativeUi, state: TextFieldState, inside: Boolean
 
 private enum class ListLayout { SINGLE, DOUBLE, CARDS }
 
+@Composable
+private fun CookieLoginForm(ui: SaltNativeUi,platform: AccountPlatform,close: () -> Unit) {
+    var cookie by remember(ui,platform) { mutableStateOf("") }
+    var message by remember {mutableStateOf("")}
+    val palette=ui.palette(currentComposer)
+    val focus=remember {FocusRequester()}
+    LaunchedEffect(focus) {focus.requestFocus()}
+    DisposableEffect(ui,platform) {onDispose {cookie=""}}
+    val submit={
+        val input=cookie
+        cookie=""
+        try {ui.desk().loginCookie(platform,input);close()}
+        catch(_: Exception) {message="Cookie 格式无效或操作已取消，请重新填写完整的 Cookie。"}
+    }
+    Column(Modifier.fillMaxWidth().padding(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        NativeText(ui,"填写 Cookie 登录 · "+platform.label(),heading=true)
+        NativeText(ui,if(platform==AccountPlatform.NETEASE) "粘贴网易云已登录页面的 Cookie（包含 MUSIC_U）。"
+            else "粘贴 QQ 音乐已登录页面的 Cookie（包含音乐密钥和 uin）。",true)
+        BasicTextField(value=cookie,onValueChange={
+            if(it.length<=io.github.yghfv.saltneri.plugin.auth.CookieLogin.MAX_LENGTH && it.all {c->c.code in 32..126}) {cookie=it;message=""}
+            else message="请粘贴 Cookie 请求头，长度最多 8192 字符。"
+        },modifier=Modifier.fillMaxWidth().heightIn(min=44.dp).border(1.dp,Color(palette.secondary().toULong()).copy(alpha=0.35f),palette.shape())
+            .padding(10.dp).focusRequester(focus).semantics {contentDescription="Cookie 登录输入"},
+            textStyle=palette.main().copy(color=Color(palette.text().toULong())),singleLine=true,
+            visualTransformation=PasswordVisualTransformation(),
+            keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Password,imeAction=ImeAction.Done),
+            keyboardActions=KeyboardActions(onDone={if(cookie.isNotBlank())submit()}),
+            cursorBrush=SolidColor(Color(palette.accent().toULong())),
+            decorationBox={field->Box {if(cookie.isEmpty())NativeText(ui,"Cookie: name=value; ...",true);field()}})
+        if(message.isNotEmpty())NativeText(ui,message,true)
+        NativeButtons(ui,listOf(NativeButton("验证并登录",enabled=cookie.isNotBlank()){submit()},
+            NativeButton("取消"){cookie="";close()}))
+    }
+}
+
 private class PageMemory(val platform: AccountPlatform, layout: String) {
+    var cookieLogin by mutableStateOf(false)
     var layout by mutableStateOf(ListLayout.valueOf(layout))
     var view by mutableStateOf(Catalog.View.DISCOVER)
     var selectedRow by mutableStateOf("")
@@ -548,7 +587,7 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     val modifier=Modifier.fillMaxWidth().clip(palette.shape())
         .background(if(memory.selectedRow==token) Color(palette.background().toULong()).copy(alpha=0.65f) else Color.Transparent)
         .onPointerEvent(PointerEventType.Press) { event ->
-            if(track && row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
+            if(platform!=AccountPlatform.APPLEMUSIC && track && row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
                 event.changes.forEach {it.consume()}
                 memory.selectedRow=token; menu=true
             }
@@ -611,7 +650,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
     }
     DisposableEffect(ui, platform) {
         val lease = ui.pageEntered(platform)
-        onDispose { ui.pageLeft(lease); ui.desk().leave(); ui.releaseCovers() }
+        onDispose { memory.cookieLogin=false;ui.pageLeft(lease); ui.desk().leave(); ui.releaseCovers() }
     }
     val palette = ui.palette(currentComposer)
     val catalog = state?.catalog()?.takeIf { it["platform"] == platform.name }
@@ -657,7 +696,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         if(!secondary) AccountHeader(ui, platform, login, action, memory, narrowHeader, catalog, enabled)
         if(enabled) {
             val title=catalog?.get("title") as? String ?: ""
-            val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
+            val folder=platform!=AccountPlatform.APPLEMUSIC && catalog?.get("view") in listOf("FOLDER","COLLECTION")
             val author=catalog?.get("view") in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")
             Column(Modifier.fillMaxWidth().padding(horizontal=if(secondary && ui.nativeSecondaryHeaderAvailable()) 0.dp else 16.dp).padding(bottom=8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 CatalogTitle(ui,platform,if(author) (catalog?.get("authorName") as? String).orEmpty() else title,
@@ -675,15 +714,22 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
             if (!enabled) {
                 item { NativeText(ui, "\u539f\u751f\u9875\u9762\u5df2\u505c\u7528\uff0c\u8bf7\u8fd4\u56de\u5e76\u68c0\u67e5\u6a21\u7ec4\u6388\u6743\u3002") }
             } else {
+                if(memory.cookieLogin && (platform==AccountPlatform.NETEASE || platform==AccountPlatform.QQMUSIC)) item {
+                    CookieLoginForm(ui,platform){memory.cookieLogin=false}
+                }
                 if (login?.phase() != AccountLoginController.Phase.LOGGED_IN) item {
                     Column(Modifier.padding(8.dp)) {
-                        if (login?.phase()?.name in listOf("CREATING", "WAITING_SCAN", "WAITING_CONFIRMATION", "VERIFICATION_REQUIRED", "WEB_LOGIN", "EXPIRED", "ERROR")) {
+                        if (login?.phase()?.name in listOf("CREATING", "WAITING_SCAN", "WAITING_CONFIRMATION", "VERIFICATION_REQUIRED", "WEB_LOGIN", "COOKIE_LOGIN", "EXPIRED", "ERROR")) {
                             NativeText(ui, login?.status() ?: "", modifier = Modifier.padding(8.dp))
                         }
-                        if (platform == AccountPlatform.QQMUSIC || platform == AccountPlatform.NETEASE && login?.phase()?.name in listOf("VERIFICATION_REQUIRED", "ERROR", "EXPIRED")) {
+                        if (platform == AccountPlatform.APPLEMUSIC || platform == AccountPlatform.QQMUSIC || platform == AccountPlatform.NETEASE && login?.phase()?.name in listOf("VERIFICATION_REQUIRED", "ERROR", "EXPIRED")) {
                             NativeRow(ui, "\u5b98\u65b9\u7f51\u9875\u767b\u5f55", click = { action { ui.desk().action(platform, NativeDesk.Action.WEB_LOGIN) } })
                         }
-                        if (login?.phase() in listOf(AccountLoginController.Phase.CREATING, AccountLoginController.Phase.WEB_LOGIN)) {
+                        if(!memory.cookieLogin && (platform==AccountPlatform.NETEASE || platform==AccountPlatform.QQMUSIC)) NativeRow(ui,"填写 Cookie 登录（临时方式）",click={
+                            action {ui.desk().action(platform,NativeDesk.Action.CANCEL_LOGIN)}
+                            memory.cookieLogin=true
+                        })
+                        if (login?.phase() in listOf(AccountLoginController.Phase.CREATING, AccountLoginController.Phase.WEB_LOGIN,AccountLoginController.Phase.COOKIE_LOGIN)) {
                             val cancelLabel = if (login?.phase() == AccountLoginController.Phase.WEB_LOGIN) "\u53d6\u6d88\u7f51\u9875\u767b\u5f55" else "\u53d6\u6d88\u767b\u5f55"
                             NativeRow(ui, cancelLabel, click = { action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) } })
                         }
@@ -703,12 +749,29 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         }
                     }
                 }
+                if(platform==AccountPlatform.APPLEMUSIC) item {NativeText(ui,"双击歌曲由 Windows Apple Music 官方客户端播放；客户端需要已安装并登录。",modifier=Modifier.padding(8.dp))}
                 if(platform==AccountPlatform.BILIBILI && catalog?.get("view") in listOf("DISCOVER","MUSIC_HOT","MUSIC_ORIGINAL")) item {
                     NativeButtons(ui, listOf(Catalog.View.DISCOVER to "\u70ed\u95e8\u89c6\u9891",Catalog.View.MUSIC_HOT to "\u97f3\u4e50\u70ed\u95e8\u699c",Catalog.View.MUSIC_ORIGINAL to "\u539f\u521b\u699c").map { (destination,label) ->
                         NativeButton(label, catalog?.get("view")==destination.name) {
                             action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}
                         }
                     })
+                }
+                if(platform==AccountPlatform.QQMUSIC && catalog?.get("view") in listOf("DISCOVER","DAILY","PERSONAL_RADIO")) item {
+                    NativeButtons(ui, listOf(Catalog.View.DISCOVER to "推荐歌单",Catalog.View.DAILY to "每日推荐",Catalog.View.PERSONAL_RADIO to "猜你喜欢").map { (destination,label) ->
+                        NativeButton(label,catalog?.get("view")==destination.name) {
+                            action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}
+                        }
+                    })
+                }
+                if(platform==AccountPlatform.NETEASE && catalog?.get("view") in listOf("DISCOVER","DAILY","PERSONAL_RADIO","PERSONAL_PLAYLISTS","NEW_SONGS")) item {
+                    val tabs = listOf(Catalog.View.DISCOVER to "推荐歌单",Catalog.View.DAILY to "每日推荐",
+                        Catalog.View.PERSONAL_RADIO to "音乐漫游",Catalog.View.PERSONAL_PLAYLISTS to "私人歌单",Catalog.View.NEW_SONGS to "推荐新歌").map { (destination,label) ->
+                        NativeButton(label,catalog?.get("view")==destination.name) {
+                            action {ui.desk().browse(platform,destination);memory.view=Catalog.View.DISCOVER}
+                        }
+                    }
+                    (if(narrow) tabs.chunked(3) else listOf(tabs)).forEach { NativeButtons(ui,it) }
                 }
                 if(!rows.isNullOrEmpty() && rows.first().let {(it as? Map<*,*>)?.get("kind")=="TRACK"} && columns==1 && memory.layout==ListLayout.SINGLE) item {
                     Row(Modifier.fillMaxWidth()) {

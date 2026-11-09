@@ -35,7 +35,7 @@ public final class QqMusicHttp {
                     "/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg","/rsc/fcgi-bin/fcg_get_profile_homepage.fcg",
                     "/lyric/fcgi-bin/fcg_query_lyric_new.fcg").contains(uri.getPath()) && body == null
                 || "xui.ptlogin2.qq.com".equals(uri.getHost()) && Set.of("/ssl/ptqrshow","/ssl/ptqrlogin").contains(uri.getPath()) && body == null
-                || "ssl.ptlogin2.graph.qq.com".equals(uri.getHost()) && "/check_sig".equals(uri.getPath()) && body == null
+                || Set.of("ssl.ptlogin2.graph.qq.com","ssl.ptlogin2.qq.com").contains(uri.getHost()) && "/check_sig".equals(uri.getPath()) && body == null
                 || "graph.qq.com".equals(uri.getHost()) && ("/oauth2.0/login_jump".equals(uri.getPath()) && body == null
                     || "/oauth2.0/authorize".equals(uri.getPath()) && body != null);
         if(!allowed || !"https".equals(uri.getScheme()) || uri.getRawUserInfo()!=null || uri.getRawFragment()!=null
@@ -89,6 +89,8 @@ public final class QqMusicHttp {
             String type=cookie(account,"tmeLoginType");
             if(!Set.of("1","2").contains(type)) throw new IOException("QQ login type missing");
             comm.put("tmeLoginType",Integer.parseInt(type));
+            long token=io.github.yghfv.saltneri.plugin.auth.QqMusicQrClient.hash(cookie(account,"qqmusic_key"),5381);
+            comm.put("g_tk",token);comm.put("g_tk_new_20200303",token);
         }
         comm.putAll(overrides);
         var response=exchange(GATEWAY,jsonBytes(Map.of("comm",comm,"req_0",Map.of("module",module,"method",method,"param",param))),
@@ -98,7 +100,7 @@ public final class QqMusicHttp {
         for(Object code:List.of(root.getOrDefault("code",-1),envelope.getOrDefault("code",-1),envelope.getOrDefault("subcode",0)))
             if(number(code,-1)!=0) throw new Rejected(number(code,-1));
         var data=object(envelope.get("data"));
-        for(Object code:List.of(data.getOrDefault("code",0),data.getOrDefault("subcode",0)))
+        for(Object code:List.of(data.getOrDefault("code",0),data.getOrDefault("subcode",0),data.getOrDefault("retcode",0)))
             if(number(code,-1)!=0) throw new Rejected(number(code,-1));
         request.check(); if(account!=null && !account.isActive()) throw new IOException("QQ account retired");
         return data;

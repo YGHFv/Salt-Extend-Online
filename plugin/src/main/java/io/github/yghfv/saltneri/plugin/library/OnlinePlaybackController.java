@@ -92,6 +92,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
     }
     public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings,Function<AccountPlatform,AccountCredentials> accounts) throws Exception {
             Audio audio;
+            if(target.platform()==AccountPlatform.APPLEMUSIC)throw new java.io.IOException("APPLE/OFFICIAL_CLIENT_REQUIRED");
             if (target.platform() == AccountPlatform.BILIBILI) {
                 var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
                 audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());

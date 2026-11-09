@@ -146,10 +146,11 @@ public final class NativeUiContractTest {
                 @SuppressWarnings("unchecked") Function1<Object,Object> built = (Function1<Object,Object>)entryScope.getMethod("build").invoke(scope);
                 Field entriesField = SaltNativeUi.class.getDeclaredField("entries"); entriesField.setAccessible(true);
                 @SuppressWarnings("unchecked") Map<AccountPlatform,Object> entries = (Map<AccountPlatform,Object>)entriesField.get(ui);
-                AtomicInteger biliPage = new AtomicInteger(), neteasePage = new AtomicInteger(), qqPage = new AtomicInteger();
+                AtomicInteger biliPage = new AtomicInteger(), neteasePage = new AtomicInteger(), qqPage = new AtomicInteger(), applePage=new AtomicInteger();
                 entries.put(AccountPlatform.BILIBILI, (Function3<Object,Composer,Integer,Unit>)(key,c,flags) -> { biliPage.incrementAndGet(); return Unit.INSTANCE; });
                 entries.put(AccountPlatform.NETEASE, (Function3<Object,Composer,Integer,Unit>)(key,c,flags) -> { neteasePage.incrementAndGet(); return Unit.INSTANCE; });
                 entries.put(AccountPlatform.QQMUSIC, (Function3<Object,Composer,Integer,Unit>)(key,c,flags) -> { qqPage.incrementAndGet(); return Unit.INSTANCE; });
+                entries.put(AccountPlatform.APPLEMUSIC,(Function3<Object,Composer,Integer,Unit>)(key,c,flags)->{applePage.incrementAndGet();return Unit.INSTANCE;});
                 Composer composer = composerFixture();
                 for (AccountPlatform platform : AccountPlatform.values()) {
                     Object key = route.getConstructor(String.class).newInstance(SaltNativeUi.PLUGIN_ID + "/native/" + platform.name());
@@ -161,7 +162,7 @@ public final class NativeUiContractTest {
                         catch (Exception error) { throw new AssertionError(error); }
                     });
                 }
-                check(biliPage.get() == 1 && neteasePage.get() == 1 && qqPage.get() == 1 && fallback.get() == 0);
+                check(biliPage.get() == 1 && neteasePage.get() == 1 && qqPage.get() == 1 && applePage.get()==1 && fallback.get() == 0);
                 Object modEntry = built.invoke(unrelated);
                 javax.swing.SwingUtilities.invokeAndWait(() -> {
                     try { modEntry.getClass().getMethod("Content", Composer.class, int.class).invoke(modEntry, composer, 0); }

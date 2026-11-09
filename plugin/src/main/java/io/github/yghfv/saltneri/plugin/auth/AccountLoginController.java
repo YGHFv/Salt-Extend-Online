@@ -16,7 +16,7 @@ import java.util.function.Supplier;
 
 /** QR login and one-shot saved-session restore. All work is bounded and account-revision fenced. */
 public final class AccountLoginController implements AutoCloseable {
-    public enum Phase { IDLE, CREATING, WAITING_SCAN, WAITING_CONFIRMATION, VERIFICATION_REQUIRED, WEB_LOGIN, LOGGED_IN, EXPIRED, ERROR, CLOSED }
+    public enum Phase { IDLE, CREATING, WAITING_SCAN, WAITING_CONFIRMATION, VERIFICATION_REQUIRED, WEB_LOGIN, COOKIE_LOGIN, LOGGED_IN, EXPIRED, ERROR, CLOSED }
     @FunctionalInterface interface WebLogin { AccountCredentials login(RequestScope request) throws java.io.IOException; }
     public record Snapshot(Phase phase, String status, URI qrContent, String userId, AccountCredentials.Profile profile, String revision, byte[] qrImage) {
         public Snapshot(Phase phase,String status,URI qrContent,String userId,AccountCredentials.Profile profile,String revision) {this(phase,status,qrContent,userId,profile,revision,null);}
@@ -32,10 +32,11 @@ public final class AccountLoginController implements AutoCloseable {
         volatile Future<?> work;
         volatile ScheduledFuture<?> scheduled;
         volatile QrAuthClient.Session session;
+        volatile java.util.List<ScopedCookies.Entry> cookieInput=java.util.List.of();
         Operation(QrAuthClient client) { this.client = client; }
         void cancel() {
             active.set(false); if (scheduled != null) scheduled.cancel(false);
-            if (request != null) request.close(); if (work != null) work.cancel(true); client.close(); session = null;
+            if (request != null) request.close(); if (work != null) work.cancel(true); client.close(); session = null; cookieInput=java.util.List.of();
         }
     }
     private final AccountPlatform platform;
@@ -55,7 +56,7 @@ public final class AccountLoginController implements AutoCloseable {
     private Phase phase = Phase.IDLE;
     private String status = "Not logged in. Login is explicit; no existing account is imported.";
     public AccountLoginController(AccountPlatform platform, BooleanSupplier authorized, EncryptedAccountStore store, Runnable onChange) {
-        this(platform, switch(platform) {case BILIBILI -> BiliQrClient::new; case NETEASE -> NeteaseQrClient::new; case QQMUSIC -> QqMusicQrClient::new;},
+        this(platform, switch(platform) {case BILIBILI -> BiliQrClient::new; case NETEASE -> NeteaseQrClient::new; case QQMUSIC -> QqMusicQrClient::new; case APPLEMUSIC -> AppleMusicAuthClient::new;},
                 authorized, store, onChange, Clock.systemUTC(), 3000);
     }
     public AccountLoginController(AccountPlatform platform, Supplier<QrAuthClient> clients, BooleanSupplier authorized,
@@ -79,6 +80,7 @@ public final class AccountLoginController implements AutoCloseable {
                 : "\u6b63\u5728\u51c6\u5907\u5b98\u65b9\u626b\u7801\u767b\u5f55\uff0c\u4e0d\u8bfb\u53d6\u5176\u4ed6\u5e94\u7528\u8d26\u53f7\u3002"; return current;
     }
     public void start(boolean remember) {
+        if(platform==AccountPlatform.APPLEMUSIC) {startWebLogin(remember);return;}
         Operation operation;
         synchronized (this) { rememberEnabled = remember; startupAttempted = true; operation = begin(); }
         changed();
@@ -98,7 +100,27 @@ public final class AccountLoginController implements AutoCloseable {
         if (store == null) throw new IllegalStateException("Secure storage unavailable");
         startRestore(begin(), false);
     }
-    public void startWebLogin(boolean remember) { startWebLogin(remember,platform==AccountPlatform.QQMUSIC?WindowsQqMusicWebLogin::login:WindowsNeteaseWebLogin::login); }
+    public void startCookieLogin(String header,boolean remember) throws java.io.IOException {
+        // Validate before replacing a currently verified account.
+        var entries=CookieLogin.parse(platform,header,clock);
+        Operation operation;
+        synchronized(this) {
+            rememberEnabled=remember;startupAttempted=true;operation=begin();phase=Phase.COOKIE_LOGIN;
+            operation.cookieInput=entries;status="正在验证填写的 Cookie，验证成功后登录。";
+        }
+        changed();
+        submit(operation,()->{
+            try(RequestScope request=request(operation)) {
+                var input=operation.cookieInput;operation.cookieInput=java.util.List.of();request.check();
+                var verified=operation.client.verifyCookies(input,clock,request);
+                try {request.check();publish(operation,verified);}
+                catch(Exception error) {if(verified!=null)verified.retire();throw error;}
+            } catch(Exception | LinkageError error) {fail(operation,error);}
+            finally {operation.cookieInput=java.util.List.of();}
+        });
+    }
+    public void startWebLogin(boolean remember) { startWebLogin(remember,platform==AccountPlatform.APPLEMUSIC?WindowsAppleMusicWebLogin::login:
+            platform==AccountPlatform.QQMUSIC?WindowsQqMusicWebLogin::login:WindowsNeteaseWebLogin::login); }
     void startWebLogin(boolean remember, WebLogin web) {
         if(platform==AccountPlatform.BILIBILI) throw new IllegalArgumentException("Web login unavailable for Bilibili");
         Operation operation;
@@ -106,6 +128,7 @@ public final class AccountLoginController implements AutoCloseable {
             rememberEnabled=remember; startupAttempted=true; operation=begin(); phase=Phase.WEB_LOGIN;
             status="\u8bf7\u5728\u65b0\u6253\u5f00\u7684\u7f51\u6613\u4e91\u5b98\u65b9\u9875\u9762\u70b9\u51fb\u767b\u5f55\uff0c\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u3002\u4ec5\u4f7f\u7528\u72ec\u7acb\u4e34\u65f6\u7a97\u53e3\uff0c\u4e0d\u8bfb\u53d6\u6d4f\u89c8\u5668\u5df2\u6709\u8d26\u53f7\uff1b5\u5206\u949f\u5185\u6709\u6548\u3002";
             if(platform==AccountPlatform.QQMUSIC) status="\u8bf7\u5728 QQ \u97f3\u4e50\u5b98\u65b9\u9875\u9762\u9009\u62e9 QQ \u6216\u5fae\u4fe1\u767b\u5f55\u5e76\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u3002\u4f7f\u7528\u72ec\u7acb\u4e34\u65f6 Edge\uff0c\u4e0d\u8bfb\u53d6\u73b0\u6709\u8d26\u53f7\uff1b5 \u5206\u949f\u5185\u6709\u6548\u3002";
+            if(platform==AccountPlatform.APPLEMUSIC) status="请在独立 Edge 中登录 Apple Music。资料库登录会加密保存；播放需要 Windows 官方客户端已登录。";
         }
         changed();
         submit(operation,()->{
@@ -211,6 +234,14 @@ public final class AccountLoginController implements AutoCloseable {
     }
     private synchronized void fail(Operation operation, Throwable error) {
         if (!valid(operation)) return;
+        if(phase==Phase.COOKIE_LOGIN) {
+            var stage=platform==AccountPlatform.QQMUSIC?AuthFailure.Stage.QQ_COOKIE:AuthFailure.Stage.NET_COOKIE;
+            error=error instanceof AuthFailure safe?safe.atStage(stage):error instanceof java.io.IOException io
+                    ?AuthFailure.wrap(stage,AuthFailure.Reason.RESPONSE,io):AuthFailure.of(stage,AuthFailure.Reason.RESPONSE);
+            operation.cancel();phase=Phase.ERROR;
+            status="Cookie 登录未完成 ["+error.getMessage()+"]; 请检查是否为完整、有效的登录 Cookie 后重试。";
+            return;
+        }
         if(platform==AccountPlatform.QQMUSIC) {
             var stage=phase==Phase.WEB_LOGIN?AuthFailure.Stage.QQ_WEB:phase==Phase.CREATING?AuthFailure.Stage.QQ_CREATE:AuthFailure.Stage.QQ_POLL;
             error=error instanceof AuthFailure known?(known.getMessage().startsWith("QQ_")?known:known.atStage(stage))
@@ -221,7 +252,9 @@ public final class AccountLoginController implements AutoCloseable {
         }
         operation.cancel();
         phase = error instanceof AuthFailure safe && safe.requiresWebVerification() ? Phase.VERIFICATION_REQUIRED : Phase.ERROR;
-        status = AuthFailure.diagnostic(error);
+        status = platform==AccountPlatform.APPLEMUSIC
+                ? "Apple Music 登录未完成 ["+(error instanceof java.io.IOException && error.getMessage()!=null && error.getMessage().matches("APPLE/[A-Z0-9_]{1,64}")?error.getMessage():"APPLE/WEB_LOGIN")+"]; 请在官方页面完成登录后重试"
+                : AuthFailure.diagnostic(error);
     }
     public synchronized void cancelLogin() {
         if (closed || phase == Phase.LOGGED_IN) return; startupAttempted = true; discardOperation(); phase = Phase.IDLE; status = "Pending login cancelled; QR invalid locally.";

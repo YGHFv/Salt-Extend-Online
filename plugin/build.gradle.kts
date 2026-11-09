@@ -82,6 +82,7 @@ tasks.processResources {
     from("src/main/resources/" + if (experimentalAdapter) "preference_config_experimental.json" else "preference_config.json") {
         rename { "preference_config.json" }
     }
+    from(rootProject.files("licenses/MineRadio-GPL-3.0.txt")) { into("META-INF/licenses") }
     from(rootProject.files("LICENSE", "THIRD_PARTY_NOTICES.md")) {
         into("META-INF/licenses")
     }

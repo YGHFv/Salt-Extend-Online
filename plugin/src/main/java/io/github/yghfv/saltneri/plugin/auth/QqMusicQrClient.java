@@ -52,7 +52,9 @@ public final class QqMusicQrClient implements QrAuthClient {
         if(session==null || session!=current)return new Poll(State.EXPIRED,null);
         if(!clock.instant().isBefore(session.expiresAt())) {clearSession(session);return new Poll(State.EXPIRED,null);}
         var response=send(URI.create("https://xui.ptlogin2.qq.com/ssl/ptqrlogin?u1="+encode("https://graph.qq.com/oauth2.0/login_jump")
-                +"&from_ui=1&aid=716027609&daid=383&pt_3rd_aid=100497308&ptqrtoken="+hash(cookieValue("qrsig"),0)),null,request,262144);
+                +"&ptredirect=0&h=1&t=1&g=1&from_ui=1&ptlang=2052&action=0-0-"+clock.millis()
+                +"&js_ver=20102616&js_type=1&pt_uistyle=40&has_onekey=1"
+                +"&aid=716027609&daid=383&pt_3rd_aid=100497308&ptqrtoken="+hash(cookieValue("qrsig"),0)),null,request,262144);
         String raw=new String(response.bytes(),StandardCharsets.UTF_8).strip();
         if(response.status()!=200)throw AuthFailure.of(AuthFailure.Stage.QQ_POLL,AuthFailure.Reason.RESPONSE);
         var values=QqMusicPtui.parse(raw);
@@ -74,7 +76,8 @@ public final class QqMusicQrClient implements QrAuthClient {
         };
     }
     private AccountCredentials exchange(String checkSig,RequestScope request) throws IOException {
-        var signature=send(trusted(checkSig,"ssl.ptlogin2.graph.qq.com","/check_sig"),null,request,262144);
+        URI signatureUri=trustedSignature(checkSig);
+        var signature=send(signatureUri,null,request,262144);
         if(signature.status()!=302) throw AuthFailure.of(AuthFailure.Stage.QQ_SIGNATURE,AuthFailure.Reason.RESPONSE);
         var jump=send(trusted(signature.location(),"graph.qq.com","/oauth2.0/login_jump"),null,request,262144);
         URI authorize=URI.create("https://graph.qq.com/oauth2.0/authorize");
@@ -104,6 +107,11 @@ public final class QqMusicQrClient implements QrAuthClient {
         var result=http.exchange(GATEWAY,jsonBytes(Map.of("comm",Map.of("g_tk",5381,"platform","yqq","ct",24,"cv",0,"tmeLoginType",2),
                 "req",Map.of("module","QQConnectLogin.LoginServer","method","QQLogin","param",Map.of("code",code)))),"",request,262144);
         var unverified=QqMusicLoginResponse.decode(result,clock);
+        try {return verify(unverified,request);} finally {unverified.retire();}
+    }
+    @Override public AccountCredentials verifyCookies(List<ScopedCookies.Entry> entries,Clock clock,RequestScope request) throws IOException {
+        String identity=entries.stream().filter(e->e.name().equals("qqmusic_uin")).map(ScopedCookies.Entry::value).findFirst().orElse("");
+        var unverified=new AccountCredentials(AccountPlatform.QQMUSIC,identity,entries,clock);
         try {return verify(unverified,request);} finally {unverified.retire();}
     }
     @Override public AccountCredentials verify(AccountCredentials saved,RequestScope request) throws IOException {
@@ -200,6 +208,14 @@ public final class QqMusicQrClient implements QrAuthClient {
                     || uri.getPort()!=-1 && uri.getPort()!=443 || uri.getRawUserInfo()!=null || uri.getRawFragment()!=null) throw new IllegalArgumentException();
             return uri;
         } catch(RuntimeException failure) {throw new IOException("QQ login redirect rejected");}
+    }
+    private static URI trustedSignature(String value) throws IOException {
+        try {
+            URI uri=URI.create(value);
+            if(uri.getHost()==null || !Set.of("ssl.ptlogin2.graph.qq.com","ssl.ptlogin2.qq.com").contains(uri.getHost()))
+                throw new IllegalArgumentException();
+            return trusted(value,uri.getHost(),"/check_sig");
+        } catch(IllegalArgumentException invalid) {throw new IOException("QQ login redirect rejected");}
     }
     public static long hash(String value,long initial) {long hash=initial;for(char c:value.toCharArray()) hash=(hash*33+c)&0xffffffffL;return hash&0x7fffffffL;}
     private void check() throws IOException {if(closed) {loginCookies.clear();throw new IOException("QQ login closed");}}

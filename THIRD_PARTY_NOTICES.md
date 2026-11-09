@@ -129,7 +129,7 @@ Actual host queue replacement/continuous audible playback remain installation ac
 Four unmodified Java source files (`QrCode`, `QrSegment`, `BitBuffer`, `DataTooLongException`) are
 vendored under `plugin/src/main/java/io/nayuki/qrcodegen`; original copyright/license headers remain.
 Their SHA-256 hashes are locked in `reference-lock.json` and checked before compilation.
-This pure-Java library is the only intentionally bundled third-party runtime implementation;
+This pure-Java library is the only intentionally bundled third-party Java runtime implementation;
 it renders QR data locally as SVG, without an external image service or client CDN.
 No proprietary Salt/API/Kotlin/Compose implementation is bundled.
 
@@ -181,3 +181,36 @@ checked against the installed Salt archive, rather than assuming that library ve
 
 Native row/layout/theme methods are linked to the user's host through fingerprinted bindings;
 no proprietary Salt or WebDAV implementation is copied into the plugin.
+
+## MusicOne
+
+- Repository: https://github.com/HGODLK/MusicOne
+- Reviewed revision: `2a9be828c8bac38b38c5bd8fabf8611e44c5c134` (2026-11-09).
+- License: GPL-3.0; the project GPL license is included in the artifact.
+
+QQ QR polling parameters, the accepted check_sig hosts, daily recommendation directory 202,
+and personalized radio 99 were adapted from `source-packs/qq/.../internal/`.
+The platform clients, bounded transport and account lifecycle are implemented in Salt Extend.
+NetEase daily/new-song recommendation endpoints and field normalization follow
+`source-packs/netease/.../NeteaseApiClient.kt`.
+Explicit QQ Cookie login accepts the music-key and loginType aliases used in `QqApiClient.kt`.
+
+## MineRadio Apple Music Specially Customized Edition
+
+- Repository: https://github.com/FHJI-lgtm/MineRadio-Apple-Music-Specially-Customized-Edition
+- Reviewed revision: `e0ddc69ff62d717515e804c3c2d9be7a5e4a35fd` (2026-11-09).
+- License: GPL-3.0, included in `licenses/MineRadio-GPL-3.0.txt` and the artifact license directory.
+
+`plugin/src/main/resources/applemusic/lib/am-common.ps1`, `am-smtc.ps1`, `am-uia.ps1`
+and `am-play.ps1` are adapted from `experiment/apple-music-windows-control/poc/lib/`.
+Original headers are preserved. The adapter adds hidden process launch parameters and a bounded
+UTF-8 stdin/JSON wrapper; it does not bundle Electron, Node.js, MusicKit or Apple client binaries.
+Apple public bearer discovery, Web API headers, artwork and library/catalog identity mapping
+follow `apple-music-web-lyrics.js`, `desktop/apple-music-web-api.js` and `apple-music-api.js`.
+The pinned original and adapted resource hashes are recorded in `reference-lock.json`.
+Apple Music audio is played only by the user's official Windows client, verified by SMTC.
+NetEase private playlist and daily recommendation response mapping follow `server.js`.
+The NetEase private FM protocol was cross-checked with
+https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced at
+`4a7d557326d16d2f1e5172ee69c9471eb3a50173` (`module/personal_fm.js` and
+`module/personal_fm_mode.js`); no source from that project is bundled.

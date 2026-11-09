@@ -445,7 +445,7 @@ public final class SaltNativeUi implements AutoCloseable {
     private void openInitialHome(Object current,String home) {
         try {
             pageBinding.requireInstalled();
-            if("BILIBILI".equals(home) || "NETEASE".equals(home) || "QQMUSIC".equals(home)) {
+            if("BILIBILI".equals(home) || "NETEASE".equals(home) || "QQMUSIC".equals(home) || "APPLEMUSIC".equals(home)) {
                 invoke(navigate,current,routes.get(AccountPlatform.valueOf(home)));return;
             }
             Object route;

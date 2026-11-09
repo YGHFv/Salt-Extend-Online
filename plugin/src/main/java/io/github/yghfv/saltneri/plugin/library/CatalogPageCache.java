@@ -20,8 +20,14 @@ final class CatalogPageCache {
     private long revision;
     final BiliDiscovery.Cache discovery;
     final CatalogHttp.SessionCache sessions=new CatalogHttp.SessionCache();
-    CatalogPageCache(Clock clock) { this.clock = clock; discovery = new BiliDiscovery.Cache(clock); }
-    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); sessions.clear(); }
+    final QqMusicCatalog.Recommendations qqRecommendations=new QqMusicCatalog.Recommendations();
+    final NeteaseRecommendations netRecommendations=new NeteaseRecommendations();
+    final io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp appleHttp;
+    CatalogPageCache(Clock clock) {
+        this.clock = clock; discovery = new BiliDiscovery.Cache(clock);
+        appleHttp=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp(io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection::new,clock);
+    }
+    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); sessions.clear(); qqRecommendations.clear(); netRecommendations.clear(); }
     @FunctionalInterface interface FullLoader { CatalogClient.CollectionContents load() throws Exception; }
     CatalogClient.CollectionContents all(AccountCredentials owner,Query query,RequestScope request,FullLoader loader) throws Exception {
         long captured;
@@ -48,7 +54,7 @@ final class CatalogPageCache {
             if (account != owner) { clear(); account = owner; }
             captured = revision;
             pages.entrySet().removeIf(e -> !clock.instant().isBefore(e.getValue().until()));
-            Cached hit = pages.get(query);
+            Cached hit = query.view()==View.DAILY?null:pages.get(query);
             if (hit != null) { request.check(); return hit.page(); }
         }
         try {

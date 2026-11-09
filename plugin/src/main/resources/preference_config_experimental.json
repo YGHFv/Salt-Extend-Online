@@ -35,14 +35,16 @@
             "歌曲",
             "Bilibili",
             "网易云",
-            "QQ 音乐"
+            "QQ 音乐",
+            "Apple Music"
           ],
           "entry_values": [
             "restore",
             "Track",
             "BILIBILI",
             "NETEASE",
-            "QQMUSIC"
+            "QQMUSIC",
+            "APPLEMUSIC"
           ],
           "default_value": "restore"
         },
@@ -284,6 +286,22 @@
           "summary": "查看模组接入、登录阶段和播放适配状态；不显示凭据或音频地址。",
           "arrow_type": "none",
           "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.showStatus"
+        },
+        {
+          "key": "applemusic.home",
+          "type": "list",
+          "title": "Apple Music 默认栏目",
+          "entries": [
+            "发现",
+            "我的专辑",
+            "我的歌单"
+          ],
+          "entry_values": [
+            "DISCOVER",
+            "MINE",
+            "SAVED"
+          ],
+          "default_value": "DISCOVER"
         }
       ]
     }

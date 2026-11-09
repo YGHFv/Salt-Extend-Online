@@ -98,7 +98,7 @@ public final class SidebarSettingsContractTest {
             bindings.playlistChoices(List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("one","Playlist one",new Object()),
                     new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("two","Playlist two",new Object())));
             var options=((List<?>)group.getMethod("\u0529").invoke(bindings.filteredGroup(config,SaltNativeUi.PLUGIN_ID,true))).getFirst();
-            check(list.getMethod("\u052b").invoke(options).equals(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","playlist:one","playlist:two")));
+            check(list.getMethod("\u052b").invoke(options).equals(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC","playlist:one","playlist:two")));
             check(((List<?>)list.getMethod("\u052a").invoke(options)).size()==AccountPlatform.values().length+4);
             Object settingsRoute=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.SIDEBAR_CONFIG);
             check(ui.settingsPage(settingsRoute) && ui.platform(settingsRoute)==null);

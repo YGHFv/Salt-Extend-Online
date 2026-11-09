@@ -28,7 +28,7 @@ public final class CatalogPaging {
         if(start>=MAX_ITEMS)return new Window(title,items,false,(MAX_ITEMS+width-1)/width,-1);
         for(int index=start/20+1;index<=(end-1)/20+1;index++) {
             request.check();
-            Page part=fetch.page(new Query(query.platform(),query.view(),query.folder(),index,query.owner(),query.keyword(),query.reverse(),query.order()));
+            Page part=fetch.page(new Query(query.platform(),query.view(),query.folder(),index,query.owner(),query.keyword(),query.reverse(),query.order(),query.resource()));
             title=part.title();
             if(part.totalCount()>=0)count=part.totalCount();
             long slots=count>=0?count:part.totalPages()>0?part.totalPages()*20L:-1;

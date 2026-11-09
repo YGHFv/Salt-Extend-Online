@@ -88,6 +88,9 @@ public final class NeteaseQrClient implements QrAuthClient {
     public AccountCredentials verifyWebCookies(java.util.List<ScopedCookies.Entry> entries, RequestScope request) throws IOException {
         return verifyWebCookies(entries, AuthHttp.DEFAULT_USER_AGENT, request);
     }
+    @Override public AccountCredentials verifyCookies(java.util.List<ScopedCookies.Entry> entries,Clock clock,RequestScope request) throws IOException {
+        return verifyWebCookies(entries,AuthHttp.DEFAULT_USER_AGENT,request);
+    }
     public AccountCredentials verifyWebCookies(java.util.List<ScopedCookies.Entry> entries, String browserAgent, RequestScope request) throws IOException {
         beginRequest(request);
         try {

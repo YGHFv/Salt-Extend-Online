@@ -65,7 +65,7 @@ public final class TrackContextMenuRenderTest {
                 var hazeValues=new androidx.compose.runtime.ProvidedValue[]{
                         ((androidx.compose.runtime.ProvidableCompositionLocal<Object>)blur.getMethod("\u037f").invoke(null)).provides(haze),
                         ((androidx.compose.runtime.ProvidableCompositionLocal<Object>)blur.getMethod("\u0528").invoke(null)).provides(haze)};
-                for(var platform:AccountPlatform.values()) for(String layout:List.of("CARDS","SINGLE","DOUBLE")) {
+                for(var platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) for(String layout:List.of("CARDS","SINGLE","DOUBLE")) {
                     desk.layout(platform,layout);
                     // Clear page memory between independent layout fixtures, not user settings.
                     var memory=SaltNativeUi.class.getDeclaredField("pageMemory"); memory.setAccessible(true); ((Map<?,?>)memory.get(ui)).clear();

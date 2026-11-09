@@ -7,18 +7,24 @@ import java.util.List;
 public final class Catalog {
     private static final java.time.format.DateTimeFormatter DATE=java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(java.time.ZoneId.of("Asia/Shanghai"));
     private Catalog() { }
-    public enum View { DISCOVER, MUSIC_HOT, MUSIC_ORIGINAL, MINE, SAVED, FOLDER, COLLECTION, SEARCH, AUTHOR_VIDEOS, AUTHOR_COLLECTIONS }
+    public enum View { DISCOVER, DAILY, PERSONAL_RADIO, PERSONAL_PLAYLISTS, NEW_SONGS, MUSIC_HOT, MUSIC_ORIGINAL, MINE, SAVED, FOLDER, COLLECTION, SEARCH, AUTHOR_VIDEOS, AUTHOR_COLLECTIONS }
     public enum Kind { FOLDER, COLLECTION, TRACK }
     public enum Sort { DEFAULT, REVERSE, TITLE, ARTIST, DURATION, PLAY_COUNT }
-    public record Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse, Sort order) {
+    public record Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse, Sort order, String resource) {
+        public Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse, Sort order) {this(platform,view,folder,page,owner,keyword,reverse,order,"");}
         public Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword, boolean reverse) { this(platform,view,folder,page,owner,keyword,reverse,Sort.DEFAULT); }
         public Query(AccountPlatform platform, View view, long folder, int page, long owner, String keyword) { this(platform,view,folder,page,owner,keyword,false); }
         public Query(AccountPlatform platform, View view, long folder, int page) { this(platform, view, folder, page, 0, ""); }
         public Query(AccountPlatform platform, View view, long folder, int page, long owner) { this(platform, view, folder, page, owner, ""); }
         public Query {
+            resource=resource==null?"":resource;
+            if(!resource.isEmpty() && (platform!=AccountPlatform.APPLEMUSIC || view!=View.FOLDER || !resource.matches("(albums|playlists)/[A-Za-z0-9.-]{1,128}")))throw new IllegalArgumentException("Invalid library resource");
+            if(platform==AccountPlatform.APPLEMUSIC && view==View.FOLDER && resource.isEmpty())throw new IllegalArgumentException("Missing Apple library resource");
             keyword = keyword == null ? "" : keyword.strip();
             if (platform == null || view == null || page < 1 || page > 500
                     || (view == View.MUSIC_HOT || view == View.MUSIC_ORIGINAL) && platform != AccountPlatform.BILIBILI
+                    || (view == View.DAILY || view == View.PERSONAL_RADIO) && platform != AccountPlatform.QQMUSIC && platform != AccountPlatform.NETEASE
+                    || (view == View.PERSONAL_PLAYLISTS || view == View.NEW_SONGS) && platform != AccountPlatform.NETEASE
                     || (view == View.FOLDER || view == View.COLLECTION ? folder <= 0 : folder != 0)
                     || (view == View.COLLECTION || view == View.AUTHOR_VIDEOS || view == View.AUTHOR_COLLECTIONS ? platform != AccountPlatform.BILIBILI || owner <= 0 : owner != 0)
                     || reverse && view!=View.COLLECTION && view!=View.AUTHOR_VIDEOS

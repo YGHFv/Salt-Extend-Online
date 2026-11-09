@@ -54,12 +54,14 @@ public final class SavedPlaylistArtworkContractTest {
             case NETEASE->TrackKey.netease(id);
             case QQMUSIC->TrackKey.qqmusic(id);
             case BILIBILI->TrackKey.bilibili(id,123);
+            case APPLEMUSIC->throw new IllegalArgumentException("External player");
         };
         var platform=MediaLease.Platform.valueOf(target.platform().name());
         URI media=URI.create(switch(target.platform()) {
             case NETEASE->"https://m7.music.126.net/fixture";
             case QQMUSIC->"https://dl.stream.qqmusic.qq.com/fixture";
             case BILIBILI->"https://test.bilivideo.com/fixture";
+            case APPLEMUSIC->throw new IllegalArgumentException("External player");
         });
         Instant expiry=Instant.now().plusSeconds(900);
         return new Audio(key,new Salt1193PlaybackSession.Metadata("Fixture","Artist","",""),
@@ -79,7 +81,7 @@ public final class SavedPlaylistArtworkContractTest {
         var profile=Salt1193Probe.inspect(SavedPlaylistArtworkContractTest.class.getClassLoader(),"1.19.3","Steam");
         check(profile.matched(),"Missing host");
         byte[] png=PlaybackCoverContractTest.png();
-        for(var platform:AccountPlatform.values()) {
+        for(var platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) {
             Path root=Files.createTempDirectory("salt-cover-switch-fixture-").toRealPath();
             String id=platform==AccountPlatform.QQMUSIC?"00123456789abc":platform==AccountPlatform.NETEASE?"120":"BV17x411w7KC";
             String other=platform==AccountPlatform.QQMUSIC?"00987654321abc":platform==AccountPlatform.NETEASE?"121":"BV1Q541167Qg";

@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 final class WindowsEdgeWebLogin {
     private WindowsEdgeWebLogin() { }
     static AccountCredentials login(AccountPlatform platform,RequestScope request,WebLoginCapture.Verifier verifier) throws IOException {
+        if(platform==AccountPlatform.APPLEMUSIC)return WindowsAppleMusicCapture.capture(request);
         String url=platform==AccountPlatform.QQMUSIC?"https://y.qq.com/":"https://music.163.com/";
         try(var browser=WindowsEdgeProcess.open(request,false,url);var capture=new WebLoginCapture()) {
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(250);

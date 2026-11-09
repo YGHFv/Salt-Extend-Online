@@ -19,7 +19,9 @@ public final class CoverSource {
         URI bili = parse(AccountPlatform.BILIBILI, source.toString());
         if(bili != null) return bili;
         URI net = parse(AccountPlatform.NETEASE, source.toString());
-        return net != null ? net : parse(AccountPlatform.QQMUSIC, source.toString());
+        if(net!=null)return net;
+        URI qq=parse(AccountPlatform.QQMUSIC,source.toString());
+        return qq!=null?qq:parse(AccountPlatform.APPLEMUSIC,source.toString());
     }
     /** The same QQ album identity on its static CDN, not an arbitrary redirect or signed URL. */
     public static URI playbackFallback(URI source) {
@@ -42,6 +44,7 @@ public final class CoverSource {
                     ? Set.of("i0.hdslb.com", "i1.hdslb.com", "i2.hdslb.com", "i3.hdslb.com", "i0.biliimg.com", "i1.biliimg.com", "i2.biliimg.com").contains(uri.getHost())
                     : platform == AccountPlatform.NETEASE
                         ? Set.of("p1.music.126.net", "p2.music.126.net", "p3.music.126.net", "p4.music.126.net").contains(uri.getHost())
+                        : platform==AccountPlatform.APPLEMUSIC?uri.getHost().matches("is[1-5]-ssl\\.mzstatic\\.com")
                         : Set.of("y.qq.com","qpic.y.qq.com","music-file.y.qq.com","y.gtimg.cn","p.qpic.cn","q.qlogo.cn","thirdqq.qlogo.cn").contains(uri.getHost());
             String path = uri.getRawPath();
             int at = path.lastIndexOf('@');
