@@ -142,6 +142,18 @@ public final class WebLoginContractTest {
         }
         check(!AuthFailure.code(AuthFailure.Stage.BILI_POLL,AuthFailure.Reason.API,8821).requiresWebVerification());
         check(AuthFailure.code(AuthFailure.Stage.NET_CREATE,AuthFailure.Reason.API,-462).requiresWebVerification());
+        for(var reason:List.of(AuthFailure.Reason.BROWSER_EXIT,AuthFailure.Reason.BROWSER_CONNECT,
+                AuthFailure.Reason.BROWSER_POLICY,AuthFailure.Reason.BROWSER_TIMEOUT)) {
+            try(var controller=new AccountLoginController(AccountPlatform.QQMUSIC,
+                    ()->new QqMusicQrClient(CLOCK,new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp((uri,body)->{
+                        throw new AssertionError("Web failure reached QR HTTP");
+                    })),()->true,null,()->{},CLOCK,10)) {
+                controller.startWebLogin(false,r->{throw AuthFailure.code(AuthFailure.Stage.NET_WEB,reason,7);});
+                waitFor(()->controller.snapshot().phase()==AccountLoginController.Phase.ERROR);
+                check(controller.snapshot().status().contains("QQ_WEB/"+reason+"=7"));
+                check(controller.credentials()==null);
+            }
+        }
         System.out.println("PASS: "+checks+" risk-stop/explicit web login/cookie bounds/identity/cancellation/no credential leakage checks; synthetic only");
     }
 }

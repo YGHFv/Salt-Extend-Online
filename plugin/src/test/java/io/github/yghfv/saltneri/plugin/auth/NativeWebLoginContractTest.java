@@ -27,6 +27,14 @@ public final class NativeWebLoginContractTest {
         check(WindowsEdgeProcess.quote("space path").equals("\"space path\""));
         check(WindowsEdgeProcess.quote("C:\\end\\").equals("\"C:\\end\\\\\""));
         check(WindowsEdgeProcess.quote("a\"b").equals("\"a\\\"b\""));
+        for(int pointerSize:List.of(4,8)) {
+            byte[] bytes=WindowsEdgeProcess.inheritedDescriptors(pointerSize,11,22,33);
+            var descriptor=java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            check(bytes.length==9+5*pointerSize && descriptor.getInt()==5);
+            for(byte flag:new byte[]{0x41,0x41,0x41,0x09,0x09})check(descriptor.get()==flag);
+            for(long handle:new long[]{11,11,11,22,33})
+                check((pointerSize==8?descriptor.getLong():Integer.toUnsignedLong(descriptor.getInt()))==handle);
+        }
         for(var platform:List.of(AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) {
             String official=platform==AccountPlatform.NETEASE?"https://music.163.com/":"https://y.qq.com/";
             check(WindowsEdgeWebLogin.official(platform,official));

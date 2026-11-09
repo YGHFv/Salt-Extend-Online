@@ -11,7 +11,7 @@ public final class AuthFailure extends IOException {
     public enum Reason { HTTP, API, RESPONSE, COOKIE, CREDENTIAL, IDENTITY, DNS, TLS, TIMEOUT, NETWORK, BROWSER_MISSING,
         BROWSER_POLICY, BROWSER_LAUNCH, BROWSER_EXIT, BROWSER_CONNECT, BROWSER_TIMEOUT, HELPER,
         HELPER_MISSING, HELPER_RESOURCE, HELPER_START, HELPER_POLICY, HELPER_VERSION, HELPER_SCRIPT, HELPER_IO, HELPER_EXIT, HELPER_OUTPUT,
-        PROFILE, CANCELLED, DEVICE, DEVICE_PAGE, DEVICE_API, DEVICE_TOKEN, DEVICE_COOKIE, DEVICE_CONTEXT }
+        PROFILE, CANCELLED, DEVICE, DEVICE_PAGE, DEVICE_API, DEVICE_TOKEN, DEVICE_COOKIE, DEVICE_CONTEXT, QR_IMAGE, QR_COOKIE }
     private final Stage stage;
     private final Reason reason;
     private final Long code;
@@ -69,11 +69,21 @@ public final class AuthFailure extends IOException {
                 "\u3002\u672a\u5bfc\u5165\u672a\u9a8c\u8bc1\u8d26\u53f7";
         }
         if(safe.requiresWebVerification()) return "\u7f51\u6613\u4e91\u8981\u6c42\u5b89\u5168\u9a8c\u8bc1 ["+safe.getMessage()+"]\uff1b\u8bf7\u70b9\u51fb\u201c\u5b98\u65b9\u7f51\u9875\u767b\u5f55\u201d\uff0c\u5728\u7f51\u6613\u4e91\u9875\u9762\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u548c\u767b\u5f55";
-        if(safe.stage.name().startsWith("QQ_")) return "QQ \u97f3\u4e50\u767b\u5f55\u672a\u5b8c\u6210 ["+safe.getMessage()+"]\uff1b\u53ef\u91cd\u65b0\u626b\u7801\u6216\u4f7f\u7528\u201c\u5b98\u65b9\u7f51\u9875\u767b\u5f55\u201d\u624b\u52a8\u9a8c\u8bc1\uff08\u9700 Microsoft Edge\uff09\u3002\u672a\u5bfc\u5165\u672a\u9a8c\u8bc1\u8d26\u53f7";
+        if(safe.stage.name().startsWith("QQ_")) return "QQ \u97f3\u4e50\u767b\u5f55\u672a\u5b8c\u6210 ["+safe.getMessage()+"]\uff1b"+
+            (safe.stage==Stage.QQ_CREATE?qqQrHint(safe.reason)+"\u3002":"")+
+            "\u53ef\u91cd\u65b0\u626b\u7801\u6216\u4f7f\u7528\u201c\u5b98\u65b9\u7f51\u9875\u767b\u5f55\u201d\u624b\u52a8\u9a8c\u8bc1\uff08\u9700 Microsoft Edge\uff09\u3002\u672a\u5bfc\u5165\u672a\u9a8c\u8bc1\u8d26\u53f7";
         return "\u767b\u5f55\u5931\u8d25 ["+safe.getMessage()+"]\uff1b"+
             (safe.reason==Reason.TIMEOUT || safe.reason==Reason.NETWORK || safe.reason==Reason.DNS || safe.reason==Reason.TLS
                 ? "\u8bf7\u68c0\u67e5\u7f51\u7edc\u540e\u70b9\u51fb\u8d26\u53f7\u56fe\u6807\u91cd\u8bd5"
                 : "\u8bf7\u70b9\u51fb\u8d26\u53f7\u56fe\u6807\u91cd\u65b0\u626b\u7801\uff0c\u5e76\u5728\u5b98\u65b9 App \u786e\u8ba4");
+    }
+    private static String qqQrHint(Reason reason) {
+        return switch(reason) {
+            case QR_IMAGE -> "\u5b98\u65b9\u626b\u7801\u63a5\u53e3\u672a\u8fd4\u56de\u6709\u6548\u56fe\u7247";
+            case QR_COOKIE, COOKIE -> "\u5b98\u65b9\u626b\u7801\u7b7e\u540d Cookie \u7f3a\u5931\u6216\u65e0\u6548";
+            case DNS, TLS, TIMEOUT, NETWORK -> "QQ \u6388\u6743\u670d\u52a1\u8fde\u63a5\u5931\u8d25\uff0c\u4e0e B \u7ad9\u63a5\u53e3\u53ef\u7528\u6027\u65e0\u5173";
+            default -> "\u5b98\u65b9 QQ \u626b\u7801\u670d\u52a1\u8bf7\u6c42\u5931\u8d25";
+        };
     }
     private static String webHint(Reason reason) {
         return switch(reason) {

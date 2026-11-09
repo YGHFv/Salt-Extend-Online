@@ -213,13 +213,11 @@ public final class AccountLoginController implements AutoCloseable {
         if (!valid(operation)) return;
         if(platform==AccountPlatform.QQMUSIC) {
             var stage=phase==Phase.WEB_LOGIN?AuthFailure.Stage.QQ_WEB:phase==Phase.CREATING?AuthFailure.Stage.QQ_CREATE:AuthFailure.Stage.QQ_POLL;
-            error=error instanceof AuthFailure known && known.getMessage().startsWith("QQ_")?known
+            error=error instanceof AuthFailure known?(known.getMessage().startsWith("QQ_")?known:known.atStage(stage))
                     :error instanceof io.github.yghfv.saltneri.plugin.qqmusic.QqMusicHttp.Rejected rejected
                     ?AuthFailure.code(stage,AuthFailure.Reason.API,rejected.code())
                     :error instanceof java.io.IOException io?AuthFailure.wrap(stage,AuthFailure.Reason.RESPONSE,io)
                     :AuthFailure.of(stage,AuthFailure.Reason.RESPONSE);
-            if(error instanceof AuthFailure known && !known.getMessage().startsWith("QQ_"))
-                error=AuthFailure.of(stage,known.getMessage().contains("BROWSER_MISSING")?AuthFailure.Reason.BROWSER_MISSING:AuthFailure.Reason.RESPONSE);
         }
         operation.cancel();
         phase = error instanceof AuthFailure safe && safe.requiresWebVerification() ? Phase.VERIFICATION_REQUIRED : Phase.ERROR;

@@ -75,6 +75,18 @@ jobs:
       - name: Compile and run full native regression
         shell: pwsh
         run: ./scripts/build-local.ps1 -SaltHome $env:SALT_HOME -JdkHome $env:SALT_JDK_HOME -Experimental
+      - name: Verify real isolated Edge launch with synthetic data
+        shell: pwsh
+        run: |
+          $build = Get-ChildItem -LiteralPath 'plugin/build/local' -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $configs = @(Get-ChildItem -LiteralPath (Join-Path $env:SALT_HOME 'app') -Filter '*.cfg')
+          if ($configs.Count -ne 1) { throw 'Expected one Salt configuration.' }
+          $config = Get-Content -LiteralPath $configs[0].FullName -Raw
+          if ($config -notmatch '(?m)^app\.classpath=\$APPDIR[\\/](.+)\r?$') { throw 'Missing host classpath.' }
+          $hostPackage = Join-Path (Join-Path $env:SALT_HOME 'app') $Matches[1].Trim()
+          $classpath = "$($build.FullName)/test-classes;$($build.FullName)/classes;$hostPackage"
+          & (Join-Path $env:SALT_JDK_HOME 'bin/java.exe') --enable-native-access=ALL-UNNAMED "-Djava.io.tmpdir=$($build.FullName)/tmp" -cp $classpath io.github.yghfv.saltneri.plugin.auth.WindowsNativeWebLoginProbe --explicit-headless-fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated native Edge compatibility regression failed.' }
       - name: Identify validated artifact
         id: artifact
         shell: pwsh

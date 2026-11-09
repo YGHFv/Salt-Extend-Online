@@ -6,6 +6,7 @@ import com.sun.jna.platform.win32.BaseTSD.*;
 import com.sun.jna.platform.win32.WinBase.*;
 import com.sun.jna.platform.win32.WinNT.*;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.ByteByReference;
 import io.github.yghfv.saltneri.plugin.net.BoundedJson;
 import io.github.yghfv.saltneri.plugin.net.RequestScope;
 import java.io.IOException;
@@ -60,6 +61,9 @@ final class WindowsEdgeProcess implements AutoCloseable {
     }
     private static Thread daemon(Runnable action,String name) {var t=new Thread(action,name);t.setDaemon(true);return t;}
     static WindowsEdgeProcess open(RequestScope request,boolean headless,String url) throws IOException {
+        return open(request,headless,url,false);
+    }
+    static WindowsEdgeProcess open(RequestScope request,boolean headless,String url,boolean explicitPipeHandles) throws IOException {
         request.check();
         if(!System.getProperty("os.name","").startsWith("Windows")) throw failure(AuthFailure.Reason.BROWSER_MISSING);
         Path root;
@@ -71,7 +75,7 @@ final class WindowsEdgeProcess implements AutoCloseable {
             browser.secureProfile();
             Path executable=WindowsEdgeDiscovery.find();
             WindowsEdgeDiscovery.assertPolicy();
-            browser.start(executable,headless,url);
+            browser.start(executable,headless,url,explicitPipeHandles);
             Thread owner=Thread.currentThread();
             browser.watch.scheduleWithFixedDelay(()->{
                 try {request.check();if(owner.isInterrupted()) throw new CancellationException();}
@@ -79,8 +83,8 @@ final class WindowsEdgeProcess implements AutoCloseable {
             },0,50,TimeUnit.MILLISECONDS);
             try {browser.call("Browser.getVersion",Map.of(),null,25000);browser.ready=true;}
             catch(IOException error) {
-                if(error instanceof AuthFailure safe && safe.getMessage().contains("BROWSER_TIMEOUT")) throw safe;
-                if(!browser.alive()) throw failure(AuthFailure.Reason.BROWSER_EXIT);
+                // call() has already stopped the owned job on failure; checking alive here invents an exit.
+                if(error instanceof AuthFailure safe) throw safe;
                 throw failure(AuthFailure.Reason.BROWSER_CONNECT);
             }
             return browser;
@@ -108,9 +112,20 @@ final class WindowsEdgeProcess implements AutoCloseable {
         Pointer value=(Pointer)library.getFunction(function).invoke(Pointer.class,arguments);
         return value==null?null:new HANDLE(value);
     }
-    private void start(Path executable,boolean headless,String url) throws IOException {
+    static byte[] inheritedDescriptors(int pointerSize,long nul,long read,long write) {
+        if(pointerSize!=4 && pointerSize!=8)throw new IllegalArgumentException("Invalid native pointer size");
+        var buffer=java.nio.ByteBuffer.allocate(4+5+5*pointerSize).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        buffer.putInt(5);
+        buffer.put(new byte[]{0x41,0x41,0x41,0x09,0x09});
+        for(long value:new long[]{nul,nul,nul,read,write}) {
+            if(pointerSize==8)buffer.putLong(value);
+            else buffer.putInt((int)value);
+        }
+        return buffer.array();
+    }
+    private void start(Path executable,boolean headless,String url,boolean explicitPipeHandles) throws IOException {
         HANDLE childInput=null,childOutput=null,nul=null,thread=null;
-        Memory attributes=null,handles=null;
+        Memory attributes=null,handles=null,descriptors=null;
         boolean attributesInitialized=false;
         try {
             var security=new SECURITY_ATTRIBUTES();security.bInheritHandle=true;security.write();
@@ -127,6 +142,13 @@ final class WindowsEdgeProcess implements AutoCloseable {
             startup.startup.cb=new WinDef.DWORD(startup.size());
             startup.startup.dwFlags=0x100;
             startup.startup.hStdInput=nul;startup.startup.hStdOutput=nul;startup.startup.hStdError=nul;
+            // Chromium's standard pipe transport expects CRT descriptors 3/4, not just inherited Win32 handles.
+            byte[] descriptorBytes=inheritedDescriptors(Native.POINTER_SIZE,Pointer.nativeValue(nul.getPointer()),
+                Pointer.nativeValue(childInput.getPointer()),Pointer.nativeValue(childOutput.getPointer()));
+            descriptors=new Memory(descriptorBytes.length);descriptors.write(0,descriptorBytes,0,descriptorBytes.length);
+            Arrays.fill(descriptorBytes,(byte)0);
+            startup.startup.cbReserved2=new WinDef.WORD(descriptors.size());
+            startup.startup.lpReserved2=new ByteByReference();startup.startup.lpReserved2.setPointer(descriptors);
             try(var size=new Memory(Native.SIZE_T_SIZE)) {
                 invoke("InitializeProcThreadAttributeList",null,1,0,size);
                 long length=Native.SIZE_T_SIZE==8?size.getLong(0):Integer.toUnsignedLong(size.getInt(0));
@@ -146,9 +168,10 @@ final class WindowsEdgeProcess implements AutoCloseable {
             var limits=new ExtendedLimits();limits.basic.flags=0x2000;limits.write();
             if(invoke("SetInformationJobObject",job,9,limits.getPointer(),limits.size())==0) throw nativeFailure(AuthFailure.Reason.BROWSER_LAUNCH);
             String command=quote(executable.toString())+" --user-data-dir="+quote(root.resolve("profile").toString())+
-                " --remote-debugging-pipe --remote-debugging-io-pipes="+
-                Long.toUnsignedString(Pointer.nativeValue(childInput.getPointer()))+","+
-                Long.toUnsignedString(Pointer.nativeValue(childOutput.getPointer()))+
+                " --remote-debugging-pipe"+
+                (explicitPipeHandles?" --remote-debugging-io-pipes="+
+                    Long.toUnsignedString(Pointer.nativeValue(childInput.getPointer()))+","+
+                    Long.toUnsignedString(Pointer.nativeValue(childOutput.getPointer())):"")+
                 " --no-first-run --no-default-browser-check --disable-sync --disable-extensions --disable-background-mode "+
                 (headless?"--headless=new about:blank":"--app="+url);
             if(command.length()>30000) throw failure(AuthFailure.Reason.BROWSER_LAUNCH);
@@ -171,6 +194,7 @@ final class WindowsEdgeProcess implements AutoCloseable {
             if(attributesInitialized) invoke("DeleteProcThreadAttributeList",attributes);
             if(handles!=null) handles.close();
             if(attributes!=null) attributes.close();
+            if(descriptors!=null) descriptors.close();
         }
     }
     static String quote(String argument) {
@@ -236,7 +260,15 @@ final class WindowsEdgeProcess implements AutoCloseable {
         } catch(ExecutionException error) {throw failure(AuthFailure.Reason.BROWSER_CONNECT);}
         catch(InterruptedException error) {Thread.currentThread().interrupt();throw new CancellationException("Web login cancelled");}
         catch(IOException | CancellationException error) {
+            IOException classified=error instanceof IOException io?io:null;
+            if(classified!=null && !ready && !stopped && process!=null && !alive()) {
+                var exit=new IntByReference();
+                if(kernel.GetExitCodeProcess(process,exit) && exit.getValue()!=259)
+                    classified=AuthFailure.code(AuthFailure.Stage.NET_WEB,AuthFailure.Reason.BROWSER_EXIT,
+                        Integer.toUnsignedLong(exit.getValue()));
+            }
             if(!(error instanceof NeteaseDeviceCollector.ContextUnavailable))stopOwnedJob();
+            if(classified!=null)throw classified;
             throw error;
         }
     }

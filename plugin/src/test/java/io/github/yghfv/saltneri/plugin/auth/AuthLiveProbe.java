@@ -8,10 +8,17 @@ public final class AuthLiveProbe {
         if(args.length!=2||!(args[0].equals("--explicit-create-only") || args[0].equals("--explicit-session-check"))){System.err.println("Requires explicit create-only or session-check platform argument.");System.exit(2);return;}
         try {
             AccountPlatform platform=AccountPlatform.valueOf(args[1]);
-            try(QrAuthClient client=platform==AccountPlatform.BILIBILI?new BiliQrClient():new NeteaseQrClient();RequestScope scope=new RequestScope(()->true, platform==AccountPlatform.NETEASE?70000:30000)){
+            try(QrAuthClient client=switch(platform) {case BILIBILI -> new BiliQrClient();case NETEASE -> new NeteaseQrClient();case QQMUSIC -> new QqMusicQrClient();};
+                RequestScope scope=new RequestScope(()->true, platform==AccountPlatform.NETEASE?90000:30000)){
                 var session=client.create(scope);
-                var qr=io.nayuki.qrcodegen.QrCode.encodeText(session.qrContent().toASCIIString(), io.nayuki.qrcodegen.QrCode.Ecc.MEDIUM);
-                if(qr.size<21)throw new IllegalStateException("Local QR generation failed");
+                if(platform==AccountPlatform.QQMUSIC) {
+                    byte[] image=client.qrImage(session);
+                    if(image==null || image.length<8)throw new IllegalStateException("Official QR image missing");
+                    java.util.Arrays.fill(image,(byte)0);
+                } else {
+                    var qr=io.nayuki.qrcodegen.QrCode.encodeText(session.qrContent().toASCIIString(), io.nayuki.qrcodegen.QrCode.Ecc.MEDIUM);
+                    if(qr.size<21)throw new IllegalStateException("Local QR generation failed");
+                }
                 System.out.println("PASS: "+platform+" official QR generation + validated payload + local QR encoding over verified TLS.");
                 if(args[0].equals("--explicit-session-check")) {
                     var result=client.poll(session,scope);

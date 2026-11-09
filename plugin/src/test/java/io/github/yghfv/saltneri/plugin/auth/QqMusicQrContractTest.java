@@ -177,6 +177,17 @@ public final class QqMusicQrContractTest {
             check(c.qrImage(first)==null && c.poll(first,r).state()==QrAuthClient.State.EXPIRED);
             replaced.badImage=false;var fresh=c.create(r);check(fresh!=first && c.qrImage(fresh)!=null);
         }
+        for(boolean invalidImage:List.of(true,false)) {
+            try(var request=new RequestScope(()->true);var qrClient=new QqMusicQrClient(CLOCK,new QqMusicHttp((uri,body)->
+                new Response(uri,200,invalidImage?new byte[]{1,2,3}:new byte[]{(byte)137,80,78,71,13,10,26,10,0},
+                    invalidImage?List.of("qrsig=SYNTHETIC; Domain=ptlogin2.qq.com; Path=/; Secure"):List.of(),null)))) {
+                try {qrClient.create(request);throw new AssertionError("Invalid QR accepted");}
+                catch(AuthFailure safe) {
+                    check(safe.getMessage().equals("QQ_CREATE/"+(invalidImage?"QR_IMAGE":"QR_COOKIE")));
+                    check(qrClient.qrImage(null)==null && !AuthFailure.diagnostic(safe).contains("SYNTHETIC"));
+                }
+            }
+        }
         for(String profile:List.of("info","creator","profile","user","direct")) {
             var web=new Fixture();web.omitIdentity=true;web.profileField=profile;
             try(var c=web.client();var r=new RequestScope(()->true)) {

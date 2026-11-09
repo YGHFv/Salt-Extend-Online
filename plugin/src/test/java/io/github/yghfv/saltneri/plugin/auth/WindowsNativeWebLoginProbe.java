@@ -104,6 +104,33 @@ public final class WindowsNativeWebLoginProbe {
             if(!"DEVICE_CONTEXT".equals(value.get("error")))throw new AssertionError("Lost token state accepted");checks++;
         }
         if(!roots().equals(before)) throw new AssertionError("Native profile leak");checks++;
+        try(var request=new RequestScope(()->true,30000);var browser=WindowsEdgeProcess.open(request,true,null,true)) {
+            if(!browser.inOwnedJob() || !browser.alive())throw new AssertionError("Explicit pipe compatibility failed");checks++;
+            if(!BoundedJson.array(browser.call("Storage.getCookies",Map.of()).get("cookies")).isEmpty())
+                throw new AssertionError("Compatibility profile imported cookies");checks++;
+        }
+        if(!roots().equals(before))throw new AssertionError("Compatibility profile leak");checks++;
+        try(var request=new RequestScope(()->true,30000);var browser=WindowsEdgeProcess.open(request,true,null)) {
+            var ready=WindowsEdgeProcess.class.getDeclaredField("ready");ready.setAccessible(true);ready.setBoolean(browser,false);
+            try {browser.call("Synthetic.invalidMethod",Map.of());throw new AssertionError("CDP failure ignored");}
+            catch(AuthFailure safe) {
+                if(!"NET_WEB/BROWSER_CONNECT".equals(safe.getMessage()))throw new AssertionError("Cleanup fabricated browser exit");checks++;
+            }
+        }
+        if(!roots().equals(before))throw new AssertionError("Failed-connect profile leak");checks++;
+        try(var request=new RequestScope(()->true,30000);var browser=WindowsEdgeProcess.open(request,true,null)) {
+            var ready=WindowsEdgeProcess.class.getDeclaredField("ready");ready.setAccessible(true);ready.setBoolean(browser,false);
+            var process=WindowsEdgeProcess.class.getDeclaredField("process");process.setAccessible(true);
+            var handle=(com.sun.jna.platform.win32.WinNT.HANDLE)process.get(browser);
+            if(!com.sun.jna.platform.win32.Kernel32.INSTANCE.TerminateProcess(handle,7))
+                throw new AssertionError("Owned exit fixture failed");
+            com.sun.jna.platform.win32.Kernel32.INSTANCE.WaitForSingleObject(handle,3000);
+            try {browser.call("Browser.getVersion",Map.of());throw new AssertionError("Real exit ignored");}
+            catch(AuthFailure safe) {
+                if(!"NET_WEB/BROWSER_EXIT=7".equals(safe.getMessage()))throw new AssertionError("Actual browser exit code lost");checks++;
+            }
+        }
+        if(!roots().equals(before))throw new AssertionError("Exited browser profile leak");checks++;
         var permitted=new java.util.concurrent.atomic.AtomicBoolean(true);
         try(var request=new RequestScope(permitted::get,30000);var browser=WindowsEdgeProcess.open(request,true,null)) {
             permitted.set(false);long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
