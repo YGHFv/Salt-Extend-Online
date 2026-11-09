@@ -40,7 +40,7 @@ public final class QqMusicQrContractTest {
         int loginCode;
         int verifyCode,verifyStatus=200;
         String profileField="info";
-        boolean missingProfile;
+        boolean missingProfile,parentConflict;
         String rawStatus,metadata="";
         public HttpURLConnection open(URI uri,byte[] body) throws IOException {
             byte[] bytes=new byte[0];List<String> cookies=List.of();String location=null;int status=200;
@@ -56,11 +56,15 @@ public final class QqMusicQrContractTest {
                     cookies=List.of("p_uin=o00042; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600",
                             "p_skey=PSKEY_SECRET; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600");
                     if(parentDeletion)cookies=List.of(cookies.getFirst(),cookies.getLast(),"p_skey=; Domain=qq.com; Path=/; Secure; Max-Age=0");
+                    if(parentConflict)cookies=List.of("p_skey=PARENT_SECRET; Domain=qq.com; Path=/; Secure; Max-Age=3600",
+                            cookies.getFirst(),cookies.getLast(),"pt_oauth_token=OAUTH_SECRET; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600",
+                            "unrelated=NOT_FORWARDED; Domain=graph.qq.com; Path=/; Secure; Max-Age=3600");
                 }
                 case "/oauth2.0/login_jump" -> bytes="ok".getBytes(StandardCharsets.UTF_8);
                 case "/oauth2.0/authorize" -> {
                     Map<String,String> form=new HashMap<>();
                     for(String part:new String(body,StandardCharsets.US_ASCII).split("&")) {var pair=part.split("=",2);form.put(pair[0],URLDecoder.decode(pair[1],StandardCharsets.UTF_8));}
+                    check(form.get("g_tk").equals(Long.toString(QqMusicQrClient.hash("PSKEY_SECRET",5381))));
                     status=302;location="https://y.qq.com/portal/wx_redirect.html?code="+"A".repeat(32)+"&state="+(wrongState?"FOREIGN":form.get("state"));
                 }
                 case "/cgi-bin/musicu.fcg" -> {
@@ -200,7 +204,7 @@ public final class QqMusicQrContractTest {
                 account.retire();
             }
         }
-        for(String family:List.of("tmeLoginType","login_type",""))for(String key:List.of("qqmusic_key","qm_keyst","musickey")) {
+        for(String family:List.of("tmeLoginType","login_type"))for(String key:List.of("qqmusic_key","qm_keyst","musickey")) {
             var web=new Fixture();web.omitIdentity=true;
             try(var c=web.client();var r=new RequestScope(()->true)) {
                 var account=WindowsQqMusicWebLogin.verifyCookies(webCookies(webFixture(key,family,
@@ -214,6 +218,49 @@ public final class QqMusicQrContractTest {
         try(var c=new Fixture().client();var r=new RequestScope(()->true)) {
             var account=WindowsQqMusicWebLogin.verifyCookies(webCookies(scoped),CLOCK,c,r);
             check(account.userId().equals("42"));account.retire();
+        }
+        for(int mode=0;mode<5;mode++) {
+            var rows=webFixture("qqmusic_key","tmeLoginType","2","uin","o00042");
+            if(mode==0)rows.remove(2);
+            if(mode==1)rows.add(webCookie("login_type","2","y.qq.com"));
+            if(mode==2)rows.add(webCookie("qm_keyst","OTHER_SECRET","y.qq.com"));
+            if(mode==3)rows.add(webCookie("musickey","OTHER_SECRET","y.qq.com"));
+            if(mode==4)rows.add(webCookie("psrf_access_token_expiresAt",Long.toString(CLOCK.instant().getEpochSecond()-1),"y.qq.com"));
+            fails(()->QqMusicWebCookies.decode(webCookies(rows),CLOCK));
+        }
+        var bounded=webFixture("qm_keyst","tmeLoginType","2","uin","o00042");
+        bounded.add(webCookie("psrf_access_token_expiresAt",Long.toString(CLOCK.instant().getEpochSecond()+60),"y.qq.com"));
+        var browserAccount=QqMusicWebCookies.decode(webCookies(bounded),CLOCK);
+        check(browserAccount.cookieSnapshot().stream().allMatch(e->e.expiry().equals(CLOCK.instant().plusSeconds(60))));
+        check(browserAccount.header(GATEWAY).contains("musickey=MUSIC_SECRET") && browserAccount.header(GATEWAY).contains("login_type=1"));
+        browserAccount.retire();
+        for(String unavailable:List.of("0","unavailable")) {
+            var rows=webFixture("qm_keyst","tmeLoginType","2","uin","o00042");
+            rows.add(webCookie("psrf_access_token_expiresAt",unavailable,"y.qq.com"));
+            var account=QqMusicWebCookies.decode(webCookies(rows),CLOCK);
+            check(account.isActive());account.retire();
+        }
+        var direct=new Fixture();direct.profileField="direct";direct.omitIdentity=true;
+        try(var c=direct.client();var r=new RequestScope(()->true)) {
+            var verified=WindowsQqMusicWebLogin.verifyCookies(webCookies(webFixture("qm_keyst","login_type","1","uin","o00042")),CLOCK,c,r);
+            check(verified.profile().name().equals("Verified"));verified.retire();
+        }
+        var conflict=new Fixture();conflict.state="0";conflict.parentConflict=true;
+        try(var c=conflict.client();var r=new RequestScope(()->true)) {
+            var s=c.create(r);var result=c.poll(s,r);
+            var authorization=conflict.requests.stream().filter(response->response.getURL().getPath().equals("/oauth2.0/authorize")).findFirst().orElseThrow();
+            String header=authorization.getRequestProperty("Cookie");
+            check(header.contains("p_skey=PSKEY_SECRET") && header.contains("pt_oauth_token=OAUTH_SECRET"));
+            check(!header.contains("PARENT_SECRET") && !header.contains("NOT_FORWARDED"));
+            result.credentials().retire();
+        }
+        var contextual=new Fixture();
+        var context=webFixture("qm_keyst","login_type","1","uin","o00042");
+        String agent=AGENT+" Edg/150.0.0.0";
+        try(var c=contextual.client();var r=new RequestScope(()->true)) {
+            var account=WindowsQqMusicWebLogin.verifyCookies(jsonBytes(Map.of("cookies",context,"userAgent",agent)),CLOCK,c,r);
+            check(account.userAgent().equals(agent) && contextual.requests.getFirst().getRequestProperty("User-Agent").equals(agent));
+            account.retire();
         }
         for(String error:List.of("EDGE_MISSING","WEB_CLOSED","WEB_TIMEOUT","FAIL_SECRET")) {
             try {QqMusicWebCookies.decode(jsonBytes(Map.of("error",error)),CLOCK);throw new AssertionError("Helper error ignored");}

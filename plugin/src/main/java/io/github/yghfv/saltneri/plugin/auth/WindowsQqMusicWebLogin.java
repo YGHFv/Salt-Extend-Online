@@ -10,15 +10,16 @@ public final class WindowsQqMusicWebLogin {
     private WindowsQqMusicWebLogin() { }
     public static AccountCredentials login(RequestScope request) throws IOException {
         var clock=Clock.systemUTC();
-        byte[] output=null;
-        try {
-            output=NativeWindowsLogin.login(AccountPlatform.QQMUSIC,request);
-            try(var client=new QqMusicQrClient()) {return verifyCookies(output,clock,client,request);}
+        try(var client=new QqMusicQrClient()) {
+            return NativeWindowsLogin.login(AccountPlatform.QQMUSIC,request,(output,scope)-> {
+                try { return verifyCookies(output,clock,client,scope); }
+                finally { Arrays.fill(output,(byte)0); }
+            });
         } catch(IOException failure) {
             if(failure instanceof AuthFailure safe && safe.getMessage().startsWith("NET_WEB/"))
                 throw safe.atStage(AuthFailure.Stage.QQ_WEB);
             throw AuthFailure.wrap(AuthFailure.Stage.QQ_WEB,AuthFailure.Reason.RESPONSE,failure);
-        } finally {if(output!=null)Arrays.fill(output,(byte)0);}
+        }
     }
     static AccountCredentials verifyCookies(byte[] output,Clock clock,QrAuthClient client,RequestScope request) throws IOException {
         var unverified=QqMusicWebCookies.decode(output,clock);

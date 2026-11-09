@@ -21,6 +21,7 @@ public final class AuthFailure extends IOException {
     public static AuthFailure of(Stage stage, Reason reason) { return new AuthFailure(stage,reason,null); }
     public static AuthFailure code(Stage stage, Reason reason, long code) { return new AuthFailure(stage,reason,code); }
     public AuthFailure atStage(Stage target) { return new AuthFailure(target,reason,code); }
+    Reason reason() { return reason; }
     static Reason webHelperReason(Object error) {
         return switch(String.valueOf(error)) {
             case "EDGE_MISSING" -> Reason.BROWSER_MISSING;

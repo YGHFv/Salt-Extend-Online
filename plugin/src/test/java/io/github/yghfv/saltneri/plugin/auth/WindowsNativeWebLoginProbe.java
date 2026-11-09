@@ -47,6 +47,7 @@ public final class WindowsNativeWebLoginProbe {
             browser.call("Network.setCookies",Map.of("cookies",List.of(
                 Map.of("name","qm_keyst","value","SYNTHETIC_SECRET","domain","y.qq.com","path","/","secure",true,"httpOnly",true),
                 Map.of("name","uin","value","o00042","domain",".qq.com","path","/","secure",true),
+                Map.of("name","tmeLoginType","value","2","domain","y.qq.com","path","/","secure",true),
                 Map.of("name","tracking","value","not-imported","domain","y.qq.com","path","/"),
                 Map.of("name","p_skey","value","NOT_IMPORTED","domain",".qq.com","path","/"))),session);
             var cookies=WindowsEdgeWebLogin.qqCookies(browser);
@@ -59,6 +60,28 @@ public final class WindowsNativeWebLoginProbe {
                         throw new AssertionError("QQ credentials mismatch");checks++;
                 } finally {account.retire();}
             } finally {Arrays.fill(output,(byte)0);}
+            String agent=BoundedJson.string(browser.call("Browser.getVersion",Map.of()).get("userAgent"));
+            if(!AuthHttp.validUserAgent(agent))throw new AssertionError("Official browser UA unavailable");checks++;
+            try(var capture=new WebLoginCapture()) {
+                var calls=new java.util.concurrent.atomic.AtomicInteger();
+                WebLoginCapture.Verifier verifier=(candidate,scope)->{
+                    if(!browser.alive() || !agent.equals(BoundedJson.object(BoundedJson.parse(candidate)).get("userAgent")))
+                        throw new AssertionError("Browser closed or context changed before verification");
+                    if(calls.incrementAndGet()==1)throw AuthFailure.code(AuthFailure.Stage.QQ_VERIFY,AuthFailure.Reason.API,1000);
+                    return QqMusicWebCookies.decode(candidate,Clock.systemUTC());
+                };
+                if(capture.observe(cookies,agent,true,verifier,request)!=null ||
+                    capture.observe(cookies,agent,true,verifier,request)!=null || calls.get()!=1 || !browser.alive())
+                    throw new AssertionError("Incomplete credential closed owned browser");checks++;
+                browser.call("Network.setCookies",Map.of("cookies",List.of(
+                    Map.of("name","qm_keyst","value","SYNTHETIC_CHANGED_SECRET","domain","y.qq.com","path","/","secure",true,"httpOnly",true))),session);
+                cookies=WindowsEdgeWebLogin.qqCookies(browser);
+                if(capture.observe(cookies,agent,true,verifier,request)!=null)throw new AssertionError("Unstable cookies verified");checks++;
+                var account=capture.observe(cookies,agent,true,verifier,request);
+                if(account==null || !account.isActive() || calls.get()!=2 || !browser.alive())
+                    throw new AssertionError("Changed stable candidate not verified with owned window open");checks++;
+                account.retire();
+            }
             String official="https://music.163.com";
             String api="function(options){globalThis.__saltFixtureCalls++;globalThis.__saltFixtureOptions=options;"+
                 "return {getToken:()=>new Promise(resolve=>{globalThis.__saltFixtureResolve=resolve})}}";

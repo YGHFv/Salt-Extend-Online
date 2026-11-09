@@ -16,12 +16,15 @@ public final class WindowsNeteaseWebLogin {
     private WindowsNeteaseWebLogin() { }
     public static AccountCredentials login(RequestScope request) throws IOException {
         var clock=Clock.systemUTC();
-        byte[] output=NativeWindowsLogin.login(AccountPlatform.NETEASE,request);
-        try {
-            var entries=readCookies(output,clock);
-            try (var client=new NeteaseQrClient()) { return client.verifyWebCookies(entries,request); }
+        try (var client=new NeteaseQrClient()) {
+            return NativeWindowsLogin.login(AccountPlatform.NETEASE,request,(output,scope)-> {
+                try {
+                    var root=BoundedJson.object(BoundedJson.parse(output));
+                    String agent=BoundedJson.string(root.get("userAgent"));
+                    return client.verifyWebCookies(readCookies(output,clock),agent,scope);
+                } finally { Arrays.fill(output,(byte)0); }
+            });
         } catch(IOException error) { throw AuthFailure.wrap(AuthFailure.Stage.NET_WEB,AuthFailure.Reason.RESPONSE,error); }
-        finally { Arrays.fill(output,(byte)0); }
     }
     static List<ScopedCookies.Entry> readCookies(byte[] output, Clock clock) throws IOException {
         return readCookies(output, clock, true);

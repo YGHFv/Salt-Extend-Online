@@ -27,6 +27,7 @@
     "auth/WindowsNeteaseWebLogin.java",
     "auth/WindowsWebLoginHelper.java",
     "auth/NativeWindowsLogin.java",
+    "auth/WebLoginCapture.java",
     "library/CoverSource.java",
     "bilibili/BiliWbi.java",
     "host/PlaybackStartGate.java",

@@ -9,48 +9,50 @@ import java.util.concurrent.TimeUnit;
 /** Official-page login over private native pipes; no PowerShell or default browser context. */
 final class WindowsEdgeWebLogin {
     private WindowsEdgeWebLogin() { }
-    static byte[] login(AccountPlatform platform,RequestScope request) throws IOException {
+    static AccountCredentials login(AccountPlatform platform,RequestScope request,WebLoginCapture.Verifier verifier) throws IOException {
         String url=platform==AccountPlatform.QQMUSIC?"https://y.qq.com/":"https://music.163.com/";
-        try(var browser=WindowsEdgeProcess.open(request,false,url)) {
+        try(var browser=WindowsEdgeProcess.open(request,false,url);var capture=new WebLoginCapture()) {
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(250);
-            String target=null,session=null;byte[] stable=null;
-            try {
-                while(System.nanoTime()<deadline) {
-                    request.check();
-                    if(!browser.alive()) throw failure(AuthFailure.Reason.CANCELLED);
-                    List<Map<String,Object>> pages=pages(browser);
-                    Map<String,Object> page=null;
-                    if(platform==AccountPlatform.QQMUSIC) {
-                        page=pages.stream().filter(p->official(platform,p.get("url"))).findFirst().orElse(null);
-                        if(pages.isEmpty()) throw failure(AuthFailure.Reason.CANCELLED);
-                    } else {
-                        for(var candidate:pages) if(target==null?official(platform,candidate.get("url")):target.equals(candidate.get("targetId"))) {page=candidate;break;}
-                        if(target!=null && page==null) throw failure(AuthFailure.Reason.CANCELLED);
-                        if(target==null && page!=null) {
-                            target=BoundedJson.string(page.get("targetId"));
-                            session=BoundedJson.string(browser.call("Target.attachToTarget",Map.of("targetId",target,"flatten",true)).get("sessionId"));
-                        }
+            String target=null,session=null;
+            String agent=BoundedJson.string(browser.call("Browser.getVersion",Map.of()).get("userAgent"));
+            if(!AuthHttp.validUserAgent(agent))throw failure(AuthFailure.Reason.RESPONSE);
+            while(System.nanoTime()<deadline) {
+                request.check();
+                if(!browser.alive()) throw failure(AuthFailure.Reason.CANCELLED);
+                List<Map<String,Object>> pages=pages(browser);
+                Map<String,Object> page=null;
+                if(platform==AccountPlatform.QQMUSIC) {
+                    page=pages.stream().filter(p->official(platform,p.get("url"))).findFirst().orElse(null);
+                    if(pages.isEmpty()) throw failure(AuthFailure.Reason.CANCELLED);
+                } else {
+                    for(var candidate:pages) if(target==null?official(platform,candidate.get("url")):target.equals(candidate.get("targetId"))) {page=candidate;break;}
+                    if(target!=null && page==null) {target=null;session=null;}
+                    if(pages.isEmpty()) throw failure(AuthFailure.Reason.CANCELLED);
+                    if(target==null && page!=null) {
+                        target=BoundedJson.string(page.get("targetId"));
+                        session=BoundedJson.string(browser.call("Target.attachToTarget",Map.of("targetId",target,"flatten",true)).get("sessionId"));
                     }
-                    if(page!=null && official(platform,page.get("url"))) {
-                        List<Object> cookies;
-                        if(platform==AccountPlatform.QQMUSIC) cookies=qqCookies(browser);
-                        else cookies=filterCookies(BoundedJson.array(browser.call("Network.getCookies",Map.of("urls",List.of(
-                            "https://music.163.com/","https://music.163.com/weapi/w/nuser/account/get",
-                            "https://interface.music.163.com/eapi/song/enhance/player/url/v1")),session).get("cookies")),platform);
-                        if(cookies.size()>64) throw failure(AuthFailure.Reason.COOKIE);
-                        boolean ready=ready(platform,cookies);
-                        if(platform==AccountPlatform.QQMUSIC) {
-                            byte[] snapshot=BoundedJson.encode(cookies);
-                            boolean unchanged=stable!=null && Arrays.equals(stable,snapshot);
-                            if(stable!=null) Arrays.fill(stable,(byte)0);
-                            stable=snapshot;ready=ready && unchanged;
-                        }
-                        if(ready) return BoundedJson.encode(Map.of("cookies",cookies));
-                    }
-                    WindowsEdgeProcess.pause(1000);
                 }
-                throw failure(AuthFailure.Reason.TIMEOUT);
-            } finally {if(stable!=null) Arrays.fill(stable,(byte)0);}
+                if(page!=null && official(platform,page.get("url"))) {
+                    List<Object> cookies;
+                    if(platform==AccountPlatform.QQMUSIC) cookies=qqCookies(browser);
+                    else cookies=filterCookies(BoundedJson.array(browser.call("Network.getCookies",Map.of("urls",List.of(
+                        "https://music.163.com/","https://music.163.com/weapi/w/nuser/account/get",
+                        "https://interface.music.163.com/eapi/song/enhance/player/url/v1")),session).get("cookies")),platform);
+                    if(cookies.size()>64) throw failure(AuthFailure.Reason.COOKIE);
+                    boolean ready=ready(platform,cookies);
+                    var verified=capture.observe(cookies,agent,ready,verifier,request);
+                    if(verified!=null) {
+                        if(verified.platform()!=platform) {verified.retire();throw failure(AuthFailure.Reason.IDENTITY);}
+                        return verified;
+                    }
+                } else {
+                    capture.observe(List.of(),agent,false,verifier,request);
+                }
+                WindowsEdgeProcess.pause(1000);
+            }
+            if(capture.rejected()!=null)throw capture.rejected();
+            throw failure(AuthFailure.Reason.TIMEOUT);
         }
     }
     static List<Map<String,Object>> pages(WindowsEdgeProcess browser) throws IOException {
@@ -89,7 +91,7 @@ final class WindowsEdgeWebLogin {
         return result;
     }
     static boolean ready(AccountPlatform platform,List<Object> cookies) throws IOException {
-        boolean key=false,identity=false;
+        boolean key=false,identity=false;String apiType=null,webType=null;
         for(Object row:cookies) {
             var cookie=BoundedJson.object(row);Object name=cookie.get("name");
             String value=BoundedJson.string(cookie.get("value"));
@@ -97,9 +99,13 @@ final class WindowsEdgeWebLogin {
             else {
                 if(Set.of("qqmusic_key","qm_keyst","musickey").contains(name) && !value.isEmpty()) key=true;
                 if(Set.of("qqmusic_uin","uin","wxuin").contains(name) && value.matches("^(o0*)?[1-9][0-9]{0,18}$")) identity=true;
+                if("tmeLoginType".equals(name))apiType=value;
+                if("login_type".equals(name))webType=value;
             }
         }
-        return platform==AccountPlatform.QQMUSIC && key && identity;
+        String translated="1".equals(webType)?"2":"2".equals(webType)?"1":null;
+        return platform==AccountPlatform.QQMUSIC && key && identity && (apiType==null?translated!=null:
+                Set.of("1","2").contains(apiType) && (webType==null || apiType.equals(translated)));
     }
     static byte[] device(RequestScope request) throws IOException {
         try(var browser=WindowsEdgeProcess.open(request,true,null)) {

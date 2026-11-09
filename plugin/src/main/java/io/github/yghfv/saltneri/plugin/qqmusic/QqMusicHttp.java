@@ -27,6 +27,9 @@ public final class QqMusicHttp {
         public Map<String,Object> json() throws IOException { return BoundedJson.object(BoundedJson.parse(bytes)); }
     }
     public Response exchange(URI uri, byte[] body, String cookie, RequestScope request, int limit) throws IOException {
+        return exchange(uri, body, cookie, AGENT, request, limit);
+    }
+    private Response exchange(URI uri, byte[] body, String cookie, String userAgent, RequestScope request, int limit) throws IOException {
         boolean allowed = GATEWAY.equals(uri)
                 || "c.y.qq.com".equals(uri.getHost()) && Set.of("/fav/fcgi-bin/fcg_get_profile_order_asset.fcg",
                     "/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg","/rsc/fcgi-bin/fcg_get_profile_homepage.fcg",
@@ -43,7 +46,7 @@ public final class QqMusicHttp {
             connection.setConnectTimeout(8000); connection.setReadTimeout(8000);
             connection.setRequestMethod(body==null?"GET":"POST");
             boolean credentialExchange=body!=null && GATEWAY.equals(uri) && object(BoundedJson.parse(body)).containsKey("req");
-            connection.setRequestProperty("User-Agent",credentialExchange?"QQMusic":AGENT);
+            connection.setRequestProperty("User-Agent",credentialExchange?"QQMusic":userAgent);
             connection.setRequestProperty("Referer",uri.getHost().contains("ptlogin2")?"https://xui.ptlogin2.qq.com/":"https://y.qq.com/");
             connection.setRequestProperty("Accept-Encoding","identity");
             if(cookie!=null && !cookie.isEmpty()) connection.setRequestProperty("Cookie",cookie);
@@ -89,7 +92,7 @@ public final class QqMusicHttp {
         }
         comm.putAll(overrides);
         var response=exchange(GATEWAY,jsonBytes(Map.of("comm",comm,"req_0",Map.of("module",module,"method",method,"param",param))),
-                account==null?"":account.header(GATEWAY),request,BoundedJson.MAX_BYTES);
+                account==null?"":account.header(GATEWAY),account==null?AGENT:account.userAgent(),request,BoundedJson.MAX_BYTES);
         if(response.status()!=200) throw new Rejected(response.status(),true);
         var root=response.json(); var envelope=object(root.get("req_0"));
         for(Object code:List.of(root.getOrDefault("code",-1),envelope.getOrDefault("code",-1),envelope.getOrDefault("subcode",0)))

@@ -37,17 +37,18 @@ public final class EncryptedAccountStore {
         Path file = directory(create).resolve(platform.name().toLowerCase(java.util.Locale.ROOT) + ".dpapi");
         if (Files.exists(file, LinkOption.NOFOLLOW_LINKS) && (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().equals(file))) throw new IOException("Unsafe account storage file"); return file;
     }
-    public synchronized void save(AccountCredentials account, BooleanSupplier stillCurrent) throws IOException {
+    public void save(AccountCredentials account, BooleanSupplier stillCurrent) throws IOException {
         save(account, stillCurrent, action -> { if (!stillCurrent.getAsBoolean()) throw new IOException("Account save cancelled"); action.run(); });
     }
-    public synchronized void save(AccountCredentials account, BooleanSupplier stillCurrent, Promotion promotion) throws IOException {
+    public void save(AccountCredentials account, BooleanSupplier stillCurrent, Promotion promotion) throws IOException {
         if (!stillCurrent.getAsBoolean() || !account.isActive()) throw new IOException("Account save cancelled");
         List<Object> cookies = new ArrayList<>();
         for (var entry : account.cookieSnapshot()) {
             cookies.add(Map.of("name", entry.name(), "value", entry.value(), "domain", entry.domain(), "path", entry.path(),
                     "hostOnly", entry.hostOnly(), "secure", entry.secure(), "expiry", entry.expiry().getEpochSecond()));
         }
-        byte[] plain = BoundedJson.encode(Map.of("version", 1, "platform", account.platform().name(), "userId", account.userId(), "cookies", cookies));
+        byte[] plain = BoundedJson.encode(Map.of("version", 1, "platform", account.platform().name(), "userId", account.userId(),
+                "cookies", cookies, "userAgent", account.userAgent()));
         byte[] sealed;
         try { if (plain.length > 60000) throw new IOException("Account snapshot too large"); sealed = protector.protect(plain); }
         finally { Arrays.fill(plain, (byte)0); }
@@ -59,9 +60,12 @@ public final class EncryptedAccountStore {
             if (!stillCurrent.getAsBoolean() || !account.isActive()) throw new IOException("Account save cancelled");
             // Same-directory atomic replacement never truncates a pre-existing hard link or follows a link.
             promotion.publish(() -> {
-                if (!stillCurrent.getAsBoolean() || !account.isActive()) throw new IOException("Account save cancelled");
-                Files.move(temporary, target(account.platform(), true), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                Files.deleteIfExists(marker(account.platform(), true));
+                // Controllers own their revision lock before taking the storage lock, never the reverse.
+                synchronized (this) {
+                    if (!stillCurrent.getAsBoolean() || !account.isActive()) throw new IOException("Account save cancelled");
+                    Files.move(temporary, target(account.platform(), true), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                    Files.deleteIfExists(marker(account.platform(), true));
+                }
             });
         } finally { Files.deleteIfExists(temporary); }
     }
@@ -85,7 +89,9 @@ public final class EncryptedAccountStore {
                 entries.add(new ScopedCookies.Entry(BoundedJson.string(entry.get("name")), BoundedJson.string(entry.get("value")), BoundedJson.string(entry.get("domain")),
                         BoundedJson.string(entry.get("path")), hostOnly, secure, Instant.ofEpochSecond(BoundedJson.integer(entry.get("expiry")))));
             }
-            return new AccountCredentials(platform, BoundedJson.string(root.get("userId")), entries, clock);
+            String userAgent = root.containsKey("userAgent") ? BoundedJson.string(root.get("userAgent")) : AuthHttp.DEFAULT_USER_AGENT;
+            return new AccountCredentials(platform, BoundedJson.string(root.get("userId")), entries, clock,
+                    new AccountCredentials.Profile("", null), userAgent);
         } catch (IllegalArgumentException | java.time.DateTimeException invalid) { throw new IOException("Invalid saved account"); }
         finally { Arrays.fill(plain, (byte)0); }
     }
@@ -100,7 +106,7 @@ public final class EncryptedAccountStore {
         return marker;
     }
     /** Nonsecret tombstone survives disable/shutdown even if queued encrypted-file deletion cannot run. */
-    public void markLoggedOut(AccountPlatform platform) throws IOException {
+    public synchronized void markLoggedOut(AccountPlatform platform) throws IOException {
         Path marker = marker(platform, true); Path temporary = Files.createTempFile(marker.getParent(), ".logout-", ".tmp");
         try { Files.move(temporary, marker(platform, true), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
         finally { Files.deleteIfExists(temporary); }

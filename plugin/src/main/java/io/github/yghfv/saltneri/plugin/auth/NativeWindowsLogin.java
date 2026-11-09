@@ -7,16 +7,16 @@ import java.lang.reflect.*;
 /** Late host-native binding keeps synthetic/offline auth contracts independent of JNA. */
 final class NativeWindowsLogin {
     private NativeWindowsLogin() { }
-    static byte[] login(AccountPlatform platform,RequestScope request) throws IOException {
-        return invoke("login",new Class<?>[]{AccountPlatform.class,RequestScope.class},platform,request);
+    static AccountCredentials login(AccountPlatform platform,RequestScope request,WebLoginCapture.Verifier verifier) throws IOException {
+        return (AccountCredentials)invoke("login",new Class<?>[]{AccountPlatform.class,RequestScope.class,WebLoginCapture.Verifier.class},platform,request,verifier);
     }
     static byte[] device(RequestScope request) throws IOException {
-        return invoke("device",new Class<?>[]{RequestScope.class},request);
+        return (byte[])invoke("device",new Class<?>[]{RequestScope.class},request);
     }
-    private static byte[] invoke(String name,Class<?>[] types,Object... args) throws IOException {
+    private static Object invoke(String name,Class<?>[] types,Object... args) throws IOException {
         requestWindows();
         try {
-            return (byte[])Class.forName("io.github.yghfv.saltneri.plugin.auth.WindowsEdgeWebLogin").getDeclaredMethod(name,types).invoke(null,args);
+            return Class.forName("io.github.yghfv.saltneri.plugin.auth.WindowsEdgeWebLogin").getDeclaredMethod(name,types).invoke(null,args);
         } catch(InvocationTargetException error) {
             Throwable cause=error.getCause();
             if(cause instanceof IOException io) throw io;

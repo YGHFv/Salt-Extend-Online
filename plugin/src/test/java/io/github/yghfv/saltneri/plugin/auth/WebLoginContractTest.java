@@ -104,6 +104,64 @@ public final class WebLoginContractTest {
             try { client.verifyWebCookies(entries,request); throw new AssertionError("Unverified browser credential accepted"); }
             catch(AuthFailure expected) { check(expected.getMessage().equals("NET_VERIFY/IDENTITY")); }
         }
+        String agent=AuthHttp.DEFAULT_USER_AGENT+" Edg/150.0.0.0";
+        for(String accountJson:List.of("{\"code\":200,\"account\":{\"id\":\"42\"},\"profile\":{\"userId\":42}}",
+                "{\"code\":200,\"account\":{\"id\":null},\"profile\":{\"userId\":\"42\"}}")) {
+            var replies=new ArrayList<AuthProtocolContractTest.Response>();
+            try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->{
+                var reply=new AuthProtocolContractTest.Response(uri,accountJson,List.of(),null);replies.add(reply);return reply;
+            }));var request=new RequestScope(()->true)) {
+                var verified=client.verifyWebCookies(entries,agent,request);
+                check(verified.userId().equals("42") && verified.userAgent().equals(agent));
+                var restored=client.verify(verified,request);
+                check(restored.userAgent().equals(agent) && replies.stream().allMatch(r->agent.equals(r.getRequestProperty("User-Agent"))));
+                restored.retire();verified.retire();
+            }
+        }
+        for(String id:List.of("\"42.0\"","\" 42\"","0","-42","42.5","true","\"9223372036854775808\"")) {
+            try(var client=new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->
+                    new AuthProtocolContractTest.Response(uri,"{\"code\":200,\"account\":{\"id\":"+id+"}}",List.of(),null)));
+                var request=new RequestScope(()->true)) {
+                try {client.verifyWebCookies(entries,agent,request);throw new AssertionError("Invalid ID accepted");}
+                catch(AuthFailure safe) {check(safe.getMessage().equals("NET_VERIFY/IDENTITY"));}
+            }
+        }
+        var captureCalls=new AtomicInteger();var candidateBytes=new AtomicReference<byte[]>();
+        List<Object> partial=List.of(Map.of("name","MUSIC_U","value","PARTIAL_SECRET","domain",".music.163.com","path","/"));
+        List<Object> complete=List.of(Map.of("name","MUSIC_U","value","COMPLETE_SECRET","domain",".music.163.com","path","/"));
+        WebLoginCapture.Verifier verifier=(output,scope)->{
+            candidateBytes.set(output);int n=captureCalls.incrementAndGet();
+            if(n==1)throw AuthFailure.code(AuthFailure.Stage.NET_VERIFY,AuthFailure.Reason.API,8821);
+            return AuthProtocolContractTest.credentials(AccountPlatform.NETEASE);
+        };
+        try(var capture=new WebLoginCapture();var request=new RequestScope(()->true)) {
+            check(capture.observe(partial,agent,true,verifier,request)==null && captureCalls.get()==0);
+            check(capture.observe(partial,agent,true,verifier,request)==null && captureCalls.get()==1);
+            check(capture.rejected().getMessage().equals("NET_VERIFY/API=8821"));
+            check(Arrays.equals(candidateBytes.get(),new byte[candidateBytes.get().length]));
+            for(int i=0;i<4;i++)check(capture.observe(partial,agent,true,verifier,request)==null && captureCalls.get()==1);
+            var auxiliary=new ArrayList<Object>(partial);
+            auxiliary.add(Map.of("name","analytics","value","CHANGED","domain",".music.163.com","path","/"));
+            check(capture.observe(auxiliary,agent,true,verifier,request)==null);
+            check(capture.observe(auxiliary,agent,true,verifier,request)==null && captureCalls.get()==1);
+            check(capture.observe(complete,agent,true,verifier,request)==null);
+            var verified=capture.observe(complete,agent,true,verifier,request);
+            check(verified.isActive() && captureCalls.get()==2);verified.retire();
+        }
+        try(var capture=new WebLoginCapture();var request=new RequestScope(()->true)) {
+            for(int i=0;i<4;i++) {
+                List<Object> changed=List.of(Map.of("name","MUSIC_U","value","SECRET_"+i,"domain",".music.163.com","path","/"));
+                capture.observe(changed,agent,true,(output,scope)->{captureCalls.incrementAndGet();throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY,AuthFailure.Reason.CREDENTIAL);},request);
+                capture.observe(changed,agent,true,(output,scope)->{captureCalls.incrementAndGet();throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY,AuthFailure.Reason.CREDENTIAL);},request);
+            }
+            check(captureCalls.get()==5);
+        }
+        var late=AuthProtocolContractTest.credentials(AccountPlatform.NETEASE);var allowedCapture=new AtomicBoolean(true);
+        try(var capture=new WebLoginCapture();var request=new RequestScope(allowedCapture::get)) {
+            capture.observe(complete,agent,true,(output,scope)->late,request);
+            try {capture.observe(complete,agent,true,(output,scope)->{allowedCapture.set(false);return late;},request);throw new AssertionError("Late account accepted");}
+            catch(CancellationException expected) {check(!late.isActive());}
+        }
         var polls=new AtomicInteger(); var browserCalls=new AtomicInteger();
         java.util.function.Supplier<QrAuthClient> clients=()->new NeteaseQrClient(CLOCK,new AuthHttp((uri,body)->{
             if(uri.getPath().endsWith("unikey")) return new AuthProtocolContractTest.Response(uri,"{\"code\":200,\"unikey\":\"abcdefghijklmnop1234567890abcdef\"}",List.of(),null);

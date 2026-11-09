@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.time.Clock;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -37,6 +38,14 @@ public final class AuthLifecycleContractTest {
         var account=AuthProtocolContractTest.credentials(AccountPlatform.BILIBILI);store.save(account,()->true);
         byte[] disk=Files.readAllBytes(directory.resolve("saltneri-auth/bilibili.dpapi"));check(!new String(disk,StandardCharsets.ISO_8859_1).contains("COOKIE_SECRET"));
         var restored=store.load(AccountPlatform.BILIBILI);check(restored.userId().equals("42")&&restored.isActive());check(!restored.accountScope().equals(account.accountScope()));restored.retire();
+        var contextualSource=AuthProtocolContractTest.credentials(AccountPlatform.NETEASE);
+        var contextual=new AccountCredentials(AccountPlatform.NETEASE,"42",contextualSource.cookieSnapshot(),CLOCK,
+                new AccountCredentials.Profile("",null),AuthHttp.DEFAULT_USER_AGENT+" Edg/150.0.0.0");
+        contextualSource.retire();
+        store.save(contextual,()->true);
+        var contextualRestore=store.load(AccountPlatform.NETEASE);
+        check(contextualRestore.userAgent().equals(contextual.userAgent()));
+        contextualRestore.retire();contextual.retire();store.delete(AccountPlatform.NETEASE);
         store.markLoggedOut(AccountPlatform.BILIBILI);
         try{store.load(AccountPlatform.BILIBILI);throw new AssertionError("Signout resurrected");}catch(IOException expected){checks++;}
         store.save(account,()->true);check(store.load(AccountPlatform.BILIBILI).isActive());
@@ -44,6 +53,33 @@ public final class AuthLifecycleContractTest {
         disk=Files.readAllBytes(directory.resolve("saltneri-auth/bilibili.dpapi"));disk[disk.length-1]^=1;Files.write(directory.resolve("saltneri-auth/bilibili.dpapi"),disk);
         try{store.load(AccountPlatform.BILIBILI);throw new AssertionError("Tamper accepted");}catch(IOException expected){checks++;}
         store.save(account,()->true);
+        store.save(account,()->true,action->{
+            check(!Thread.holdsLock(store));
+            action.run();
+        });
+        var legacyCookies=new java.util.ArrayList<Object>();
+        for(var e:account.cookieSnapshot())legacyCookies.add(java.util.Map.of("name",e.name(),"value",e.value(),"domain",e.domain(),
+                "path",e.path(),"hostOnly",e.hostOnly(),"secure",e.secure(),"expiry",e.expiry().getEpochSecond()));
+        byte[] legacyPlain=io.github.yghfv.saltneri.plugin.net.BoundedJson.encode(java.util.Map.of("version",1,"platform","BILIBILI","userId","42","cookies",legacyCookies));
+        byte[] legacyCipher=protector().protect(legacyPlain),magic={'S','N','A','U','T','H',1},legacy=Arrays.copyOf(magic,magic.length+legacyCipher.length);
+        System.arraycopy(legacyCipher,0,legacy,magic.length,legacyCipher.length);
+        Files.write(directory.resolve("saltneri-auth/bilibili.dpapi"),legacy);
+        var oldFormat=store.load(AccountPlatform.BILIBILI);
+        check(oldFormat.userAgent().equals(AuthHttp.DEFAULT_USER_AGENT));oldFormat.retire();Arrays.fill(legacyPlain,(byte)0);
+        var promotionEntered=new CountDownLatch(1);var concurrent=Executors.newSingleThreadExecutor(r->{var t=new Thread(r,"auth-save-lock-fixture");t.setDaemon(true);return t;});
+        var revisionLock=new Object();
+        try {
+            java.util.concurrent.Future<?> saving;
+            synchronized(revisionLock) {
+                saving=concurrent.submit(()->{
+                    try {store.save(account,()->true,action->{promotionEntered.countDown();synchronized(revisionLock){action.run();}});}
+                    catch(IOException failure){throw new java.io.UncheckedIOException(failure);}
+                });
+                check(promotionEntered.await(2,TimeUnit.SECONDS));
+                check(concurrentRead(store).get(2,TimeUnit.SECONDS));
+            }
+            saving.get(2,TimeUnit.SECONDS);check(store.hasSaved(AccountPlatform.BILIBILI));
+        } finally {concurrent.shutdownNow();}
         CountDownLatch release=new CountDownLatch(1);FakeClient old=new FakeClient(release),fresh=new FakeClient(null);AtomicInteger clients=new AtomicInteger(),changes=new AtomicInteger();AtomicBoolean permitted=new AtomicBoolean(true);
         try(AccountLoginController controller=new AccountLoginController(AccountPlatform.BILIBILI,()->clients.getAndIncrement()==0?old:fresh,permitted::get,store,changes::incrementAndGet,CLOCK,10)){
             controller.start(false);check(old.polling.await(2,TimeUnit.SECONDS));check(controller.snapshot().qrContent()!=null);
@@ -105,5 +141,10 @@ public final class AuthLifecycleContractTest {
             pending.restoreOnStartup(true); check(pending.credentials()==null);
         } finally { lateRestore.release.countDown(); }
         account.retire();System.out.println("PASS: "+checks+" login revision/logout/persistence checks (synthetic credentials)");
+    }
+    private static java.util.concurrent.CompletableFuture<Boolean> concurrentRead(EncryptedAccountStore store) {
+        var result=new java.util.concurrent.CompletableFuture<Boolean>();
+        var thread=new Thread(()->{try{result.complete(store.hasSaved(AccountPlatform.BILIBILI));}catch(IOException e){result.completeExceptionally(e);}},"auth-store-lock-fixture");
+        thread.setDaemon(true);thread.start();return result;
     }
 }

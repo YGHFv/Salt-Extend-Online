@@ -22,14 +22,20 @@ public final class AccountCredentials {
     private final String scope;
     private final ScopedCookies cookies;
     private final Profile profile;
+    private final String userAgent;
     private final String revision = UUID.randomUUID().toString();
     private final AtomicBoolean active = new AtomicBoolean(true);
     public AccountCredentials(AccountPlatform platform, String userId, List<ScopedCookies.Entry> entries, Clock clock) throws IOException {
         this(platform, userId, entries, clock, new Profile("", null));
     }
     public AccountCredentials(AccountPlatform platform, String userId, List<ScopedCookies.Entry> entries, Clock clock, Profile profile) throws IOException {
+        this(platform, userId, entries, clock, profile, AuthHttp.DEFAULT_USER_AGENT);
+    }
+    public AccountCredentials(AccountPlatform platform, String userId, List<ScopedCookies.Entry> entries, Clock clock, Profile profile, String userAgent) throws IOException {
         if (userId == null || !userId.matches("[1-9][0-9]{0,18}")) throw new IOException("Invalid verified account identity");
         try { Long.parseLong(userId); } catch (NumberFormatException error) { throw new IOException("Invalid verified account identity"); }
+        if (!AuthHttp.validUserAgent(userAgent)) throw new IOException("Invalid account browser context");
+        this.userAgent = userAgent;
         this.platform = platform; this.userId = userId; scope = platform.name().toLowerCase(java.util.Locale.ROOT) + ":account:" + userId + ":" + UUID.randomUUID();
         this.profile = Profile.from(platform, profile.name(), profile.avatar() == null ? null : profile.avatar().toString());
         cookies = new ScopedCookies(platform, clock); cookies.restore(entries);
@@ -39,6 +45,7 @@ public final class AccountCredentials {
     public AccountPlatform platform() { return platform; }
     public String userId() { return userId; }
     public Profile profile() { return profile; }
+    public String userAgent() { return userAgent; }
     public String revision() { return revision; }
     public String accountScope() { return scope; }
     public boolean isActive() {

@@ -54,15 +54,21 @@ final class QqMusicWebCookies {
         observations.forEach(c->selected.putIfAbsent(c.name,c));
         Observed key=first(selected,List.of("qqmusic_key","qm_keyst","musickey"));
         if(key==null)throw failure(AuthFailure.Reason.CREDENTIAL);
+        for(String alias:List.of("qqmusic_key","qm_keyst","musickey")) {
+            var other=selected.get(alias);
+            if(other!=null && other.domain.equals(key.domain) && !other.value.equals(key.value))
+                throw failure(AuthFailure.Reason.CREDENTIAL);
+        }
         Observed family=selected.get("tmeLoginType");
         String type;
         if(family!=null)type=family.value;
         else {
             family=selected.get("login_type");
-            type=family==null?(selected.containsKey("wxuin") && !selected.containsKey("uin")?"1":"2"):
-                    switch(family.value) {case "1" -> "2";case "2" -> "1";default -> "";};
+            type=family==null?"":apiType(family.value);
         }
         if(!Set.of("1","2").contains(type))throw failure(AuthFailure.Reason.CREDENTIAL);
+        var webType=selected.get("login_type");
+        if(webType!=null && !type.equals(apiType(webType.value)))throw failure(AuthFailure.Reason.CREDENTIAL);
         Observed identity=null;String id="";
         for(String name:type.equals("1")?List.of("qqmusic_uin","wxuin","uin"):List.of("qqmusic_uin","uin")) {
             var candidate=selected.get(name);if(candidate==null)continue;
@@ -70,18 +76,35 @@ final class QqMusicWebCookies {
             if(!id.isEmpty()) {identity=candidate;break;}
         }
         if(identity==null)throw failure(AuthFailure.Reason.IDENTITY);
+        if(type.equals("1") && selected.containsKey("wxuin") && selected.containsKey("qqmusic_uin")
+                && !id.equals(QqMusicLoginResponse.identity(selected.get("wxuin").value.replaceFirst("^o0*",""))))
+            throw failure(AuthFailure.Reason.IDENTITY);
         Instant expiry=key.expiry.isBefore(identity.expiry)?key.expiry:identity.expiry;
         if(family!=null && family.expiry.isBefore(expiry))expiry=family.expiry;
+        var tokenExpiry=selected.get("psrf_access_token_expiresAt");
+        if(tokenExpiry!=null) {
+            try {
+                long seconds=Long.parseLong(tokenExpiry.value);
+                if(seconds>0) {
+                    var until=Instant.ofEpochSecond(seconds);
+                    if(!until.isAfter(clock.instant()))throw failure(AuthFailure.Reason.CREDENTIAL);
+                    if(until.isBefore(expiry))expiry=until;
+                }
+            } catch(NumberFormatException | DateTimeException unavailable) { }
+        }
         var entries=new ArrayList<ScopedCookies.Entry>();
         var canonical=new LinkedHashMap<String,String>();
-        canonical.put("qqmusic_key",key.value);canonical.put("qm_keyst",key.value);
+        canonical.put("qqmusic_key",key.value);canonical.put("qm_keyst",key.value);canonical.put("musickey",key.value);
         canonical.put("qqmusic_uin",id);canonical.put("uin",id);canonical.put("tmeLoginType",type);
+        canonical.put("login_type",type.equals("1")?"2":"1");
         if(type.equals("1"))canonical.put("wxuin",id);
         for(var c:selected.values())if(!Set.of("musickey","login_type","wxuin").contains(c.name))
             canonical.putIfAbsent(c.name,c.value);
         for(var c:canonical.entrySet())entries.add(new ScopedCookies.Entry(c.getKey(),c.getValue(),"y.qq.com","/",false,true,expiry));
-        return new AccountCredentials(AccountPlatform.QQMUSIC,id,entries,clock);
+        String agent=root.containsKey("userAgent")?BoundedJson.string(root.get("userAgent")):AuthHttp.DEFAULT_USER_AGENT;
+        return new AccountCredentials(AccountPlatform.QQMUSIC,id,entries,clock,new AccountCredentials.Profile("",null),agent);
     }
+    private static String apiType(String webType) {return switch(webType) {case "1" -> "2";case "2" -> "1";default -> "";};}
     private static Observed first(Map<String,Observed> entries,List<String> names) {
         for(String name:names)if(entries.containsKey(name))return entries.get(name);return null;
     }

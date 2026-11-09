@@ -2,15 +2,17 @@
 
 在 Salt Player 原生界面中浏览、搜索和播放 Bilibili / 网易云 / QQ 音乐内容，复用 Salt 的播放队列、输出设备、音效和歌词页，不嵌入另一套播放器。
 
+Steam 创意工坊：[Salt Extend Online](https://steamcommunity.com/sharedfiles/filedetails/?id=3835352817)
+
 项目地址：[YGHFv/Salt-Extend-Online](https://github.com/YGHFv/Salt-Extend-Online)，已通过官方 `Plugin-Open-Source-Url` 字段内嵌到模组包。
 
-**当前版本：0.8.47-edge-pipe · 开发预览**。使用官方插件接口并包含部分原生 UI／播放内部绑定，需要 `CLASS_TRANSFORM` 权限。移除运行时严格版本、渠道及类文件哈希锁定，改为检查所需接口结构；某项接口缺失时停用对应能力。当前实际回归基线为 Windows / Steam Salt **1.19.3**，不承诺所有未来版本自动兼容。
+**当前版本：0.8.48-auth-flow · 开发预览**。使用官方插件接口并包含部分原生 UI／播放内部绑定，需要 `CLASS_TRANSFORM` 权限。移除运行时严格版本、渠道及类文件哈希锁定，改为检查所需接口结构；某项接口缺失时停用对应能力。当前实际回归基线为 Windows / Steam Salt **1.19.3**，不承诺所有未来版本自动兼容。
 
 自动构建／发版：可信 `main` 推送先跑 GitHub 离线回归，再由本仓库专用 Windows runner 完整回归和打包；提升版本号后自动发布 `.spmod` 与 SHA-256 的开发预览 Release。同版本不覆盖已发布文件。外部 PR 不在本机运行，部署与维护边界见 `docs/SELF_HOSTED_RELEASE.md`。
 
 ## 使用
 
-1. 在 Salt 模组管理中导入 `plugin-io.github.yghfv.saltneri.online-0.8.47-edge-pipe.spmod`，授予所需权限。同 ID 旧版不要同时启用。更新后请完整退出并重启 Salt，确保原生界面及播放绑定使用新版。
+1. 在 Salt 模组管理中导入 `plugin-io.github.yghfv.saltneri.online-0.8.48-auth-flow.spmod`，授予所需权限。同 ID 旧版不要同时启用。更新后请完整退出并重启 Salt，确保原生界面及播放绑定使用新版。
 2. 点击侧栏 Bilibili / 网易云 / QQ 音乐，首次进入自动加载「发现」。平台间切换保留各自的列表、分页、筛选和滚动状态。
 3. 在平台页登录；登录后点击右上角头像切换账户或退出。网易云扫码需要已安装的 Microsoft Edge，在后台独立临时环境中准备官方设备令牌；失败或遇到风控时可使用「官方网页登录」手动验证。两种方式均不读取浏览器已有账号。
 4. 单击合集或收藏夹打开，双击曲目播放。合集标题栏提供返回、搜索、全部播放、布局、排序；全部播放替换整个 Salt 队列，遵循当前顺序／随机模式。三平台未设置布局时默认卡片，点击布局图标按「卡片 → 单列 → 双列 → 卡片」循环，分别记忆，不再弹出选择菜单。
@@ -47,6 +49,10 @@
 ## Edge 启动兼容（0.8.47）
 
 改用 Windows CRT 标准描述符 3／4 继承调试管道，不再依赖 Chromium 的扩展句柄参数；继续限制继承句柄、使用独立临时配置和本次专属 Job，不开放 TCP 调试、不关闭沙箱。修复连接失败清理后误报 `BROWSER_EXIT`，真正提前退出才显示数值退出码。QQ 网页登录保留具体浏览器失败原因；QQ 扫码独立区分网络、图片和签名 Cookie 故障。Actions 加入真实隐藏 Edge 的无账号兼容回归。详见 `docs/EDGE_PIPE_0.8.47.md`。
+
+## 登录认证链路（0.8.48）
+
+对照 NeriPlayer 和 mygo-qyin 检查扫码、OAuth、网页登录和加密恢复。官方网页登录在临时 Edge 仍打开时验证稳定 Cookie；不再先关闭窗口再认证。QQ 必须等待明确登录类型，拒绝同源冲突的 key 别名，正确归一化网页／API 类型；OAuth 使用授权目标匹配的 Cookie 生成 `g_tk`，只发送必要授权 Cookie。网易云沿用实际浏览器 UA 到验证和加密恢复，兼容严格的数字字符串账号 ID。修复账号保存与关闭记住登录的反向加锁。保留官方鉴权要求，不以 Cookie／公开资料代替验证，不自动刷新或绕过风控。详见 `docs/AUTH_FLOW_0.8.48.md`。
 
 ## Edge 网页登录启动兼容（0.8.43）
 

@@ -77,18 +77,20 @@ public final class QqMusicQrClient implements QrAuthClient {
         var signature=send(trusted(checkSig,"ssl.ptlogin2.graph.qq.com","/check_sig"),null,request,262144);
         if(signature.status()!=302) throw AuthFailure.of(AuthFailure.Stage.QQ_SIGNATURE,AuthFailure.Reason.RESPONSE);
         var jump=send(trusted(signature.location(),"graph.qq.com","/oauth2.0/login_jump"),null,request,262144);
-        if(jump.status()!=200 || cookieValue("p_skey").isBlank() || cookieValue("p_uin").isBlank()) throw AuthFailure.of(AuthFailure.Stage.QQ_OAUTH,AuthFailure.Reason.COOKIE);
+        URI authorize=URI.create("https://graph.qq.com/oauth2.0/authorize");
+        String graphKey=cookieValue(authorize,"p_skey");
+        if(jump.status()!=200 || graphKey.isBlank() || cookieValue(authorize,"p_uin").isBlank()) throw AuthFailure.of(AuthFailure.Stage.QQ_OAUTH,AuthFailure.Reason.COOKIE);
         String state=UUID.randomUUID().toString().replace("-","");
         var params=new LinkedHashMap<String,String>();
         params.put("response_type","code");params.put("client_id","100497308");
         params.put("redirect_uri","https://y.qq.com/portal/wx_redirect.html?login_type=1&surl=https://y.qq.com/");
         params.put("scope","get_user_info,get_app_friends");params.put("state",state);
         params.put("switch","");params.put("from_ptlogin","1");params.put("src","1");params.put("update_auth","1");
-        params.put("openapi","1010_1030");params.put("g_tk",Long.toString(hash(cookieValue("p_skey"),5381)));
+        params.put("openapi","1010_1030");params.put("g_tk",Long.toString(hash(graphKey,5381)));
         params.put("auth_time",Long.toString(clock.millis()));params.put("ui",UUID.randomUUID().toString());
         byte[] form=params.entrySet().stream().map(e->encode(e.getKey())+"="+encode(e.getValue()))
                 .collect(java.util.stream.Collectors.joining("&")).getBytes(StandardCharsets.US_ASCII);
-        var authorization=send(URI.create("https://graph.qq.com/oauth2.0/authorize"),form,request,262144);
+        var authorization=send(authorize,form,request,262144);
         if(authorization.status()!=302) throw AuthFailure.of(AuthFailure.Stage.QQ_OAUTH,AuthFailure.Reason.RESPONSE);
         var callback=trusted(authorization.location(),"y.qq.com","/portal/wx_redirect.html");
         var query=new HashMap<String,String>();
@@ -114,7 +116,7 @@ public final class QqMusicQrClient implements QrAuthClient {
         catch(IOException failure) {throw AuthFailure.wrap(AuthFailure.Stage.QQ_VERIFY,AuthFailure.Reason.RESPONSE,failure);}
         var profiles=new ArrayList<Map<String,Object>>();profiles.add(data);
         for(String field:List.of("info","creator","profile","user"))if(data.get(field) instanceof Map<?,?>)profiles.add(object(data.get(field)));
-        if(profiles.size()==1 && text(data,"hostname","nickname","name","headurl","avatarUrl").isBlank())
+        if(profiles.size()==1 && text(data,"nick","hostname","nickname","name","headurl","logo","avatarUrl","avatar","headpic").isBlank())
             throw AuthFailure.of(AuthFailure.Stage.QQ_VERIFY,AuthFailure.Reason.RESPONSE);
         // This authenticated endpoint normally omits UIN. Its successful response verifies
         // the key; the account ID comes from QQLogin, never a public profile lookup.
@@ -133,12 +135,20 @@ public final class QqMusicQrClient implements QrAuthClient {
         if(avatar.isBlank() && saved.profile().avatar()!=null)avatar=saved.profile().avatar().toString();
         check();request.check();
         return new AccountCredentials(AccountPlatform.QQMUSIC,saved.userId(),saved.cookieSnapshot(),clock,
-                AccountCredentials.Profile.from(AccountPlatform.QQMUSIC,name,avatar));
+                AccountCredentials.Profile.from(AccountPlatform.QQMUSIC,name,avatar), saved.userAgent());
     }
     private Response send(URI uri,byte[] body,RequestScope request,int limit) throws IOException {
-        check();String host=uri.getHost(),path=uri.getPath();
-        String header=loginCookies.stream().filter(e->e.expiry().isAfter(clock.instant()) && (host.equals(e.domain()) || !e.hostOnly() && host.endsWith("."+e.domain()))
-                && path.startsWith(e.path())).map(e->e.name()+"="+e.value()).collect(java.util.stream.Collectors.joining("; "));
+        check();String host=uri.getHost();
+        String header;
+        if(host.equals("graph.qq.com") && uri.getPath().equals("/oauth2.0/authorize")) {
+            var graph=new LinkedHashMap<String,String>();
+            for(String name:List.of("p_uin","p_skey","pt_oauth_token")) {
+                String value=cookieValue(uri,name);if(!value.isBlank())graph.put(name,value);
+            }
+            header=graph.entrySet().stream().map(e->e.getKey()+"="+e.getValue()).collect(java.util.stream.Collectors.joining("; "));
+        } else header=loginCookies.stream().filter(e->matches(e,uri))
+                .sorted(Comparator.comparingInt((ScopedCookies.Entry e)->e.path().length()).reversed())
+                .map(e->e.name()+"="+e.value()).collect(java.util.stream.Collectors.joining("; "));
         Response response;
         var stage=uri.getPath().equals("/check_sig")?AuthFailure.Stage.QQ_SIGNATURE:
                 uri.getHost().equals("graph.qq.com")?AuthFailure.Stage.QQ_OAUTH:
@@ -155,6 +165,8 @@ public final class QqMusicQrClient implements QrAuthClient {
                             || !c.getName().matches("[A-Za-z0-9_-]{1,128}") || !c.getValue().matches("[\\x21-\\x7e]{0,4096}")
                             || c.getValue().matches(".*[;,\"\\\\].*")) throw new IOException("QQ login cookie invalid");
                     String p=c.getPath()==null?"/":c.getPath();
+                    if(!p.startsWith("/") || p.length()>1024 || p.chars().anyMatch(ch->ch<32 || ch>126))
+                        throw new IOException("QQ login cookie invalid");
                     loginCookies.removeIf(e->e.name().equals(c.getName()) && e.domain().equals(domain) && e.path().equals(p));
                     if(c.getMaxAge()!=0 && !c.getValue().isEmpty())loginCookies.add(new ScopedCookies.Entry(c.getName(),c.getValue(),domain,p,c.getDomain()==null,true,
                             clock.instant().plusSeconds(c.getMaxAge()<0?120:Math.min(120,c.getMaxAge()))));
@@ -164,7 +176,18 @@ public final class QqMusicQrClient implements QrAuthClient {
         if(loginCookies.size()>64) throw new IOException("QQ cookie limit");
         check();return response;
     }
-    private String cookieValue(String name) {return loginCookies.stream().filter(e->e.name().equals(name) && e.expiry().isAfter(clock.instant())).map(e->e.value()).findFirst().orElse("");}
+    private boolean matches(ScopedCookies.Entry e,URI uri) {
+        String host=uri.getHost(),path=uri.getPath();
+        return e.expiry().isAfter(clock.instant()) && (host.equals(e.domain()) || !e.hostOnly() && host.endsWith("."+e.domain()))
+                && (path.equals(e.path()) || path.startsWith(e.path()) && (e.path().endsWith("/") || path.charAt(e.path().length())=='/'));
+    }
+    private String cookieValue(String name) {return cookieValue(URI.create("https://xui.ptlogin2.qq.com/ssl/ptqrlogin"),name);}
+    private String cookieValue(URI uri,String name) {
+        return loginCookies.stream().filter(e->e.name().equals(name) && matches(e,uri))
+                .sorted(Comparator.comparingInt((ScopedCookies.Entry e)->e.domain().length()).reversed()
+                        .thenComparing(Comparator.comparingInt((ScopedCookies.Entry e)->e.path().length()).reversed()))
+                .map(ScopedCookies.Entry::value).findFirst().orElse("");
+    }
     private synchronized void clearSession(Session session) {if(current==session) {current=null;image=null;loginCookies.clear();}}
     private synchronized boolean consumeSession(Session session) {
         if(closed || current!=session || !clock.instant().isBefore(session.expiresAt()))return false;

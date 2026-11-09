@@ -48,7 +48,12 @@ public final class NativeWebLoginContractTest {
         cookies.add(Map.of("name","tracking","value","NOT_IMPORTED","domain","y.qq.com","path","/"));
         cookies.add(Map.of("name","qqmusic_key","value","NOT_IMPORTED","domain","y.qq.com.evil","path","/"));
         var filtered=WindowsEdgeWebLogin.filterCookies(cookies,AccountPlatform.QQMUSIC);
-        check(filtered.size()==2 && WindowsEdgeWebLogin.ready(AccountPlatform.QQMUSIC,filtered));
+        check(filtered.size()==2 && !WindowsEdgeWebLogin.ready(AccountPlatform.QQMUSIC,filtered));
+        filtered.add(Map.of("name","tmeLoginType","value","2","domain","y.qq.com","path","/"));
+        check(WindowsEdgeWebLogin.ready(AccountPlatform.QQMUSIC,filtered));
+        var inconsistent=new ArrayList<>(filtered);
+        inconsistent.add(Map.of("name","login_type","value","2","domain","y.qq.com","path","/"));
+        check(!WindowsEdgeWebLogin.ready(AccountPlatform.QQMUSIC,inconsistent));
         check(!WindowsEdgeWebLogin.ready(AccountPlatform.QQMUSIC,List.of(filtered.getFirst())));
         check(WindowsEdgeWebLogin.filterCookies(cookies,AccountPlatform.NETEASE).isEmpty());
         var parsed=BoundedJson.parse(BoundedJson.encode(Map.of("cookies",filtered)));

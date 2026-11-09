@@ -20,6 +20,7 @@ public final class NeteaseQrClient implements QrAuthClient {
     private final ScopedCookies cookies;
     private final NeteaseDeviceSnapshot.Provider devices;
     private volatile NeteaseDeviceSnapshot device;
+    private volatile String userAgent = AuthHttp.DEFAULT_USER_AGENT;
     private Session activeSession;
     private RequestScope activeRequest;
     private boolean closed, started;
@@ -43,7 +44,7 @@ public final class NeteaseQrClient implements QrAuthClient {
             if(error instanceof AuthFailure safe)throw safe.atStage(AuthFailure.Stage.NET_DEVICE);
             throw AuthFailure.wrap(AuthFailure.Stage.NET_DEVICE,AuthFailure.Reason.DEVICE,error);
         }
-        synchronized (this) { checkOpen(request); device = prepared; cookies.restore(prepared.cookies()); }
+        synchronized (this) { checkOpen(request); device = prepared; userAgent = prepared.userAgent(); cookies.restore(prepared.cookies()); }
         Map<String, Object> root = post("/weapi/login/qrcode/unikey", Map.of("type", 1, "noCheckToken", true), Map.of(), request).json();
         requireCode(root, 200, AuthFailure.Stage.NET_CREATE); String key = BoundedJson.string(root.get("unikey"));
         if (!key.matches("[a-zA-Z0-9_-]{16,256}")) throw invalid();
@@ -85,8 +86,15 @@ public final class NeteaseQrClient implements QrAuthClient {
         catch (IOException error) { throw AuthFailure.wrap(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.RESPONSE, error); }
     }
     public AccountCredentials verifyWebCookies(java.util.List<ScopedCookies.Entry> entries, RequestScope request) throws IOException {
+        return verifyWebCookies(entries, AuthHttp.DEFAULT_USER_AGENT, request);
+    }
+    public AccountCredentials verifyWebCookies(java.util.List<ScopedCookies.Entry> entries, String browserAgent, RequestScope request) throws IOException {
         beginRequest(request);
-        try { clearSession(); cookies.restore(entries); return verifyJar(request); }
+        try {
+            clearSession();
+            if (!AuthHttp.validUserAgent(browserAgent)) throw AuthFailure.of(AuthFailure.Stage.NET_WEB, AuthFailure.Reason.RESPONSE);
+            userAgent = browserAgent; cookies.restore(entries); return verifyJar(request);
+        }
         finally { endRequest(); }
     }
     private AccountCredentials verifiedJar(RequestScope request) throws IOException {
@@ -96,23 +104,23 @@ public final class NeteaseQrClient implements QrAuthClient {
         String csrf = cookies.value(uri, "__csrf"); if (!csrf.isEmpty()) payload.put("csrf_token", csrf);
         Map<String, Object> root = post("/weapi/w/nuser/account/get", payload, Map.of(), request).json(); requireCode(root, 200, AuthFailure.Stage.NET_VERIFY);
         long uid = 0;
-        if (root.get("account") != null) uid = BoundedJson.integer(BoundedJson.object(root.get("account")).get("id"));
+        if (root.get("account") != null && BoundedJson.object(root.get("account")).get("id") != null)
+            uid = identity(BoundedJson.object(root.get("account")).get("id"));
         if (root.get("profile") != null && BoundedJson.object(root.get("profile")).get("userId") != null) {
-            long profileId = BoundedJson.integer(BoundedJson.object(root.get("profile")).get("userId"));
+            long profileId = identity(BoundedJson.object(root.get("profile")).get("userId"));
             if (uid != 0 && uid != profileId) throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.IDENTITY); uid = profileId;
         }
         if (uid <= 0) throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.IDENTITY);
         Map<String, Object> profile = root.get("profile") == null ? Map.of() : BoundedJson.object(root.get("profile"));
         synchronized (this) {
             checkOpen(request); return new AccountCredentials(AccountPlatform.NETEASE, Long.toString(uid), cookies.snapshot(), clock,
-                    AccountCredentials.Profile.from(AccountPlatform.NETEASE, profile.get("nickname"), profile.get("avatarUrl")));
+                    AccountCredentials.Profile.from(AccountPlatform.NETEASE, profile.get("nickname"), profile.get("avatarUrl")), userAgent);
         }
     }
     private AuthHttp.Response post(String path, Map<String, Object> payload, Map<String, String> headers, RequestScope request) throws IOException {
         String query = payload.containsKey("csrf_token") ? "?csrf_token=" + URLEncoder.encode((String)payload.get("csrf_token"), StandardCharsets.UTF_8) : "";
-        NeteaseDeviceSnapshot context = device;
         var response = http.exchange(URI.create(BASE + path + query), NeteaseWeapi.form(payload), cookies, headers,
-                context == null ? AuthHttp.DEFAULT_USER_AGENT : context.userAgent(), request);
+                userAgent, request);
         synchronized (this) { checkOpen(request); }
         return response;
     }
@@ -123,17 +131,25 @@ public final class NeteaseQrClient implements QrAuthClient {
         finally { endRequest(); }
     }
     private AccountCredentials verifySaved(AccountCredentials saved, RequestScope request) throws IOException {
-        if (saved.platform() != AccountPlatform.NETEASE) throw invalid(); cookies.restore(saved.cookieSnapshot());
+        if (saved.platform() != AccountPlatform.NETEASE) throw invalid(); userAgent = saved.userAgent(); cookies.restore(saved.cookieSnapshot());
         AccountCredentials verified = verifyJar(request);
         if (!verified.userId().equals(saved.userId())) { verified.retire(); throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.IDENTITY); } return verified;
     }
     private static void requireCode(Map<String, Object> root, long expected, AuthFailure.Stage stage) throws IOException { long code = BoundedJson.integer(root.get("code")); if (code != expected) throw AuthFailure.code(stage, AuthFailure.Reason.API, code); }
+    private static long identity(Object value) throws IOException {
+        try {
+            if (value instanceof String text && text.matches("[1-9][0-9]{0,18}")) return Long.parseLong(text);
+            long id = BoundedJson.integer(value);
+            if (id > 0) return id;
+        } catch (IOException | NumberFormatException invalid) { }
+        throw AuthFailure.of(AuthFailure.Stage.NET_VERIFY, AuthFailure.Reason.IDENTITY);
+    }
     private static IOException invalid() { return new IOException("Invalid NetEase login response"); }
     private synchronized void beginRequest(RequestScope request) throws IOException {
         checkOpen(request); if (activeRequest != null) throw invalid(); activeRequest = request;
     }
     private synchronized void checkOpen(RequestScope request) throws IOException { request.check(); if (closed) throw invalid(); }
     private synchronized void endRequest() { activeRequest = null; if (closed) clearSession(); }
-    private synchronized void clearSession() { activeSession = null; device = null; cookies.clear(); }
+    private synchronized void clearSession() { activeSession = null; device = null; userAgent = AuthHttp.DEFAULT_USER_AGENT; cookies.clear(); }
     @Override public synchronized void close() { closed = true; if (activeRequest != null) activeRequest.close(); clearSession(); }
 }

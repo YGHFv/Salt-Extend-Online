@@ -19,7 +19,9 @@ public final class AuthLiveProbe {
                     var qr=io.nayuki.qrcodegen.QrCode.encodeText(session.qrContent().toASCIIString(), io.nayuki.qrcodegen.QrCode.Ecc.MEDIUM);
                     if(qr.size<21)throw new IllegalStateException("Local QR generation failed");
                 }
-                System.out.println("PASS: "+platform+" official QR generation + validated payload + local QR encoding over verified TLS.");
+                System.out.println("PASS: "+platform+(platform==AccountPlatform.QQMUSIC
+                        ?" official QR image + scoped signature Cookie over verified TLS."
+                        :" official QR generation + validated payload + local QR encoding over verified TLS."));
                 if(args[0].equals("--explicit-session-check")) {
                     var result=client.poll(session,scope);
                     if(result.credentials()!=null) result.credentials().retire();
