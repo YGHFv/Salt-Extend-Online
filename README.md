@@ -6,6 +6,8 @@
 
 **当前版本：0.8.46-netease-device · 开发预览**。使用官方插件接口并包含部分原生 UI／播放内部绑定，需要 `CLASS_TRANSFORM` 权限。移除运行时严格版本、渠道及类文件哈希锁定，改为检查所需接口结构；某项接口缺失时停用对应能力。当前实际回归基线为 Windows / Steam Salt **1.19.3**，不承诺所有未来版本自动兼容。
 
+自动构建／发版：可信 `main` 推送先跑 GitHub 离线回归，再由本仓库专用 Windows runner 完整回归和打包；提升版本号后自动发布 `.spmod` 与 SHA-256 的开发预览 Release。同版本不覆盖已发布文件。外部 PR 不在本机运行，部署与维护边界见 `docs/SELF_HOSTED_RELEASE.md`。
+
 ## 使用
 
 1. 在 Salt 模组管理中导入 `plugin-io.github.yghfv.saltneri.online-0.8.46-netease-device.spmod`，授予所需权限。同 ID 旧版不要同时启用。更新后请完整退出并重启 Salt，确保原生界面及播放绑定使用新版。

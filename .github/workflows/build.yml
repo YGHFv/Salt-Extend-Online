@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: salt-build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   offline:
@@ -19,12 +19,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: zulu
           java-version: '25'
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Validate metadata, core, QR security, HTTP and cache contracts
@@ -32,6 +34,8 @@ jobs:
         run: ./scripts/test-offline.ps1 -JdkHome $env:JAVA_HOME
       - name: Check patch whitespace
         run: git show --format= --check HEAD
+      - name: Test release validation
+        run: python scripts/test-ci-release.py
 
   package:
     name: Salt 1.19.3 Package
@@ -47,8 +51,11 @@ jobs:
     env:
       SALT_HOME: ${{ vars.SALT_HOME }}
       SALT_JDK_HOME: ${{ vars.SALT_JDK_HOME }}
+      SALT_KOTLIN_HOME: ${{ vars.SALT_KOTLIN_HOME }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - name: Check local build prerequisites
         shell: pwsh
         run: |
@@ -59,7 +66,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Python 3 is required on the runner.' }
       - name: Verify pinned compiler tools
         shell: pwsh
-        run: ./scripts/setup-native-ui.ps1
+        run: |
+          if (-not $env:SALT_KOTLIN_HOME) { throw 'Configure the persistent Kotlin compiler cache.' }
+          ./scripts/setup-native-ui.ps1 -ToolDirectory $env:SALT_KOTLIN_HOME
+          $localTools = Join-Path $env:GITHUB_WORKSPACE '.tools/kotlin-2.4.0'
+          New-Item -ItemType Directory -Path $localTools -Force | Out-Null
+          Copy-Item -LiteralPath (Get-ChildItem -LiteralPath $env:SALT_KOTLIN_HOME -File).FullName -Destination $localTools
       - name: Compile and run full native regression
         shell: pwsh
         run: ./scripts/build-local.ps1 -SaltHome $env:SALT_HOME -JdkHome $env:SALT_JDK_HOME -Experimental
@@ -73,7 +85,7 @@ jobs:
           "$hash  $([IO.Path]::GetFileName($path))" | Set-Content -LiteralPath "$path.sha256" -Encoding ascii
           "path=$path" >> $env:GITHUB_OUTPUT
           "name=Salt-Extend-Online-$($metadata.version)" >> $env:GITHUB_OUTPUT
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: |
@@ -81,3 +93,40 @@ jobs:
             ${{ steps.artifact.outputs.path }}.sha256
           if-no-files-found: error
           retention-days: 14
+      - name: Remove this job's temporary build data
+        if: always()
+        shell: pwsh
+        run: |
+          $workspace = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
+          foreach ($relative in @('plugin/build', 'core/build', 'scripts/__pycache__', '.tools')) {
+            $target = [IO.Path]::GetFullPath((Join-Path $workspace $relative))
+            if (-not $target.StartsWith($workspace + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+              throw 'Cleanup target escaped the checkout.'
+            }
+            if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+          }
+
+  release:
+    name: Publish Development Release
+    needs: [offline, package]
+    if: >-
+      github.repository == 'YGHFv/Salt-Extend-Online' &&
+      github.event_name != 'pull_request' && github.ref == 'refs/heads/main' &&
+      vars.SALT_PACKAGE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: Salt-Extend-Online-*
+          path: release-artifacts
+          merge-multiple: true
+      - name: Verify and publish versioned mod and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/publish-release.py --artifact-dir release-artifacts
