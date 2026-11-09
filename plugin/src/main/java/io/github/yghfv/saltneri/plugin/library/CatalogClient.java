@@ -23,6 +23,8 @@ public final class CatalogClient {
     private final CatalogHttp.SessionCache sessions;
     private final QqMusicCatalog.Recommendations qqRecommendations;
     private final NeteaseRecommendations netRecommendations;
+    private KugouCatalog.Cache kugouCache=new KugouCatalog.Cache();
+    CatalogClient kugouCache(KugouCatalog.Cache cache) {kugouCache=cache;return this;}
     private final io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp appleHttp;
     public CatalogClient(AccountCredentials account) { this(account, Clock.systemUTC(), CatalogHttp::openPinned); }
     public CatalogClient(AccountCredentials account, Clock clock, CatalogHttp.Opener opener) { this(account,clock,opener,new BiliDiscovery.Cache(clock)); }
@@ -47,6 +49,11 @@ public final class CatalogClient {
         this.netRecommendations=netRecommendations;
     }
     public Page load(Query query, RequestScope request) throws IOException {
+        if(query.platform()==AccountPlatform.KUGOU)try {
+            return new KugouCatalog(account,clock,new io.github.yghfv.saltneri.plugin.kugou.KugouHttp(uri->opener.open(uri,null)),kugouCache).load(query,request);
+        } catch(IOException error) {
+            throw CatalogFailure.wrap(Stage.KUGOU_CONTENTS,"KUGOU/LOGIN_REQUIRED".equals(error.getMessage())?Reason.LOGIN_REQUIRED:Reason.RESPONSE,error);
+        }
         if(query.platform()==AccountPlatform.APPLEMUSIC)return new AppleMusicCatalog(account,clock,appleHttp).load(query,request);
         if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open,qqRecommendations).load(query,request);
         boolean discover = query.view() == View.DISCOVER || query.view() == View.MUSIC_HOT || query.view() == View.MUSIC_ORIGINAL || query.view()==View.NEW_SONGS;
@@ -84,6 +91,7 @@ public final class CatalogClient {
     CollectionContents loadAll(Query query, RequestScope request, CatalogPageCache cache,
                                java.util.function.BiConsumer<Integer,Integer> progress) throws IOException {
         if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
+        if(query.platform()==AccountPlatform.KUGOU)return new KugouCatalog(account,clock,new io.github.yghfv.saltneri.plugin.kugou.KugouHttp(uri->opener.open(uri,null))).loadAll(query,request);
         if(query.platform()==AccountPlatform.APPLEMUSIC)return new AppleMusicCatalog(account,clock,appleHttp).loadAll(query,request);
         if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open).loadAll(query,request);
         if(account!=null && account.platform()!=query.platform() || query.platform()==AccountPlatform.BILIBILI && account==null)
@@ -254,16 +262,25 @@ public final class CatalogClient {
             case NEW_SONGS -> root.get("result");
             default -> null;
         };
+        if(!(raw instanceof List<?>)) {
+            Map<String,Object> nested=root.get("data") instanceof Map<?,?>?object(root.get("data")):root;
+            for(String field:query.view()==View.PERSONAL_PLAYLISTS?List.of("recommend","resources","playlists","result","data"):
+                    query.view()==View.DAILY?List.of("dailySongs","recommend","songs"):List.of("songs","list","result")) {
+                if(nested.get(field) instanceof List<?>) {raw=nested.get(field);break;}
+            }
+            if(!(raw instanceof List<?>) && root.get("data") instanceof List<?>)raw=root.get("data");
+        }
         if(!(raw instanceof List<?>)) throw invalid();
         var items=new ArrayList<Item>();var seen=new HashSet<String>();
-        for(Object value:bounded(array(raw),100)) {
+        for(Object value:bounded(array(raw),query.view()==View.PERSONAL_PLAYLISTS?1000:100)) {
             request.check();
             if(!(value instanceof Map<?,?>)) continue;
             try {
                 var row=object(value);Item item;
                 if(query.view()==View.PERSONAL_PLAYLISTS) {
-                    long target=id(row.get("id"));String title=display(row.get("name"));
-                    if(title.isBlank())continue;
+                    if(row.get("playlist") instanceof Map<?,?>)row=object(row.get("playlist"));
+                    long target=optionalNumber(alias(row,"id","playlistId"),0);String title=display(alias(row,"name","title"));
+                    if(target<=0 || title.isBlank())continue;
                     item=new Item(Kind.FOLDER,Long.toString(target),title,neteaseAuthor(row),optionalNumber(row.get("trackCount"),-1),true,
                             firstCover(AccountPlatform.NETEASE,row,"picUrl","coverImgUrl"));
                 } else {

@@ -78,7 +78,7 @@ public final class LibraryController implements AutoCloseable {
             State s = new State(p); states.put(p,s);
             s.cache = new CatalogPageCache(clock);
             Function<AccountCredentials, PlatformResolutionController.Resolver<Query, String, Page>> factory = account ->
-                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions,s.cache.qqRecommendations,s.cache.appleHttp,s.cache.netRecommendations).load(q,r) : testLoader.apply(account);
+                    testLoader == null ? (q,k,scope,r) -> new CatalogClient(account,clock,CatalogHttp::openPinned,s.cache.discovery,s.cache.sessions,s.cache.qqRecommendations,s.cache.appleHttp,s.cache.netRecommendations).kugouCache(s.cache.kugouCache).load(q,r) : testLoader.apply(account);
             // Catalog metadata has no signed audio URL; retain it until explicit refresh/account revocation.
             s.loader = new PlatformResolutionController<>("Catalog", account -> {
                 var resolver = factory.apply(account);
@@ -183,7 +183,7 @@ public final class LibraryController implements AutoCloseable {
         Item item = s.rows.get(token); if (item == null || !item.enabled()) throw new IllegalStateException("Stale row"); platform = s.platform;
         if (item.kind() != Kind.TRACK) {
             remember(s); reset(s); s.totalCount = item.count(); s.creator = item.subtitle(); s.title=item.title();
-            load(s,platform==AccountPlatform.APPLEMUSIC?new Query(platform,View.FOLDER,1,1,0,"",false,Sort.DEFAULT,item.target()):new Query(platform,item.kind() == Kind.COLLECTION ? View.COLLECTION : View.FOLDER,Long.parseLong(item.target()),1,item.owner()));
+            load(s,platform==AccountPlatform.APPLEMUSIC || platform==AccountPlatform.KUGOU?new Query(platform,View.FOLDER,1,1,0,"",false,Sort.DEFAULT,item.target()):new Query(platform,item.kind() == Kind.COLLECTION ? View.COLLECTION : View.FOLDER,Long.parseLong(item.target()),1,item.owner()));
         } else if(platform!=AccountPlatform.APPLEMUSIC)prepare.accept(new OnlinePlaybackController.Target(platform,item.target()));
     }
     private void remember(State s) {
@@ -398,7 +398,7 @@ public final class LibraryController implements AutoCloseable {
             if (item.cover() != null && !fallback) return item.cover();
             if (fallback && item.cover() == null) return null;
             platform=s.platform;
-            if(platform==AccountPlatform.QQMUSIC || platform==AccountPlatform.APPLEMUSIC) return null;
+            if(platform==AccountPlatform.QQMUSIC || platform==AccountPlatform.APPLEMUSIC || platform==AccountPlatform.KUGOU) return null;
             if(platform==AccountPlatform.BILIBILI && (item.kind()!=Kind.COLLECTION || item.owner()<=0)) return null;
             if(platform==AccountPlatform.NETEASE && item.kind()!=Kind.TRACK && item.kind()!=Kind.FOLDER) return null;
             account = accounts.apply(s.platform);

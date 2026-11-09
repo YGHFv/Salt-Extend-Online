@@ -15,14 +15,22 @@ import java.util.Map;
 public final class BoundedJson {
     public static final int MAX_BYTES = 2 * 1024 * 1024;
     private final String text;
+    private final boolean neteaseCreator;
     private int cursor, nodes;
-    private BoundedJson(String text) { this.text = text; }
+    private BoundedJson(String text,boolean neteaseCreator) { this.text = text;this.neteaseCreator=neteaseCreator; }
     public static Object parse(byte[] bytes) throws IOException {
+        return parse(bytes,false);
+    }
+    /** Only the private-playlist endpoint emits creator:null followed by the creator object. */
+    public static Object parseNeteaseRecommendations(byte[] bytes) throws IOException {
+        return parse(bytes,true);
+    }
+    private static Object parse(byte[] bytes,boolean neteaseCreator) throws IOException {
         if (bytes.length > MAX_BYTES) throw invalid();
         try {
             String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
-            BoundedJson parser = new BoundedJson(text);
+            BoundedJson parser = new BoundedJson(text,neteaseCreator);
             Object result = parser.value(0); parser.whitespace();
             if (parser.cursor != text.length()) throw invalid();
             return result;
@@ -38,8 +46,9 @@ public final class BoundedJson {
             if (consume('}')) return result;
             do {
                 whitespace(); String key = string(); whitespace(); require(':');
-                if (result.containsKey(key)) throw invalid();
-                result.put(key, value(depth + 1)); whitespace();
+                Object value=value(depth+1);
+                if(result.containsKey(key) && !(neteaseCreator && key.equals("creator") && result.get(key)==null && value instanceof Map<?,?>))throw invalid();
+                result.put(key, value); whitespace();
                 if (consume('}')) return result;
                 require(',');
             } while (true);

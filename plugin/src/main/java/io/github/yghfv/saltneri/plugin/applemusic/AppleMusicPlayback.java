@@ -50,7 +50,7 @@ public final class AppleMusicPlayback implements AutoCloseable {
             try(var output=process.getOutputStream()) {
                 output.write(BoundedJson.encode(Map.of("id",id,"title",title,"artist",artist)));output.write('\n');
             }
-            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(45);
+            long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(75);
             while(!process.waitFor(100,TimeUnit.MILLISECONDS)) {
                 if(closed || revision!=captured || !permitted.getAsBoolean() || System.nanoTime()>deadline) {process.destroyForcibly();throw AppleMusicHttp.failure("CANCELLED_OR_TIMEOUT");}
             }
@@ -61,7 +61,12 @@ public final class AppleMusicPlayback implements AutoCloseable {
             var result=BoundedJson.object(BoundedJson.parse(lines[lines.length-1].getBytes(StandardCharsets.UTF_8)));
             if(!Boolean.TRUE.equals(result.get("ok"))) {
                 String stage=result.get("stage") instanceof String s && s.matches("[A-Z0-9_]{1,64}")?s:"HELPER";
-                status.accept("Apple Music 播放未完成 ["+stage+"]");
+                status.accept(switch(stage) {
+                    case "APP_NOT_INSTALLED" -> "Apple Music 客户端未安装，请安装并登录 Windows Apple Music 后播放";
+                    case "APP_LAUNCH_FAILED" -> "Apple Music 客户端启动失败，请手动打开并登录后重试";
+                    case "APP_WINDOW_TIMEOUT" -> "Apple Music 客户端窗口尚未就绪，请完成首次启动或登录后重试";
+                    default -> "Apple Music 播放未完成 ["+stage+"]";
+                });
             }
         } catch(Exception error) {
             if(!closed && revision==captured)status.accept("Apple Music 播放未完成，请确认官方客户端已安装并登录");

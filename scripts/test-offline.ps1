@@ -7,6 +7,8 @@ foreach ($script in @('verify-project.py', 'verify-vendor.py', 'test-inspector.p
     & python (Join-Path $PSScriptRoot $script)
     if ($LASTEXITCODE -ne 0) { throw "Static verification failed: $script" }
 }
+& (Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe') -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'test-apple-launch.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Apple Music launcher contract failed.' }
 & (Join-Path $PSScriptRoot 'test-core.ps1') -JdkHome $JdkHome
 $matrix = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'contract-tests.json') -Raw | ConvertFrom-Json
 $build = Join-Path $root ('plugin/build/offline/' + [Guid]::NewGuid().ToString('N'))

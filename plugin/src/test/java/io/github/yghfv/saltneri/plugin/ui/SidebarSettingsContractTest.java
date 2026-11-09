@@ -91,6 +91,7 @@ public final class SidebarSettingsContractTest {
             for(var item:managed)keys.add((String)item.getClass().getMethod("\u037f").invoke(item));
             check(!keys.contains("ui.sidebar.Settings") && keys.containsAll(
                     Arrays.stream(AccountPlatform.values()).map(p->"ui.sidebar."+p.name()).toList()));
+            for(var platform:AccountPlatform.values())check(bindings.label(platform.name()).equals(platform.label()));
             var list=Class.forName("androidx.compose.ui.\u077b$\u0529");
             Object home=list.getConstructor(String.class,String.class,String.class,String.class,List.class,List.class,String.class,String.class)
                     .newInstance("home","ui.home","Home","",List.of("Restore"),List.of("restore"),"restore","config.json");
@@ -98,7 +99,7 @@ public final class SidebarSettingsContractTest {
             bindings.playlistChoices(List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("one","Playlist one",new Object()),
                     new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("two","Playlist two",new Object())));
             var options=((List<?>)group.getMethod("\u0529").invoke(bindings.filteredGroup(config,SaltNativeUi.PLUGIN_ID,true))).getFirst();
-            check(list.getMethod("\u052b").invoke(options).equals(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC","playlist:one","playlist:two")));
+            check(list.getMethod("\u052b").invoke(options).equals(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC","KUGOU","playlist:one","playlist:two")));
             check(((List<?>)list.getMethod("\u052a").invoke(options)).size()==AccountPlatform.values().length+4);
             Object settingsRoute=Class.forName(SaltNativeUi.MOD_ROUTE).getConstructor(String.class).newInstance(SaltNativeUi.SIDEBAR_CONFIG);
             check(ui.settingsPage(settingsRoute) && ui.platform(settingsRoute)==null);

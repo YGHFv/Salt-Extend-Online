@@ -56,7 +56,7 @@ public final class AccountLoginController implements AutoCloseable {
     private Phase phase = Phase.IDLE;
     private String status = "Not logged in. Login is explicit; no existing account is imported.";
     public AccountLoginController(AccountPlatform platform, BooleanSupplier authorized, EncryptedAccountStore store, Runnable onChange) {
-        this(platform, switch(platform) {case BILIBILI -> BiliQrClient::new; case NETEASE -> NeteaseQrClient::new; case QQMUSIC -> QqMusicQrClient::new; case APPLEMUSIC -> AppleMusicAuthClient::new;},
+        this(platform, switch(platform) {case BILIBILI -> BiliQrClient::new; case NETEASE -> NeteaseQrClient::new; case QQMUSIC -> QqMusicQrClient::new; case APPLEMUSIC -> AppleMusicAuthClient::new; case KUGOU -> KugouQrClient::new;},
                 authorized, store, onChange, Clock.systemUTC(), 3000);
     }
     public AccountLoginController(AccountPlatform platform, Supplier<QrAuthClient> clients, BooleanSupplier authorized,
@@ -90,6 +90,7 @@ public final class AccountLoginController implements AutoCloseable {
                 synchronized (this) {
                     if (!valid(operation)) return; operation.session = session; phase = Phase.WAITING_SCAN;
                     status = platform == AccountPlatform.QQMUSIC ? "\u8bf7\u4f7f\u7528\u624b\u673a QQ \u626b\u7801\u5e76\u786e\u8ba4\u767b\u5f55\uff0c\u4e8c\u7ef4\u7801\u6709\u6548\u671f 2 \u5206\u949f\u3002"
+                            : platform==AccountPlatform.KUGOU?"请使用酷狗音乐扫码并确认登录。此接入通过 KA Music API 服务完成，凭据仅用于该服务；二维码有效期 3 分钟。"
                             : "Scan with the official platform app, then confirm there. QR expires locally after 3 minutes.";
                 }
                 schedule(operation);
@@ -254,6 +255,7 @@ public final class AccountLoginController implements AutoCloseable {
         phase = error instanceof AuthFailure safe && safe.requiresWebVerification() ? Phase.VERIFICATION_REQUIRED : Phase.ERROR;
         status = platform==AccountPlatform.APPLEMUSIC
                 ? "Apple Music 登录未完成 ["+(error instanceof java.io.IOException && error.getMessage()!=null && error.getMessage().matches("APPLE/[A-Z0-9_]{1,64}")?error.getMessage():"APPLE/WEB_LOGIN")+"]; 请在官方页面完成登录后重试"
+                : platform==AccountPlatform.KUGOU?"酷狗登录未完成 ["+(error.getMessage()!=null && error.getMessage().matches("KUGOU/[A-Z0-9_]{1,64}")?error.getMessage():"KUGOU/LOGIN")+"]; 请重新扫码或检查 API 服务"
                 : AuthFailure.diagnostic(error);
     }
     public synchronized void cancelLogin() {

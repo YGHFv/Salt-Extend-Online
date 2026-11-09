@@ -20,12 +20,14 @@ import io.github.yghfv.saltneri.plugin.auth.AccountPlatform
 internal fun PlatformIcon(ui: SaltNativeUi, platform: AccountPlatform) {
     val path = remember(platform) { PathParser().parsePathString(when(platform) {
         AccountPlatform.BILIBILI -> BILIBILI
+        AccountPlatform.KUGOU -> "M 4 1 L 8 1 L 8 10 L 17 1 L 23 1 L 12 12 L 23 23 L 17 23 L 8 14 L 8 23 L 4 23 Z"
         AccountPlatform.NETEASE -> NETEASE
         AccountPlatform.QQMUSIC -> QQMUSIC
         AccountPlatform.APPLEMUSIC -> "M 9 3 L 9 16 C 3 13 2 22 8 21 C 11 21 12 19 12 16 L 12 7 L 20 5 L 20 14 C 14 11 13 20 19 19 C 22 19 23 17 23 14 L 23 1 Z"
     }).toPath() }
     val color = when(platform) {
         AccountPlatform.BILIBILI -> Color(0xFF00A1D6)
+        AccountPlatform.KUGOU -> Color(0xFF0099FF)
         AccountPlatform.NETEASE -> Color(0xFFD43C33)
         AccountPlatform.QQMUSIC -> Color(0xFF31C27C)
         AccountPlatform.APPLEMUSIC -> Color(0xFFFA375A)

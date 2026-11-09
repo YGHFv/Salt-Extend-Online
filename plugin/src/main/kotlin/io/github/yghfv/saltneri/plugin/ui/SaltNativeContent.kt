@@ -733,7 +733,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                             val cancelLabel = if (login?.phase() == AccountLoginController.Phase.WEB_LOGIN) "\u53d6\u6d88\u7f51\u9875\u767b\u5f55" else "\u53d6\u6d88\u767b\u5f55"
                             NativeRow(ui, cancelLabel, click = { action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) } })
                         }
-                        login?.qrContent()?.let { uri ->
+                        login?.qrContent()?.takeIf { login.qrImage()==null }?.let { uri ->
                             Qr(ui, uri.toASCIIString())
                             NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
                                 action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) }
@@ -742,7 +742,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         login?.qrImage()?.let { bytes ->
                             val image = remember(bytes.contentHashCode()) { runCatching { ui.thumbnail(bytes) }.getOrNull() }
                             DisposableEffect(image) { onDispose { image?.close() } }
-                            if(image != null) Image(image.bitmap(), "\u624b\u673a QQ \u767b\u5f55\u4e8c\u7ef4\u7801", Modifier.size(240.dp).background(Color.White), contentScale = ContentScale.Fit)
+                            if(image != null) Image(image.bitmap(), platform.label()+" 登录二维码", Modifier.size(240.dp).background(Color.White), contentScale = ContentScale.Fit)
                             NativeRow(ui, "\u53d6\u6d88\u5f85\u786e\u8ba4\u767b\u5f55", click = {
                                 action { ui.desk().action(platform, NativeDesk.Action.CANCEL_LOGIN) }
                             })

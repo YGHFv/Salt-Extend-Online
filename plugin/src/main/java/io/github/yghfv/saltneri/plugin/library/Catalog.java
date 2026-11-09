@@ -18,7 +18,8 @@ public final class Catalog {
         public Query(AccountPlatform platform, View view, long folder, int page, long owner) { this(platform, view, folder, page, owner, ""); }
         public Query {
             resource=resource==null?"":resource;
-            if(!resource.isEmpty() && (platform!=AccountPlatform.APPLEMUSIC || view!=View.FOLDER || !resource.matches("(albums|playlists)/[A-Za-z0-9.-]{1,128}")))throw new IllegalArgumentException("Invalid library resource");
+            if(!resource.isEmpty() && (view!=View.FOLDER || !(platform==AccountPlatform.APPLEMUSIC && resource.matches("(albums|playlists)/[A-Za-z0-9.-]{1,128}")
+                    || platform==AccountPlatform.KUGOU && KugouCatalog.validCollection(resource))))throw new IllegalArgumentException("Invalid library resource");
             if(platform==AccountPlatform.APPLEMUSIC && view==View.FOLDER && resource.isEmpty())throw new IllegalArgumentException("Missing Apple library resource");
             keyword = keyword == null ? "" : keyword.strip();
             if (platform == null || view == null || page < 1 || page > 500

@@ -72,12 +72,14 @@ public final class LazyPlaylistCoverContractTest {
                         case NETEASE -> TrackKey.netease(row.target());
                         case BILIBILI -> TrackKey.bilibili("BV17x411w7KC",number);
                         case QQMUSIC -> TrackKey.qqmusic(String.format(Locale.ROOT,"00%012d",number));
+                        case KUGOU -> TrackKey.kugou(String.format(Locale.ROOT,"%032X",number));
                     };
                     Instant expiry=time.instant().plusSeconds(60);
                     URI source=URI.create(switch(platform) {
                         case NETEASE -> "https://m7.music.126.net/fixture";
                         case BILIBILI -> "https://test.bilivideo.com/fixture";
                         case QQMUSIC -> "https://dl.stream.qqmusic.qq.com/fixture";
+                        case KUGOU -> "https://fs.kugou.com/fixture";
                     });
                     return new OnlinePlaybackController.Audio(key,new Salt1193PlaybackSession.Metadata("Resolved "+row.target(),"Artist","","",pictures.get(number-1)),
                             new MediaLease(platform,source,Map.of(),scope,expiry,100),expiry);

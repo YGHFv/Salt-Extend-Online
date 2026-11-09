@@ -270,7 +270,7 @@ public final class NativePageRenderTest {
                             (composer, flags) -> { PlatformIconsKt.PlatformIcon(ui, platform, composer, 0); return Unit.INSTANCE; });
                     try (Image image = scene.render(16_000_000L); Data png = image.encodeToData(EncodedImageFormat.PNG,100,0)) {
                         var pixels = ImageIO.read(new ByteArrayInputStream(png.getBytes())); int branded = 0;
-                        int color = switch(platform) {case BILIBILI -> 0x00a1d6;case NETEASE -> 0xd43c33;case QQMUSIC -> 0x31c27c;case APPLEMUSIC -> 0xfa375a;};
+                        int color = switch(platform) {case BILIBILI -> 0x00a1d6;case NETEASE -> 0xd43c33;case QQMUSIC -> 0x31c27c;case APPLEMUSIC -> 0xfa375a;case KUGOU -> 0x0099ff;};
                         for (int y=0; y<20; y++) for (int x=0; x<20; x++) if ((pixels.getRGB(x,y) & 0xffffff) == color && (pixels.getRGB(x,y) >>> 24) > 200) branded++;
                         check(branded > 70);
                     } catch (Exception error) { throw new AssertionError(error); }

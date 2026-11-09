@@ -36,7 +36,8 @@
             "Bilibili",
             "网易云",
             "QQ 音乐",
-            "Apple Music"
+            "Apple Music",
+            "酷狗"
           ],
           "entry_values": [
             "restore",
@@ -44,7 +45,8 @@
             "BILIBILI",
             "NETEASE",
             "QQMUSIC",
-            "APPLEMUSIC"
+            "APPLEMUSIC",
+            "KUGOU"
           ],
           "default_value": "restore"
         },
@@ -302,6 +304,40 @@
             "SAVED"
           ],
           "default_value": "DISCOVER"
+        },
+        {
+          "key": "kugou.home",
+          "type": "list",
+          "title": "酷狗首页",
+          "summary": "进入酷狗时显示的栏目。接入使用 KA Music API 服务。",
+          "entries": [
+            "推荐歌单",
+            "我的歌单",
+            "订阅歌单"
+          ],
+          "entry_values": [
+            "DISCOVER",
+            "MINE",
+            "SAVED"
+          ],
+          "default_value": "DISCOVER"
+        },
+        {
+          "key": "kugou.quality",
+          "type": "list",
+          "title": "酷狗音质",
+          "summary": "按当前账号可用权限读取完整音轨。",
+          "entries": [
+            "标准 128K",
+            "高品质 320K",
+            "无损 FLAC"
+          ],
+          "entry_values": [
+            "128",
+            "320",
+            "flac"
+          ],
+          "default_value": "128"
         }
       ]
     }

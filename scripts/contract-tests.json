@@ -41,9 +41,16 @@
     "applemusic/AppleMusicHttp.java",
     "auth/AppleMusicAuthClient.java",
     "auth/WindowsAppleMusicWebLogin.java",
-    "auth/CookieLogin.java"
+    "auth/CookieLogin.java",
+    "auth/KugouQrClient.java",
+    "kugou/KugouHttp.java"
   ],
   "tests": [
+    {
+      "class": "io.github.yghfv.saltneri.plugin.library.KugouContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
     {
       "class": "io.github.yghfv.saltneri.plugin.ui.CookieLoginRenderTest",
       "baseOnly": false,

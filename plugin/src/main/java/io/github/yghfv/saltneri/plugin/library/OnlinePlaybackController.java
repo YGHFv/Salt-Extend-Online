@@ -93,7 +93,10 @@ public final class OnlinePlaybackController implements AutoCloseable {
     public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings,Function<AccountPlatform,AccountCredentials> accounts) throws Exception {
             Audio audio;
             if(target.platform()==AccountPlatform.APPLEMUSIC)throw new java.io.IOException("APPLE/OFFICIAL_CLIENT_REQUIRED");
-            if (target.platform() == AccountPlatform.BILIBILI) {
+            if(target.platform()==AccountPlatform.KUGOU) {
+                var r=new io.github.yghfv.saltneri.plugin.kugou.KugouClient(account).resolve(target.id(),settings.kugou(),scope,request);
+                audio=withCover(new Audio(r.key(),r.metadata(),r.lease(),r.expiresAt()),r.coverCandidate(),request,settings.coverMode());
+            } else if (target.platform() == AccountPlatform.BILIBILI) {
                 var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
                 audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());
             } else if(target.platform()==AccountPlatform.QQMUSIC) {

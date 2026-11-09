@@ -17,6 +17,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Class inspector tests failed.' }
 $pluginMetadata = Get-Content -LiteralPath (Join-Path $root 'plugin.properties') -Raw | ConvertFrom-StringData
 & python (Join-Path $root 'scripts/verify-vendor.py')
 if ($LASTEXITCODE -ne 0) { throw 'Vendored QR source verification failed.' }
+& (Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe') -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'test-apple-launch.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'Apple Music launcher contract failed.' }
 $salt = [System.IO.Path]::GetFullPath($SaltHome)
 $javac = Join-Path $JdkHome 'bin/javac.exe'
 $java = Join-Path $JdkHome 'bin/java.exe'

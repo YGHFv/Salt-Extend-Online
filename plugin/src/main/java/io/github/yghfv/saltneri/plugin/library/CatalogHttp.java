@@ -118,7 +118,7 @@ public final class CatalogHttp implements AutoCloseable {
             configure(connection, uri, form); int status = connection.getResponseCode(); check(request);
             if (status != 200) throw CatalogFailure.code(stage, Reason.HTTP, status);
             Map<String, Object> result;
-            try { result = JsonResponse.read(connection, request, true); }
+            try { result = JsonResponse.read(connection, request, true,platform==AccountPlatform.NETEASE && uri.getPath().equals("/weapi/v1/discovery/recommend/resource")); }
             catch (IOException error) { throw CatalogFailure.wrap(stage, Reason.RESPONSE, error); }
             cookies.accept(uri, JsonResponse.setCookies(connection)); check(request); return result;
         } catch (IOException error) { throw CatalogFailure.wrap(stage, Reason.NETWORK, error); }

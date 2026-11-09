@@ -12,6 +12,9 @@ import java.util.zip.GZIPInputStream;
 public final class JsonResponse {
     private JsonResponse() { }
     public static Map<String, Object> read(HttpURLConnection connection, RequestScope scope, boolean allowGzip) throws IOException {
+        return read(connection,scope,allowGzip,false);
+    }
+    public static Map<String,Object> read(HttpURLConnection connection,RequestScope scope,boolean allowGzip,boolean neteaseRecommendations) throws IOException {
         String type = connection.getHeaderField("Content-Type"), encoding = connection.getHeaderField("Content-Encoding");
         if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase("application/json")
                 || connection.getContentLengthLong() > BoundedJson.MAX_BYTES) throw invalid();
@@ -26,7 +29,7 @@ public final class JsonResponse {
                 bytes.write(buffer, 0, count);
             }
         }
-        scope.check(); return BoundedJson.object(BoundedJson.parse(bytes.toByteArray()));
+        scope.check(); return BoundedJson.object(neteaseRecommendations?BoundedJson.parseNeteaseRecommendations(bytes.toByteArray()):BoundedJson.parse(bytes.toByteArray()));
     }
     public static List<String> setCookies(HttpURLConnection connection) {
         return connection.getHeaderFields().entrySet().stream()

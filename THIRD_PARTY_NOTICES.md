@@ -214,3 +214,20 @@ The NetEase private FM protocol was cross-checked with
 https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced at
 `4a7d557326d16d2f1e5172ee69c9471eb3a50173` (`module/personal_fm.js` and
 `module/personal_fm_mode.js`); no source from that project is bundled.
+
+
+## KA Music / kgka_Music_hl
+
+- Repository: https://github.com/umr-xiaomai/kgka_Music_hl
+- Reviewed revision: `6463ebf31016e053f726ae31cf9670d8bf76edd6` (2026-11-10).
+- Protocol reference only: `api.json`, `lib/services/music_api.dart`, `lib/core/api_client.dart`,
+  and `lib/models/music_models.dart`. The pinned README claims MIT, but this tree has no license
+  file; no Dart implementation, imagery, binaries or keystore is copied or bundled.
+
+The Java adapter independently implements the documented QR status, session header, search,
+playlist, privilege, audio URL and decoded KRC interfaces. The reference's fixed third-party
+API endpoint `music.api.hoilai.cn` is disclosed in the README and login UI. Credentials are
+sent as `X-Kg-Session-Id` only to that service, never to artwork or media CDNs.
+
+The Apple UIA adapter in 0.8.50 adds installed-package AUMID discovery, window-bearing process
+selection and dedicated launch diagnostics; updated adapted hashes remain in reference-lock.json.

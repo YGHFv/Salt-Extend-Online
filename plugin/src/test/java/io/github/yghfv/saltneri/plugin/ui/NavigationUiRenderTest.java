@@ -107,14 +107,15 @@ public final class NavigationUiRenderTest {
                     var label=find(actual,CAPTION,SemanticsActions.INSTANCE.getGetTextLayoutResult());
                     var nativeLabel=find(expected,CAPTION,SemanticsActions.INSTANCE.getGetTextLayoutResult());
                     check(label!=null && nativeLabel!=null && label.getBoundsInRoot().equals(nativeLabel.getBoundsInRoot()));
-                    // Salt's desktop material lets the app background show through, not a white page fill.
-                    if(height>420)check((a.getRGB(width/2,height-2)>>>24)==0);
+                    // Check outside the native settings card, whose height grows with platform rows.
+                    if(height>420)check((a.getRGB(width-2,height-2)>>>24)==0 && (b.getRGB(width-2,height-2)>>>24)==0);
                     if(height==420) {
                         var scroll=find(actual,null,SemanticsActions.INSTANCE.getScrollBy());
                         check(scroll!=null);
                         check(Boolean.TRUE.equals(scroll.getConfig().get(SemanticsActions.INSTANCE.getScrollBy()).getAction().invoke(0f,10000f)));
                         render(actual);
-                        var last=find(actual,"\u7f51\u6613\u4e91",SemanticsProperties.INSTANCE.getToggleableState());
+                        var last=find(actual,io.github.yghfv.saltneri.plugin.auth.AccountPlatform.values()[
+                                io.github.yghfv.saltneri.plugin.auth.AccountPlatform.values().length-1].label(),SemanticsProperties.INSTANCE.getToggleableState());
                         check(last!=null && last.getBoundsInRoot().getBottom()<=height);
                         var title=find(actual,"\u4fa7\u680f\u7ba1\u7406",SemanticsActions.INSTANCE.getGetTextLayoutResult());
                         check(title!=null && title.getBoundsInRoot().getTop()<56*density);

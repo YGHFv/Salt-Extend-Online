@@ -194,7 +194,9 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
                 item -> list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE
                         ? request -> new io.github.yghfv.saltneri.plugin.netease.NeteaseLyricsClient(list.account()).load(Long.parseLong(item.target()),request)
                         : list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.QQMUSIC
-                            ? request -> new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient(list.account()).lyrics(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(item.target()),request) : null,
+                            ? request -> new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient(list.account()).lyrics(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(item.target()),request)
+                            : list.platform()==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.KUGOU
+                                ? request -> new io.github.yghfv.saltneri.plugin.kugou.KugouClient(list.account()).lyrics(item.target(),request) : null,
                 savedTracks,item->identities.next());
         try {
             next.play();

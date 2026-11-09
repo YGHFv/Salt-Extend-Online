@@ -22,12 +22,13 @@ final class CatalogPageCache {
     final CatalogHttp.SessionCache sessions=new CatalogHttp.SessionCache();
     final QqMusicCatalog.Recommendations qqRecommendations=new QqMusicCatalog.Recommendations();
     final NeteaseRecommendations netRecommendations=new NeteaseRecommendations();
+    final KugouCatalog.Cache kugouCache=new KugouCatalog.Cache();
     final io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp appleHttp;
     CatalogPageCache(Clock clock) {
         this.clock = clock; discovery = new BiliDiscovery.Cache(clock);
         appleHttp=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicHttp(io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection::new,clock);
     }
-    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); sessions.clear(); qqRecommendations.clear(); netRecommendations.clear(); }
+    synchronized void clear() { revision++; pages.clear(); complete.clear(); account = null; discovery.clear(); sessions.clear(); qqRecommendations.clear(); netRecommendations.clear(); kugouCache.clear(); }
     @FunctionalInterface interface FullLoader { CatalogClient.CollectionContents load() throws Exception; }
     CatalogClient.CollectionContents all(AccountCredentials owner,Query query,RequestScope request,FullLoader loader) throws Exception {
         long captured;

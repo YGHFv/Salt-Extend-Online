@@ -9,7 +9,7 @@ import java.util.Set;
 
 /** An already-authorized, fixed media resource, never a user-supplied proxy target. */
 public final class MediaLease {
-    public enum Platform { BILIBILI, NETEASE, QQMUSIC }
+    public enum Platform { BILIBILI, NETEASE, QQMUSIC, KUGOU }
     private static final Set<String> HEADERS = Set.of("user-agent", "referer", "cookie");
     private final Platform platform;
     private final URI uri;
@@ -65,6 +65,7 @@ public final class MediaLease {
             case NETEASE -> under(host, "music.126.net");
             case QQMUSIC -> under(host, "qqmusic.qq.com") || under(host, "music.tc.qq.com")
                     || host.equalsIgnoreCase("aqqmusic.tc.qq.com");
+            case KUGOU -> under(host,"kugou.com") || under(host,"kgimg.com");
         };
         if (!allowed || !"https".equalsIgnoreCase(target.getScheme())
                 || (target.getPort() != -1 && target.getPort() != 443)

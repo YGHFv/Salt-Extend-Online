@@ -101,7 +101,7 @@ function Invoke-AmPlaySong {
       $app = Ensure-AmRunning 30000
     }
     $a.ensureAppMs = $app.ensureAppMs
-    if (-not $app.ok) { $stage = 'APP_NOT_RUNNING'; $detail = ('launched=' + $app.launched + ' noLaunch=' + [bool]$NoLaunch) }
+    if (-not $app.ok) { $stage = if ($app.stage) { $app.stage } else { 'APP_NOT_RUNNING' }; $detail = ('launched=' + $app.launched + ' noLaunch=' + [bool]$NoLaunch) }
     else {
       if (-not $NoLaunch) { $hwnd = $app.hwnd }
       if ($app.launched) { $result.appLaunched = $true; Start-Sleep -Milliseconds 800 }

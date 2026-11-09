@@ -53,6 +53,7 @@ public final class SavedPlaylistArtworkContractTest {
         var key=switch(target.platform()) {
             case NETEASE->TrackKey.netease(id);
             case QQMUSIC->TrackKey.qqmusic(id);
+            case KUGOU->TrackKey.kugou(id);
             case BILIBILI->TrackKey.bilibili(id,123);
             case APPLEMUSIC->throw new IllegalArgumentException("External player");
         };
@@ -60,6 +61,7 @@ public final class SavedPlaylistArtworkContractTest {
         URI media=URI.create(switch(target.platform()) {
             case NETEASE->"https://m7.music.126.net/fixture";
             case QQMUSIC->"https://dl.stream.qqmusic.qq.com/fixture";
+            case KUGOU->"https://fs.kugou.com/fixture";
             case BILIBILI->"https://test.bilivideo.com/fixture";
             case APPLEMUSIC->throw new IllegalArgumentException("External player");
         });

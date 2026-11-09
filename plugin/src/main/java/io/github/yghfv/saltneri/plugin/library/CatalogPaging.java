@@ -19,7 +19,9 @@ public final class CatalogPaging {
     }
     @FunctionalInterface interface Fetch {Page page(Query query) throws Exception;}
     static Window load(Query query,int width,RequestScope request,Fetch fetch) throws Exception {
-        if(width==20) {
+        // Radio endpoints return a variable batch, not a positional 20-slot page.
+        // Publish it immediately; padding a UI window used to trigger 7-14 serial FM requests.
+        if(width==20 || query.view()==View.PERSONAL_RADIO) {
             request.check();Page page=fetch.page(query);
             return new Window(page.title(),page.items(),page.hasMore(),page.totalPages()>0?page.totalPages():page.hasMore()?0:query.page(),page.totalCount());
         }

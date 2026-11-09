@@ -87,8 +87,8 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
             List<Object> dynamic=new ArrayList<>();
             for(Object item:filtered) {
                 if(listConstructor.getDeclaringClass().isInstance(item) && "ui.home".equals(invoke(valueMethod(item,"\u037f"),item))) {
-                    List<String> labels=new ArrayList<>(List.of("\u6062\u590d\u4e0a\u6b21","\u6b4c\u66f2","Bilibili","\u7f51\u6613\u4e91","QQ \u97f3\u4e50","Apple Music"));
-                    List<String> values=new ArrayList<>(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC"));
+                    List<String> labels=new ArrayList<>(List.of("\u6062\u590d\u4e0a\u6b21","\u6b4c\u66f2","Bilibili","\u7f51\u6613\u4e91","QQ \u97f3\u4e50","Apple Music","酷狗"));
+                    List<String> values=new ArrayList<>(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC","KUGOU"));
                     for(var playlist:uiPlaylists()) {labels.add("\u6b4c\u5355 \u00b7 "+playlist.title());values.add("playlist:"+playlist.id());}
                     try {item=listConstructor.newInstance("salt-home","ui.home","\u0053alt \u9996\u9875","\u542f\u52a8\u65f6\u6253\u5f00\u7684\u9875\u9762",labels,values,"restore","config.json");}
                     catch(ReflectiveOperationException failure) {throw new IllegalStateException("Home options unavailable",failure);}
@@ -113,7 +113,7 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
         List<Object> switches=new ArrayList<>();
         Map<String,String> labels=Map.ofEntries(Map.entry("Track","\u6b4c\u66f2"),Map.entry("Genre","\u6d41\u6d3e"),Map.entry("Album","\u4e13\u8f91"),
                 Map.entry("Artist","\u827a\u672f\u5bb6"),Map.entry("Folder","\u6587\u4ef6\u5939"),Map.entry("MusicLibrary","\u97f3\u4e50\u5e93"),Map.entry("SoundEffects","\u97f3\u6548"),
-                Map.entry("NewPlaylist","\u65b0\u5efa\u6b4c\u5355"),Map.entry("ImportPlaylist","\u5bfc\u5165\u6b4c\u5355"),Map.entry("BILIBILI","Bilibili"),Map.entry("NETEASE","\u7f51\u6613\u4e91"),Map.entry("QQMUSIC","QQ \u97f3\u4e50"),Map.entry("APPLEMUSIC","Apple Music"));
+                Map.entry("NewPlaylist","\u65b0\u5efa\u6b4c\u5355"),Map.entry("ImportPlaylist","\u5bfc\u5165\u6b4c\u5355"),Map.entry("BILIBILI","Bilibili"),Map.entry("NETEASE","\u7f51\u6613\u4e91"),Map.entry("QQMUSIC","QQ \u97f3\u4e50"),Map.entry("APPLEMUSIC","Apple Music"),Map.entry("KUGOU","酷狗"));
         try {
             for(String button:SidebarPolicy.BUTTONS) if(!"Settings".equals(button))
                 switches.add(switchConstructor.newInstance("sidebar-"+button,"ui.sidebar."+button,labels.get(button),"",true,"config.json"));

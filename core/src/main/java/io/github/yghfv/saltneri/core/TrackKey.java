@@ -8,11 +8,12 @@ public record TrackKey(Platform platform, String remoteId, long cid) {
     private static final Pattern BVID = Pattern.compile("BV[0-9A-Za-z]{10}");
     private static final Pattern SONG_ID = Pattern.compile("[1-9][0-9]*");
 
-    public enum Platform { NETEASE, BILIBILI, QQMUSIC }
+    public enum Platform { NETEASE, BILIBILI, QQMUSIC, KUGOU }
 
     public TrackKey {
         Objects.requireNonNull(platform, "platform");
         Objects.requireNonNull(remoteId, "remoteId");
+        if(platform==Platform.KUGOU && (!remoteId.matches("[A-F0-9]{32}") || cid!=0))throw new IllegalArgumentException("Kugou requires an audio hash");
         if (platform == Platform.QQMUSIC && (!remoteId.matches("[A-Za-z0-9]{14}") || cid != 0)) {
             throw new IllegalArgumentException("QQ Music requires a song MID and no cid");
         }
@@ -33,12 +34,14 @@ public record TrackKey(Platform platform, String remoteId, long cid) {
     }
 
     public static TrackKey qqmusic(String mid) { return new TrackKey(Platform.QQMUSIC, mid, 0); }
+    public static TrackKey kugou(String hash) {return new TrackKey(Platform.KUGOU,hash.toUpperCase(java.util.Locale.ROOT),0);}
 
     public String stableId() {
         return switch (platform) {
             case NETEASE -> "netease:song:" + remoteId;
             case BILIBILI -> "bilibili:video:" + remoteId + ":cid:" + cid;
             case QQMUSIC -> "qqmusic:song:" + remoteId;
+            case KUGOU -> "kugou:song:" + remoteId;
         };
     }
 }

@@ -54,15 +54,15 @@ def validate(path, experimental):
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(prefs) != {"bili.home", "netease.home", "qqmusic.home", "applemusic.home", "ui.home", "bili.quality", "netease.quality", "qqmusic.quality", "qqmusic.autoSourceSwitch", "netease.autoSourceSwitch", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 20:
+            if set(prefs) != {"bili.home", "netease.home", "qqmusic.home", "applemusic.home", "kugou.home", "kugou.quality", "ui.home", "bili.quality", "netease.quality", "qqmusic.quality", "qqmusic.autoSourceSwitch", "netease.autoSourceSwitch", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 22:
                 raise ValueError("Unexpected condensed settings menu")
             if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "ui.hideSidebarToggle")):
                 raise ValueError("Automatic source switching and toggle hiding must be opt-in")
             if prefs["ui.hiddenSidebar"]["default_value"] is not False:
                 raise ValueError("Sidebar hiding must be opt-in")
-            if prefs["ui.home"]["entry_values"] != ["restore", "Track", "BILIBILI", "NETEASE", "QQMUSIC", "APPLEMUSIC"] or prefs["ui.home"]["default_value"] != "restore":
+            if prefs["ui.home"]["entry_values"] != ["restore", "Track", "BILIBILI", "NETEASE", "QQMUSIC", "APPLEMUSIC", "KUGOU"] or prefs["ui.home"]["default_value"] != "restore":
                 raise ValueError("Wrong Salt startup home options")
-            for key in ("bili.home", "netease.home", "qqmusic.home", "applemusic.home"):
+            for key in ("bili.home", "netease.home", "qqmusic.home", "applemusic.home", "kugou.home"):
                 if prefs[key]["entry_values"] != ["DISCOVER", "MINE", "SAVED"] or prefs[key]["default_value"] != "DISCOVER":
                     raise ValueError("Wrong platform startup home options")
             if prefs["ui.sidebarOptimization"]["type"] != "switch" or prefs["ui.sidebarOptimization"]["default_value"] is not False:

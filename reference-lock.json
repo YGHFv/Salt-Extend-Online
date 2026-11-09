@@ -1,5 +1,5 @@
 {
-  "reviewedOn": "2026-11-09",
+  "reviewedOn": "2026-11-10",
   "neriplayer": {
     "repository": "https://github.com/YGHFv/NeriPlayer",
     "commit": "fd7fdb757821fda7a62aee3a2b7cecf3a4b8bfe0",
@@ -25,7 +25,7 @@
   },
   "workshopReference": {
     "url": "https://steamcommunity.com/sharedfiles/filedetails/?id=3829341669",
-    "title": "WebDAV \u97f3\u4e50\u5e93",
+    "title": "WebDAV 音乐库",
     "sourceOrBinaryObtained": true,
     "sourceObtained": false,
     "installedBinaryVersion": "0.2.2",
@@ -42,7 +42,12 @@
     "repository": "https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced",
     "commit": "4a7d557326d16d2f1e5172ee69c9471eb3a50173",
     "protocolOnly": true,
-    "files": ["module/personal_fm.js", "module/personal_fm_mode.js", "module/recommend_songs.js", "module/recommend_resource.js"]
+    "files": [
+      "module/personal_fm.js",
+      "module/personal_fm_mode.js",
+      "module/recommend_songs.js",
+      "module/recommend_resource.js"
+    ]
   },
   "musicone": {
     "repository": "https://github.com/HGODLK/MusicOne",
@@ -60,7 +65,7 @@
       },
       "am-play.ps1": {
         "upstreamSha256": "5222963476e757089e3e2f32889461f74ef4b0c7a035603f57ebdcb6df4a62de",
-        "adaptedSha256": "5222963476e757089e3e2f32889461f74ef4b0c7a035603f57ebdcb6df4a62de"
+        "adaptedSha256": "fec3209bd9f6fe7d1c89c07348cdd764a4a3529a5ef51bcc1882dc4745e7cbd6"
       },
       "am-smtc.ps1": {
         "upstreamSha256": "a9b9b10acf40f83fef79ded810fd8c9633b0e72b5f3577c489fa50b71677372e",
@@ -68,8 +73,21 @@
       },
       "am-uia.ps1": {
         "upstreamSha256": "86dd2e294d3f641577d56f0f915752786c886cc654bb0b82b22976abbeceac66",
-        "adaptedSha256": "e0d584e343e4abd0b3a6921bb3f4e6a12939e82206fcab34c13b2bf8116356f4"
+        "adaptedSha256": "c95e1066fc32dc045f59e2da4c0ddb4c42e22af37ee99e1a045701d98b97f22b"
       }
     }
+  },
+  "kgkaMusic": {
+    "repository": "https://github.com/umr-xiaomai/kgka_Music_hl",
+    "commit": "6463ebf31016e053f726ae31cf9670d8bf76edd6",
+    "protocolOnly": true,
+    "license": "README claims MIT; no license file in pinned tree",
+    "apiBase": "https://music.api.hoilai.cn",
+    "files": [
+      "api.json",
+      "lib/services/music_api.dart",
+      "lib/core/api_client.dart",
+      "lib/models/music_models.dart"
+    ]
   }
 }

@@ -51,9 +51,37 @@ try { [void][AmUiaNative]::SetProcessDPIAware() } catch { }
 # 1. app lifecycle
 # ------------------------------------------------------------
 function Get-AmProcess {
-  $p = Get-Process -Name 'AppleMusic' -ErrorAction SilentlyContinue
-  if ($p) { $p.Refresh() }
-  return $p
+  $items = @(Get-Process -Name 'AppleMusic' -ErrorAction SilentlyContinue)
+  foreach ($item in $items) { try { $item.Refresh() } catch { } }
+  return $items | Sort-Object @{ Expression = { $_.MainWindowHandle -ne 0 }; Descending = $true } | Select-Object -First 1
+}
+
+function Get-AmLaunchTarget {
+  $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\AppleMusic.exe'
+  if (Test-Path -LiteralPath $alias) { return @{ kind = 'alias'; target = $alias } }
+  try {
+    $package = Get-AppxPackage -Name '*AppleMusic*' -ErrorAction Stop | Select-Object -First 1
+    if ($package) {
+      $manifest = Get-AppxPackageManifest -Package $package.PackageFullName -ErrorAction Stop
+      $application = @($manifest.Package.Applications.Application) | Select-Object -First 1
+      if ($application.Id) { return @{ kind = 'aumid'; target = ($package.PackageFamilyName + '!' + $application.Id) } }
+    }
+  } catch { }
+  try {
+    $app = Get-StartApps | Where-Object { $_.AppID -match '^AppleInc\.AppleMusicWin_[A-Za-z0-9]+!' } | Select-Object -First 1
+    if ($app) { return @{ kind = 'aumid'; target = $app.AppID } }
+  } catch { }
+  return $null
+}
+
+function Start-AmInstalled($Target, [string]$Url = '') {
+  if ($Target.kind -eq 'alias') {
+    if ($Url) { Start-Process -WindowStyle Hidden -FilePath $Target.target -ArgumentList ('/url "' + $Url + '"') | Out-Null }
+    else { Start-Process -WindowStyle Hidden -FilePath $Target.target | Out-Null }
+  } else {
+    # AppsFolder is a shell namespace; Explorer activates the installed AUMID.
+    Start-Process -WindowStyle Hidden -FilePath (Join-Path $env:SystemRoot 'explorer.exe') -ArgumentList ('shell:AppsFolder\' + $Target.target) | Out-Null
+  }
 }
 
 # Returns @{ ok; launched; pid; hwnd; ensureAppMs; stage }
@@ -62,14 +90,14 @@ function Ensure-AmRunning([int]$TimeoutMs = 30000) {
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $launched = $false
   $p = Get-AmProcess
-  if (-not $p) {
-    $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\AppleMusic.exe'
-    try {
-      if (Test-Path $alias) { Start-Process -WindowStyle Hidden -FilePath $alias | Out-Null }
-      else { Start-Process -WindowStyle Hidden 'shell:AppsFolder\AppleInc.AppleMusicWin_nzyj5cx40ttqa!App' | Out-Null }
-      $launched = $true
-    } catch {
-      return @{ ok = $false; launched = $false; pid = 0; hwnd = [IntPtr]::Zero; ensureAppMs = [int]$sw.ElapsedMilliseconds; stage = 'APP_NOT_RUNNING' }
+  if (-not $p -or $p.MainWindowHandle -eq 0) {
+    $target = Get-AmLaunchTarget
+    if (-not $target -and -not $p) {
+      return @{ ok = $false; launched = $false; pid = 0; hwnd = [IntPtr]::Zero; ensureAppMs = [int]$sw.ElapsedMilliseconds; stage = 'APP_NOT_INSTALLED' }
+    }
+    if ($target) {
+      try { Start-AmInstalled $target; $launched = $true }
+      catch { return @{ ok = $false; launched = $false; pid = 0; hwnd = [IntPtr]::Zero; ensureAppMs = [int]$sw.ElapsedMilliseconds; stage = 'APP_LAUNCH_FAILED' } }
     }
   }
   while ($sw.ElapsedMilliseconds -lt $TimeoutMs) {
@@ -79,7 +107,7 @@ function Ensure-AmRunning([int]$TimeoutMs = 30000) {
     }
     Start-Sleep -Milliseconds 300
   }
-  return @{ ok = $false; launched = $launched; pid = 0; hwnd = [IntPtr]::Zero; ensureAppMs = [int]$sw.ElapsedMilliseconds; stage = 'APP_NOT_RUNNING' }
+  return @{ ok = $false; launched = $launched; pid = 0; hwnd = [IntPtr]::Zero; ensureAppMs = [int]$sw.ElapsedMilliseconds; stage = 'APP_WINDOW_TIMEOUT' }
 }
 
 # ------------------------------------------------------------
@@ -231,19 +259,17 @@ function Get-AmTreeSignature($root) {
 # `AppleMusic.exe /url "<URL>"` (execution alias of the Store package) and falls
 # back to the shell handler if the alias is unavailable.
 function Invoke-AmNavigateUrl([string]$Url) {
-  $method = ''
-  $exe = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\AppleMusic.exe'
-  if (Test-Path $exe) {
-    try {
-      Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList ('/url "' + $Url + '"') | Out-Null
-      $method = 'AppleMusic.exe /url'
-    } catch { $method = '' }
-  }
-  if (-not $method) {
-    try { Start-Process -WindowStyle Hidden $Url | Out-Null; $method = 'shell-open' } catch { $method = 'failed' }
-  }
-  Start-Sleep -Milliseconds 500
-  return @{ method = $method; ok = ($method -ne 'failed') }
+  if ($Url -notmatch '^https://music\.apple\.com/[a-z]{2}/song/[^/?]+/[1-9][0-9]*$') { return @{ method = 'failed'; ok = $false } }
+  $target = Get-AmLaunchTarget
+  try {
+    if ($target -and $target.kind -eq 'alias') {
+      Start-AmInstalled $target $Url
+      return @{ method = 'AppleMusic.exe /url'; ok = $true }
+    }
+    $deepLink = $Url -replace '^https:', 'music:'
+    Start-Process -WindowStyle Hidden -FilePath $deepLink | Out-Null
+    return @{ method = 'music-protocol'; ok = $true }
+  } catch { return @{ method = 'failed'; ok = $false } }
 }
 
 function Get-AmListItems($root) {
