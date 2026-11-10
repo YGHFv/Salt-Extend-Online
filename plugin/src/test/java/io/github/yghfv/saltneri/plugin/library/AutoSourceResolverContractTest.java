@@ -89,6 +89,22 @@ public final class AutoSourceResolverContractTest {
                 check(qqAudio.lease().belongsTo(qq.accountScope()) && qqAudio.metadata().title().equals("Original song"));
                 currentQq.set(null);check(!qqAudio.lease().isActive() && !qqAudio.transportMatches());
             } finally {qq.retire();}
+            for(var platform:List.of(AccountPlatform.KUGOU,AccountPlatform.APPLEMUSIC)) {
+                var original=account(platform);var selected=new AtomicReference<>(original);
+                Function<AccountPlatform,AccountCredentials> all=p->p==AccountPlatform.BILIBILI?currentBili.get():p==platform?selected.get():null;
+                var source=new OnlinePlaybackController.Target(platform,platform==AccountPlatform.KUGOU?"A".repeat(32):"us:123");
+                try {
+                    var fallback=NeteaseAutoSourceResolver.resolve(original,source,original.accountScope(),request,all,bili,unavailable,new Backend(bili));
+                    check(fallback.key().platform().name().equals(platform.name()) && fallback.key().remoteId().equals(source.id()));
+                    check(fallback.transportMatches() && fallback.lease().belongsTo(original.accountScope()));
+                    check(fallback.metadata().title().equals("Original song") && fallback.metadata().album().equals("Original album"));
+                    currentBili.set(null);check(!fallback.lease().isActive());currentBili.set(bili);
+                    selected.set(null);check(!fallback.lease().isActive());
+                    check(MusicAutoSourceResolver.eligible(platform,new IOException(platform==AccountPlatform.KUGOU?"KUGOU/TRACK_UNAVAILABLE":"APPLE/PCM_SILENT")));
+                    for(String stage:List.of("HTTP_401","HTTP_429","LOGIN_REQUIRED","MEDIA_TLS","MEDIA_TIMEOUT","PCM_TIMEOUT","TRACK_IDENTITY"))
+                        check(!MusicAutoSourceResolver.eligible(platform,new IOException((platform==AccountPlatform.KUGOU?"KUGOU/":"APPLE/")+stage)));
+                } finally {original.retire();}
+            }
         } finally {bili.retire();net.retire();}
         System.out.println("PASS: "+checks+" bounded fallback/page matching/retry/logical identity/two-account fences; no live traffic");
     }

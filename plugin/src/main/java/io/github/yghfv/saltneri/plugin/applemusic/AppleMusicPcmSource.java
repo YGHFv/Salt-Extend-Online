@@ -84,8 +84,14 @@ public final class AppleMusicPcmSource implements DecodedAudioSource {
                     int consumed=n+skip;cursor+=consumed;skip=0;
                     if(consumed<pcm.length)pending=Arrays.copyOfRange(pcm,consumed,pcm.length);
                 }
-            } catch(IOException | RuntimeException failure) {cursor=-1;pending=new byte[0];throw failure;}
-            finally {decoder.pause();}
+            } catch(IOException | RuntimeException failure) {
+                cursor=-1;pending=new byte[0];
+                try {decoder.pause();} catch(IOException pauseFailure) {failure.addSuppressed(pauseFailure);}
+                throw failure;
+            }
+            // The browser keeps a bounded read-ahead queue and pauses itself when it fills.
+            // Pausing after every HTTP chunk made each following chunk wait for real-time decoding
+            // while Salt's audio callback was blocked, producing a gap every few seconds.
         }
         check(active);
         // At most 16 MiB, in memory only; no persistent decrypted Apple audio.

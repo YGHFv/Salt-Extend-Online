@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.rememberCursorPositionProvider
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.xuncorp.spw.workshop.api.hook.ComposableHook
@@ -86,14 +88,43 @@ class SaltSidebarSettingsContent(private val binding: SaltSidebarSettingsBinding
 }
 
 @Composable
-fun SidebarConfigurationPage(ui: SaltNativeUi) {
+fun SettingsConfigurationPage(ui: SaltNativeUi,page: SettingsCatalog.Page) {
+    val revision=ui.settingsRevision()
+    var playlists by remember(ui,page) {mutableStateOf(emptyList<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice>())}
+    LaunchedEffect(ui,page) {
+        if(page==SettingsCatalog.Page.HOME){playlists=withContext(Dispatchers.IO){ui.nativePlaylistChoices()};ui.homePlaylistChoices(playlists)}
+    }
     val back: @Composable () -> Unit = {ui.secondaryBack({ui.settingsBack()},Modifier,currentComposer)}
     val content: @Composable BoxScope.(PaddingValues) -> Unit = { insets ->
         LazyColumn(Modifier.fillMaxSize(),contentPadding=insets) {
-            item {
+            if(page==SettingsCatalog.Page.SIDEBAR)item {
                 ui.sidebarConfigurationCaption("\u8bbe\u7f6e\u5165\u53e3\u59cb\u7ec8\u4fdd\u7559\uff0c\u5176\u4ed6\u6309\u94ae\u53ef\u81ea\u7531\u663e\u9690\u3002",currentComposer)
             }
             item {
+                key(revision,playlists,page) {
+                val settings=ui.settingsItems(page)
+                val controls: @Composable ColumnScope.() -> Unit = {
+                    settings.filter {it.key()!="ui.hiddenSidebar" || ui.sidebarOptimized()}.forEach {setting ->
+                        key(setting.key(),setting.title()) {
+                            when(setting.type()) {
+                                "switch" -> ui.settingSwitch(setting,currentComposer)
+                                "caption" -> ui.sidebarConfigurationCaption(setting.title()+" · "+setting.summary(),currentComposer)
+                                else -> {
+                                    var show by remember {mutableStateOf(false)}
+                                    val position=rememberCursorPositionProvider()
+                                    ui.settingAction(setting,{
+                                        if(setting.type()=="list")show=true else ui.repairSidebarSetting()
+                                    },currentComposer)
+                                    if(show)ui.settingChoices(position,{show=false},setting,currentComposer)
+                                }
+                            }
+                        }
+                    }
+                }
+                ui.sidebarConfigurationColumn(controls,currentComposer)
+                }
+            }
+            if(page==SettingsCatalog.Page.SIDEBAR)item {
                 val switches: @Composable ColumnScope.() -> Unit = {
                     SidebarPolicy.BUTTONS.filter {it!="Settings"}.forEach { button ->
                         key(button) {ui.sidebarSwitch(button,ui.sidebarVisible(button),currentComposer)}
@@ -103,5 +134,5 @@ fun SidebarConfigurationPage(ui: SaltNativeUi) {
             }
         }
     }
-    ui.sidebarConfigurationScreen("\u4fa7\u680f\u7ba1\u7406",back,content,currentComposer)
+    ui.sidebarConfigurationScreen(page.title(),back,content,currentComposer)
 }

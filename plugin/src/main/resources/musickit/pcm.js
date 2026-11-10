@@ -1,6 +1,7 @@
 /* Salt's MusicKit PCM port. MusicKit and the browser CDM retain ownership of DRM. */
 globalThis.saltApple = {
   error: "", queue: [], bytes: 0, epoch: 0, frame: 0, ready: false, running: false,
+  desiredRunning: false, backpressured: false, control: Promise.resolve(),
   async init(config) {
     try {
       if (!globalThis.MusicKit) await new Promise((resolve, reject) => {
@@ -10,7 +11,7 @@ globalThis.saltApple = {
         document.head.appendChild(script);
       });
       await MusicKit.configure({developerToken:config.developerToken,
-        app:{name:"Salt Extend",build:"0.9.0"}, sourceType:24, suppressErrorDialog:true,
+        app:{name:"Salt Extend",build:"0.9.1"}, sourceType:24, suppressErrorDialog:true,
         storefrontId:config.storefront});
       this.mk = MusicKit.getInstance();
       this.mk.musicUserToken = config.userToken;
@@ -79,6 +80,10 @@ globalThis.saltApple = {
         const bytes=new Uint8Array(e.data.pcm);
         if(this.bytes+bytes.length>2*1024*1024){this.error="PCM_OVERFLOW";this.pause();return;}
         this.queue.push(bytes);this.bytes+=bytes.length;
+        // Keep several seconds ready for Salt without growing indefinitely when Salt pauses.
+        if(this.desiredRunning && !this.backpressured && this.bytes>=1024*1024) {
+          this.backpressured=true;this.changePlayback(false);
+        }
       };
       element.addEventListener("ended",()=>this.node.port.postMessage({epoch:this.epoch,on:false,flush:true}));
     })();
@@ -89,23 +94,43 @@ globalThis.saltApple = {
     await this.pause();this.epoch++;this.queue=[];this.bytes=0;
     await this.mk.seekToTime(frame/48000);
     this.frame=frame;
-    return this.resume();
+    await this.resume();
+    // MusicKit produces PCM in real time. Prime a cushion before Salt's first blocking read;
+    // merely removing per-chunk pauses leaves the producer and consumer racing at equal speed.
+    const wanted=Math.min(768*1024,Math.max(0,Math.floor(this.duration*48)-frame)*4);
+    const end=Date.now()+8000;
+    while(this.bytes<wanted && !this.error && Date.now()<end)await new Promise(r=>setTimeout(r,15));
+    if(this.bytes<wanted && !this.error)this.error="PCM_TIMEOUT";
+    return {error:this.error};
   },
   async resume() {
     if(this.error)return {error:this.error};
     if(this.frame>=Math.floor(this.duration*48))return {error:""};
-    this.running=true;
-    await this.mk.play();
-    this.node.port.postMessage({epoch:this.epoch,on:true});
-    await this.ctx.resume();
+    this.desiredRunning=true;this.backpressured=false;
+    await this.changePlayback(true);
     return {error:this.error};
   },
   async pause() {
-    this.running=false;
-    if(this.mk)await this.mk.pause();
-    if(this.ctx)await this.ctx.suspend();
+    this.desiredRunning=false;this.backpressured=false;
+    await this.changePlayback(false);
     if(this.node)this.node.port.postMessage({epoch:this.epoch,on:false});
     return {error:this.error};
+  },
+  changePlayback(start) {
+    // Serialize flow control with explicit seeks/pauses so an old automatic pause cannot
+    // stop a newly resumed stream. Partial worklet packets survive automatic backpressure.
+    this.control=this.control.then(async()=>{
+      if(start) {
+        if(!this.desiredRunning || this.backpressured)return;
+        this.node.port.postMessage({epoch:this.epoch,on:true});
+        await this.mk.play();await this.ctx.resume();this.running=true;
+      } else {
+        if(this.mk)await this.mk.pause();
+        if(this.ctx)await this.ctx.suspend();
+        this.running=false;
+      }
+    }).catch(()=>{this.error="PCM_FLOW";});
+    return this.control;
   },
   pull(maximum) {
     if(this.error)return {error:this.error};
@@ -115,6 +140,9 @@ globalThis.saltApple = {
       out.set(chunk.subarray(0,count),written);written+=count;
       if(count===chunk.length)this.queue.shift();else this.queue[0]=chunk.subarray(count);}
     this.bytes-=size;this.frame+=size/4;
+    if(this.desiredRunning && this.backpressured && this.bytes<=512*1024) {
+      this.backpressured=false;this.changePlayback(true);
+    }
     let text="";for(const value of out)text+=String.fromCharCode(value);
     return {pcm:btoa(text),error:""};
   }

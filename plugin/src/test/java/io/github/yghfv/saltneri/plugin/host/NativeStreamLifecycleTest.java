@@ -23,7 +23,29 @@ public final class NativeStreamLifecycleTest {
         openingRace();
         blockedRead();
         sealedDecoderInput();
+        preparation();
         System.out.println("PASS: " + checks + " actual host callback lifecycle checks; no BASS output/account accessed");
+    }
+    private static void preparation() throws Exception {
+        for(boolean reject:new boolean[]{false,true}) {
+            try(Fixture http=new Fixture();Native runtime=new Native();Factory factory=new Factory(runtime)) {
+                var prepared=new AtomicInteger();
+                factory.streams.preparation(uri->{
+                    check(runtime.callbacks.size()==1,"Preparation ran before native probes completed");
+                    check(uri.equals(http.uri()),"Prepared unrelated media");
+                    prepared.incrementAndGet();
+                    if(reject)throw new java.io.IOException("Synthetic preparation failure");
+                });
+                Object raw=factory.streams.create(http.uri(),0);
+                check(prepared.get()==1,"Native preparation was not called once");
+                if(reject) {
+                    check(raw instanceof kotlin.Result.Failure,"Failed preparation published handle");
+                    check(runtime.freed.get()==1 && runtime.callbacks.isEmpty(),"Failed preparation leaked native handle");
+                } else {
+                    check(raw instanceof Integer && runtime.freed.get()==0,"Prepared handle was not transferred");
+                }
+            }
+        }
     }
 
     private static void failureAndEof() throws Exception {

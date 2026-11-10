@@ -33,10 +33,10 @@ public final class OnlinePlaybackController implements AutoCloseable {
         public static Audio from(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Resolved r) {return new Audio(r.key(),r.metadata(),r.lease(),r.expiresAt());}
         public boolean transportMatches() {
             return sourceKey!=null && sourceKey.platform().name().equals(lease.platform().name()) && lease.isActive()
-                    && (sourceKey.equals(key) || (key.platform()==TrackKey.Platform.NETEASE || key.platform()==TrackKey.Platform.QQMUSIC)
+                    && (sourceKey.equals(key) || key.platform()!=TrackKey.Platform.BILIBILI
                         && sourceKey.platform()==TrackKey.Platform.BILIBILI && target!=null
                         && key.platform().name().equals(target.platform().name())
-                        && key.equals(target.platform()==AccountPlatform.NETEASE?TrackKey.netease(target.id()):TrackKey.qqmusic(target.id())));
+                        && key.equals(NeteaseAutoSourceResolver.originalKey(target)));
         }
         @Override public String toString() { return "PreparedAudio[" + key.stableId() + ", URL redacted]"; }
     }
@@ -78,7 +78,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
             : testResolver.apply(account), () -> accounts.apply(platform), authorized, clock, Audio::expiresAt,
                 audio -> "\u97f3\u8f68\u5df2\u51c6\u5907\uff0c\u5c1a\u672a\u64ad\u653e\u3002",
                 error -> error instanceof java.io.IOException && error.getMessage()!=null && error.getMessage().matches("(APPLE|KUGOU)/[A-Z0-9_]{1,48}")
-                    ? (error.getMessage().startsWith("KUGOU/")?"酷狗音轨加载失败 ["+error.getMessage()+"]":error.getMessage()):null);
+                    ? (error.getMessage().startsWith("KUGOU/")?"酷狗音乐音轨加载失败 ["+error.getMessage()+"]":error.getMessage()):null);
         resolver.onDiscard(audio->{if(!transferred.remove(audio.lease()))audio.lease().release();});
         playbackWorker = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "salt-neri-doubleclick-play"); thread.setDaemon(true); return thread;
@@ -97,10 +97,19 @@ public final class OnlinePlaybackController implements AutoCloseable {
     public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings,Function<AccountPlatform,AccountCredentials> accounts) throws Exception {
             Audio audio;
             if(target.platform()==AccountPlatform.APPLEMUSIC) {
-                audio=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicClient(account).resolve(target.id(),scope,request);
+                try {audio=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicClient(account).resolve(target.id(),scope,request);}
+                catch(java.io.IOException unavailable) {
+                    if(!settings.appleMusicAutoSourceSwitch() || !MusicAutoSourceResolver.eligible(target.platform(),unavailable))throw unavailable;
+                    audio=MusicAutoSourceResolver.resolve(account,target,scope,request,settings,accounts,unavailable);
+                }
             } else if(target.platform()==AccountPlatform.KUGOU) {
-                var r=new io.github.yghfv.saltneri.plugin.kugou.KugouClient(account).resolve(target.id(),settings.kugou(),scope,request);
-                audio=withCover(new Audio(r.key(),r.metadata(),r.lease(),r.expiresAt()),r.coverCandidate(),request,settings.coverMode());
+                try {
+                    var r=new io.github.yghfv.saltneri.plugin.kugou.KugouClient(account).resolve(target.id(),settings.kugou(),scope,request);
+                    audio=withCover(new Audio(r.key(),r.metadata(),r.lease(),r.expiresAt()),r.coverCandidate(),request,settings.coverMode());
+                } catch(java.io.IOException unavailable) {
+                    if(!settings.kugouAutoSourceSwitch() || !MusicAutoSourceResolver.eligible(target.platform(),unavailable))throw unavailable;
+                    audio=MusicAutoSourceResolver.resolve(account,target,scope,request,settings,accounts,unavailable);
+                }
             } else if (target.platform() == AccountPlatform.BILIBILI) {
                 var resolved = new BiliClient(account).resolve(BiliTarget.parse(target.id()), settings.bili(), scope, request);
                 audio=withCover(Audio.from(resolved), resolved.coverCandidate(), request,settings.coverMode());

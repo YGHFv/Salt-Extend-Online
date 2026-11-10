@@ -1,4 +1,4 @@
-# 0.9.0 酷狗实际播放修复
+# 0.9.0 酷狗音乐实际播放修复
 
 歌单和歌曲信息可加载，但点播出现 `SSLHandshakeException`。实际调用 HTTPS
 KA Music API 后发现：`/song/url` 返回的是
@@ -21,7 +21,7 @@ KA Music API 后发现：`/song/url` 返回的是
 
 ## 2026-11-10 本地验收
 
-使用插件已有酷狗登录态、真实 API 和 CDN，经私有 Loopback Range、Salt 实际
+使用插件已有酷狗音乐登录态、真实 API 和 CDN，经私有 Loopback Range、Salt 实际
 HttpRangeSource 和 BASS 解码器验证三首不同曲目。BASS 使用无声音输出设备；
 没有操作运行中的 Salt 播放队列。
 

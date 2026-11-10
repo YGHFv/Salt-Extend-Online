@@ -47,6 +47,24 @@ public final class NativeDesk {
             savedPlaylists.add(target,row,playlist,()->permitted.getAsBoolean() && library.currentRow(token));
         });
     }
+    private PlatformPlaylistController platformPlaylists;
+    public void platformPlaylists(PlatformPlaylistController controller){platformPlaylists=Objects.requireNonNull(controller);}
+    public void loadPlatformPlaylists(String token) {
+        check();if(platformPlaylists!=null)platformPlaylists.load(token,library.selection(token));
+    }
+    public PlatformPlaylistController.Snapshot platformPlaylists(String token) {
+        if(platformPlaylists==null || !currentRow(token))return PlatformPlaylistController.Snapshot.empty();
+        return platformPlaylists.snapshot(token,library.selection(token));
+    }
+    public void favoriteRow(String token,String playlist) {
+        check();if(platformPlaylists==null)throw new IllegalStateException("Platform playlists unavailable");
+        platformPlaylists.add(token,library.selection(token),playlist);
+    }
+    public void subscribePlaylist(String token) {
+        check();if(platformPlaylists==null)throw new IllegalStateException("Platform playlists unavailable");
+        platformPlaylists.subscribe(token,library.selection(token));
+    }
+    public void playPlaylist(String token) {check();library.requestPlaylist(token);}
     private Supplier<CoverMode> coverMode=()->CoverMode.FIT;
     public void coverMode(Supplier<CoverMode> value) { coverMode=Objects.requireNonNull(value); }
     public CoverMode coverMode() { return coverMode.get(); }

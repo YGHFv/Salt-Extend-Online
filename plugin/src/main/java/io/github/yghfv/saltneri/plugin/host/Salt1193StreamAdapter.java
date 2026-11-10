@@ -160,6 +160,10 @@ public final class Salt1193StreamAdapter implements StreamBinding {
     public static StreamFactory nativeFactory(ClassLoader loader, java.util.function.Consumer<URI> failed) {
         return new ScopedNativeStreams(loader, null, failed);
     }
+    public static StreamFactory nativeFactory(ClassLoader loader, java.util.function.Consumer<URI> failed,
+                                             io.github.yghfv.saltneri.plugin.transport.LoopbackRangeServer transport) {
+        return new ScopedNativeStreams(loader,null,failed).preparation(transport::prepareForPlayback);
+    }
 
     private static Object read(Object owner, Field field) throws IllegalAccessException {
         if (!field.trySetAccessible()) throw new IllegalAccessException("Native owner inaccessible");

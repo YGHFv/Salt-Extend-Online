@@ -89,7 +89,7 @@ class SaltNativeContent(private val ui: SaltNativeUi) : ComposableHook() {
             val fallback = original as @Composable (Any) -> Unit
             val content: @Composable (Any) -> Unit = { key ->
                 val platform = ui.dispatch(key)
-                if(ui.settingsPage(key)) SidebarConfigurationPage(ui)
+                if(ui.settingsPage(key)) SettingsConfigurationPage(ui,ui.settingsPageKind(key))
                 else if (platform == null) fallback(key)
                 else (ui.entry(platform) as @Composable (Any) -> Unit)(key)
             }
@@ -205,7 +205,8 @@ private fun Cover(ui: SaltNativeUi, token: String, platform: AccountPlatform, mo
             .background(Brush.verticalGradient(listOf(Color.Transparent,Color.Black.copy(alpha=0.72f))))
             .padding(start=8.dp,end=8.dp,top=18.dp,bottom=6.dp),verticalAlignment=Alignment.CenterVertically) {
             val style=ui.palette(currentComposer).sub().copy(color=Color.White)
-            ui.text((stats["playCount"] as? String) ?: "--",Modifier.weight(1f).semantics {contentDescription="\u5c01\u9762\u64ad\u653e\u91cf"},style,1,1,currentComposer)
+            if(platform==AccountPlatform.BILIBILI)ui.text((stats["playCount"] as? String) ?: "--",Modifier.weight(1f).semantics {contentDescription="\u5c01\u9762\u64ad\u653e\u91cf"},style,1,1,currentComposer)
+            else Spacer(Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
             ui.text((stats["duration"] as? String) ?: "--:--",Modifier.semantics {contentDescription="\u5c01\u9762\u65f6\u957f"},style,1,1,currentComposer)
         }
@@ -574,10 +575,12 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     val track=row["kind"]=="TRACK"
     var menu by remember(platform,token) {mutableStateOf(false)}
     var playlists by remember(platform,token) {mutableStateOf(ui.desk().savedPlaylists())}
+    var favorites by remember(platform,token) {mutableStateOf(ui.desk().platformPlaylists(token))}
     LaunchedEffect(menu) {
         if(menu) {
-            ui.desk().loadSavedPlaylists()
-            while(true) {playlists=ui.desk().savedPlaylists();delay(100)}
+            if(track)ui.desk().loadSavedPlaylists()
+            ui.desk().loadPlatformPlaylists(token)
+            while(true) {playlists=ui.desk().savedPlaylists();favorites=ui.desk().platformPlaylists(token);delay(100)}
         }
     }
     val middle=if(middleLabel=="\u66f4\u65b0\u65f6\u95f4") (row["updated"] as? String).orEmpty() else (row["collection"] as? String).orEmpty()
@@ -587,7 +590,7 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     val modifier=Modifier.fillMaxWidth().clip(palette.shape())
         .background(if(memory.selectedRow==token) Color(palette.background().toULong()).copy(alpha=0.65f) else Color.Transparent)
         .onPointerEvent(PointerEventType.Press) { event ->
-            if(track && row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
+            if(row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
                 event.changes.forEach {it.consume()}
                 memory.selectedRow=token; menu=true
             }
@@ -621,7 +624,12 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     if(menu && track && row["enabled"]==true) {
         ui.trackContextMenu(rememberCursorPositionProvider(), {menu=false}, {position ->
             action {ui.desk().insertRow(token,position)}
-        }, playlists, {playlist -> action {ui.desk().addToPlaylist(token,playlist)}}, currentComposer)
+        }, playlists, {playlist -> action {ui.desk().addToPlaylist(token,playlist)}},
+            favorites,{playlist->action {ui.desk().favoriteRow(token,playlist)}}, currentComposer)
+    } else if(menu && !track && row["enabled"]==true) {
+        ui.onlinePlaylistContextMenu(rememberCursorPositionProvider(),{menu=false},
+            {action {ui.desk().playPlaylist(token);memory.localSearch=false;memory.localText=""}},
+            {action {ui.desk().subscribePlaylist(token)}},favorites,currentComposer)
     }
     }
 }

@@ -49,14 +49,28 @@ def validate(path, experimental):
             raise ValueError("Passive artifact requests permissions")
         configs = json.loads(archive.read("classes/preference_config.json"))
         buttons = [pref["on_click"] for config in configs["configs"] for pref in config["preferences"] if pref["type"] == "button"]
-        expected = ["openSidebarSettings", "clearCache", "installNativeUi", "showStatus"] if experimental else ["showStatus"]
+        expected = ["openSidebarSettings", "openAutoSourceSettings", "openQualitySettings", "openHomeSettings", "clearCache", "showStatus"] if experimental else ["showStatus"]
         if buttons != ["io.github.yghfv.saltneri.plugin." + entry_class + "." + method for method in expected]:
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
-            prefs = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(prefs) != {"bili.home", "netease.home", "qqmusic.home", "applemusic.home", "kugou.home", "kugou.quality", "ui.home", "bili.quality", "netease.quality", "qqmusic.quality", "qqmusic.autoSourceSwitch", "netease.autoSourceSwitch", "cache.limitMiB", "cover.mode", "catalog.pageLimit", "ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 22:
+            main = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
+            if set(main) != {"cache.limitMiB", "cover.mode", "catalog.pageLimit"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 9:
                 raise ValueError("Unexpected condensed settings menu")
-            if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "ui.hideSidebarToggle")):
+            pages = json.loads(archive.read("classes/settings-pages.json"))
+            expected_pages = {
+                "sidebar": {"ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"},
+                "auto-source": {"netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "kugou.autoSourceSwitch", "applemusic.autoSourceSwitch"},
+                "quality": {"bili.quality", "netease.quality", "qqmusic.quality", "kugou.quality"},
+                "home": {"ui.home", "bili.home", "netease.home", "qqmusic.home", "applemusic.home", "kugou.home"},
+            }
+            if set(pages) != set(expected_pages):
+                raise ValueError("Missing secondary settings pages")
+            for page, keys in expected_pages.items():
+                if {p["key"] for p in pages[page] if "key" in p} != keys:
+                    raise ValueError("Secondary settings keys mismatch: " + page)
+            prefs = dict(main)
+            prefs.update({p["key"]: p for items in pages.values() for p in items if "key" in p})
+            if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "kugou.autoSourceSwitch", "applemusic.autoSourceSwitch", "ui.hideSidebarToggle", "ui.sidebarOptimization")):
                 raise ValueError("Automatic source switching and toggle hiding must be opt-in")
             if prefs["ui.hiddenSidebar"]["default_value"] is not False:
                 raise ValueError("Sidebar hiding must be opt-in")
@@ -105,6 +119,10 @@ def validate(path, experimental):
                          "classes/io/github/yghfv/saltneri/plugin/auth/WindowsMusicKitDecoder.class"):
             if required not in names:
                 raise ValueError("Missing Apple Music native PCM playback: " + required)
+        for required in ("ui/SettingsCatalog", "library/MusicAutoSourceResolver",
+                         "library/PlatformPlaylistController", "library/PlatformPlaylistGateway"):
+            if "classes/io/github/yghfv/saltneri/plugin/" + required + ".class" not in names:
+                raise ValueError("Missing secondary settings/platform playlists: " + required)
         extension = "io.github.yghfv.saltneri.plugin.OnlineLyricsExtension"
         if archive.read("classes/META-INF/extensions.idx").decode("ascii").splitlines() != [extension]:
             raise ValueError("Missing lyric extension registration")

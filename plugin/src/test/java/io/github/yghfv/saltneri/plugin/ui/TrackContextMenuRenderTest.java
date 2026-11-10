@@ -31,6 +31,12 @@ public final class TrackContextMenuRenderTest {
         var inserted=new java.util.concurrent.CopyOnWriteArrayList<OnlinePlaybackController.QueueAction>();
         var played=new AtomicInteger(); var armed=new AtomicBoolean();
         var saved=new AtomicInteger();
+        var favoriteSaved=new AtomicInteger();var subscriptions=new AtomicInteger();var playlistPlayed=new AtomicInteger();
+        var accounts=new EnumMap<AccountPlatform,AccountCredentials>(AccountPlatform.class);
+        for(var platform:AccountPlatform.values()) {
+            var jar=new ScopedCookies(platform,clock);jar.accept(platform.accountUri(),List.of(platform.loginCookie()+"=fixture; Path=/; Secure"));
+            accounts.put(platform,new AccountCredentials(platform,"42",jar.snapshot(),clock));
+        }
         try(var playlists=new SavedPlaylistController(new SavedPlaylistController.Gateway() {
             public List<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice> choices() {return List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("fixture","Fixture playlist",new Object()));}
             public void add(OnlinePlaybackController.Target target,Catalog.Item row,io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice choice,java.util.function.BooleanSupplier valid) {
@@ -46,13 +52,28 @@ public final class TrackContextMenuRenderTest {
             boolean qq=target.platform()==AccountPlatform.QQMUSIC;
             return new OnlinePlaybackController.Audio(qq?TrackKey.qqmusic(target.id()):net?TrackKey.netease(target.id()):TrackKey.bilibili(target.id(),123),new Metadata("Fixture track","Artist","",""),
                     new MediaLease(qq?MediaLease.Platform.QQMUSIC:net?MediaLease.Platform.NETEASE:MediaLease.Platform.BILIBILI,URI.create(qq?"https://dl.stream.qqmusic.qq.com/fixture":net?"https://m7.music.126.net/fixture":"https://test.bilivideo.com/fixture"),Map.of(),scope,expiry,4096),expiry);
-        }); var library=new LibraryController(p->null,()->true,t->{},()->player.invalidate("Navigation"),clock,a->(query,quality,scope,request)->{
+        }); var library=new LibraryController(accounts::get,()->true,t->{},()->player.invalidate("Navigation"),clock,a->(query,quality,scope,request)->{
             requests.incrementAndGet(); return new Catalog.Page("Fixture list",List.of(
-                    new Catalog.Item(Catalog.Kind.TRACK,query.platform()==AccountPlatform.QQMUSIC?"00123456789abc":query.platform()==AccountPlatform.NETEASE?"123":"BV17x411w7KC","Fixture track","Artist",1000,true),
+                    new Catalog.Item(Catalog.Kind.TRACK,query.platform()==AccountPlatform.QQMUSIC?"00123456789abc":query.platform()==AccountPlatform.KUGOU?"A".repeat(32):
+                            query.platform()==AccountPlatform.APPLEMUSIC?"us:123":query.platform()==AccountPlatform.NETEASE?"123":"BV17x411w7KC","Fixture track","Artist",1000,true),
                     new Catalog.Item(Catalog.Kind.FOLDER,"77","Fixture folder","Artist",2,true)),false,clock.instant().plusSeconds(300),1);
-        })) {
+        });var favorites=new PlatformPlaylistController(new PlatformPlaylistController.Gateway() {
+            public List<PlatformPlaylistController.Choice> choices(AccountCredentials a,io.github.yghfv.saltneri.plugin.net.RequestScope r){
+                return List.of(new PlatformPlaylistController.Choice("10","10","Already favorite"),
+                        new PlatformPlaylistController.Choice("11","11","Platform playlist"));
+            }
+            public Set<String> members(AccountCredentials a,PlatformPlaylistController.Choice c,io.github.yghfv.saltneri.plugin.net.RequestScope r){
+                return c.id().equals("10")?Set.of("123","00123456789abc","BV17x411w7KC","A".repeat(32),"us:123"):Set.of();
+            }
+            public boolean subscribed(AccountCredentials a,Catalog.Item item,io.github.yghfv.saltneri.plugin.net.RequestScope r){return false;}
+            public void add(AccountCredentials a,Catalog.Item item,PlatformPlaylistController.Choice c,io.github.yghfv.saltneri.plugin.net.RequestScope r){
+                check(c.id().equals("11"),"Wrong platform playlist");favoriteSaved.incrementAndGet();
+            }
+            public void subscribe(AccountCredentials a,Catalog.Item item,io.github.yghfv.saltneri.plugin.net.RequestScope r){subscriptions.incrementAndGet();}
+        },accounts::get,()->true,library::currentRow,p->{},s->{})) {
             var desk=new NativeDesk(library,player,p->null,(p,a)->{if(a==NativeDesk.Action.ARM) armed.set(true);},()->true);
             desk.savedPlaylists(playlists);
+            desk.platformPlaylists(favorites);desk.playlistPlayer(list->playlistPlayed.incrementAndGet());
             ClassLoader host=TrackContextMenuRenderTest.class.getClassLoader();
             try(var ui=new SaltNativeUi(host,new NativePageRenderTest.Hooks(),desk,()->true,
                     new CoverLoader(uri->{throw new AssertionError("No covers requested");}),new CoverLoader(uri->{throw new AssertionError("No avatars requested");}))) {
@@ -66,6 +87,7 @@ public final class TrackContextMenuRenderTest {
                         ((androidx.compose.runtime.ProvidableCompositionLocal<Object>)blur.getMethod("\u037f").invoke(null)).provides(haze),
                         ((androidx.compose.runtime.ProvidableCompositionLocal<Object>)blur.getMethod("\u0528").invoke(null)).provides(haze)};
                 for(var platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) for(String layout:List.of("CARDS","SINGLE","DOUBLE")) {
+                    desk.browse(platform,Catalog.View.DISCOVER);
                     desk.layout(platform,layout);
                     // Clear page memory between independent layout fixtures, not user settings.
                     var memory=SaltNativeUi.class.getDeclaredField("pageMemory"); memory.setAccessible(true); ((Map<?,?>)memory.get(ui)).clear();
@@ -80,6 +102,8 @@ public final class TrackContextMenuRenderTest {
                         });
                         try {
                             render(scene);
+                            if(layout.equals("CARDS"))check((find(scene,"\u5c01\u9762\u64ad\u653e\u91cf",null)!=null)==(platform==AccountPlatform.BILIBILI),
+                                    "Play count overlay must be Bilibili only");
                             var refresh=find(scene,"\u5237\u65b0\u5f53\u524d\u5217\u8868",SemanticsActions.INSTANCE.getOnClick());
                             check(refresh!=null,"Refresh missing"); var b=refresh.getBoundsInRoot();
                             check(b.getTop()>=0 && b.getBottom()<=56 && b.getRight()<=width,"Refresh not in fixed top toolbar");
@@ -89,6 +113,7 @@ public final class TrackContextMenuRenderTest {
                             secondary(scene,"Fixture track");
                             check(find(scene,"\u6dfb\u52a0\u5230\u961f\u5217",null)!=null,"Native insertion parent missing");
                             check(find(scene,"\u6dfb\u52a0\u5230\u6b4c\u5355",null)!=null,"Native add-to-playlist parent missing");
+                            check(find(scene,"收藏",null)!=null,"Platform favorite parent missing");
                             check(resolves.get()==resolved && inserted.size()==count && played.get()==0,"Opening menu changed playback");
                             String[] labels={"\u5f53\u524d\u64ad\u653e\u540e","\u4e0a\u6b21\u63d2\u64ad\u540e","\u961f\u5217\u672b\u5c3e"};
                             var positions=List.of(OnlinePlaybackController.QueueAction.AFTER_CURRENT,OnlinePlaybackController.QueueAction.AFTER_LAST_ADDED,OnlinePlaybackController.QueueAction.AT_QUEUE_END);
@@ -100,14 +125,26 @@ public final class TrackContextMenuRenderTest {
                             }
                             int saves=saved.get(); secondary(scene,"Fixture track");click(scene,"\u6dfb\u52a0\u5230\u6b4c\u5355");click(scene,"Fixture playlist");
                             check(saved.get()==saves+1 && played.get()==0 && inserted.size()==count+3,"Saving changed playback");
+                            int favoritesBefore=favoriteSaved.get();
+                            secondary(scene,"Fixture track");NavigationUiRenderTest.choiceClick(scene,"收藏");
+                            var disabled=find(scene,"Already favorite",SemanticsProperties.INSTANCE.getDisabled());
+                            check(disabled!=null,"Existing platform membership must be disabled");
+                            click(scene,"Platform playlist");
+                            check(favoriteSaved.get()==favoritesBefore+1 && played.get()==0,"Platform saving changed playback");
                             secondary(scene,"Fixture folder");
                             check(find(scene,"\u6dfb\u52a0\u5230\u961f\u5217",null)==null,"Folder exposed track commands");
+                            check(find(scene,"播放全部",SemanticsActions.INSTANCE.getOnClick())!=null,"Playlist play command missing");
+                            int subscribed=subscriptions.get();click(scene,"订阅歌单");check(subscriptions.get()==subscribed+1,"Playlist subscription missing");
+                            int fullPlay=playlistPlayed.get();
+                            secondary(scene,"Fixture folder");NavigationUiRenderTest.choiceClick(scene,"播放全部");render(scene);
+                            check(playlistPlayed.get()==fullPlay+1,"Playlist menu did not submit complete playback");
                         } catch(Exception error) {throw new AssertionError(error);}
                         finally {scene.close();}
                     });
                 }
             }
         }
+        accounts.values().forEach(AccountCredentials::retire);
         if(failure.get()!=null) throw new AssertionError("Background Compose failure",failure.get());
         System.out.println("PASS: "+checks+" native track menu/toolbar checks; synthetic data, no playback/network");
     }

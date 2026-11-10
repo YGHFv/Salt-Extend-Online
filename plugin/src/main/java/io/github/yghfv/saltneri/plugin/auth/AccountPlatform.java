@@ -7,7 +7,7 @@ public enum AccountPlatform {
     AccountPlatform(String domain, String loginCookie) { this.domain = domain; this.loginCookie = loginCookie; }
     public String domain() { return domain; }
     public String loginCookie() { return loginCookie; }
-    public String label() { return switch(this) { case BILIBILI -> "Bilibili"; case NETEASE -> "\u7f51\u6613\u4e91"; case QQMUSIC -> "QQ \u97f3\u4e50"; case APPLEMUSIC -> "Apple Music"; case KUGOU -> "酷狗"; }; }
+    public String label() { return switch(this) { case BILIBILI -> "Bilibili"; case NETEASE -> "\u7f51\u6613\u4e91"; case QQMUSIC -> "QQ \u97f3\u4e50"; case APPLEMUSIC -> "Apple Music"; case KUGOU -> "酷狗音乐"; }; }
     public String configPrefix() { return switch(this) { case BILIBILI -> "bili"; case NETEASE -> "netease"; case QQMUSIC -> "qqmusic"; case APPLEMUSIC -> "applemusic"; case KUGOU -> "kugou"; }; }
     public java.net.URI accountUri() { return java.net.URI.create("https://" + (this == BILIBILI ? "api.bilibili.com" : domain) + "/"); }
     public boolean allows(String host) {

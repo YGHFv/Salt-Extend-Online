@@ -13,7 +13,9 @@ import kotlin.jvm.functions.Function4;
 /** Narrow native render boundaries: no global route mutation or second settings persistence. */
 public final class SaltSidebarSettingsBindings implements AutoCloseable {
     public static final String SCREEN="androidx.compose.ui.\u0b8f", GROUP="androidx.compose.ui.\u042c";
-    private final Method route, group, groupItems, itemKey, collapse, switchWidget, settingsScreen, settingsCaption, settingsColumn;
+    private final Method route, group, groupItems, itemKey, collapse, switchWidget, actionWidget, settingsScreen, settingsCaption, settingsColumn;
+    private final Method popup, popupItem, popupText;
+    private final Object arrow;
     private final Field configPath;
     private final Constructor<?> groupConstructor;
     private final Constructor<?> listConstructor,switchConstructor;
@@ -31,6 +33,17 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
         switchWidget=Arrays.stream(Class.forName("androidx.compose.ui.\u0824",false,host).getMethods())
                 .filter(m->m.getName().equals("\u037f") && m.getParameterCount()==12 && m.getParameterTypes()[0]==boolean.class)
                 .findFirst().orElseThrow(()->new NoSuchMethodException("Native setting switch unavailable"));
+        actionWidget=Arrays.stream(switchWidget.getDeclaringClass().getMethods())
+                .filter(m->m.getName().equals("\u037f") && m.getParameterCount()==17 && m.getParameterTypes()[0]==kotlin.jvm.functions.Function0.class)
+                .findFirst().orElseThrow(()->new NoSuchMethodException("Native setting action unavailable"));
+        Class<?> arrowType=actionWidget.getParameterTypes()[12];
+        Object[] arrows=arrowType.getEnumConstants();
+        arrow=Arrays.stream(arrows).filter(v->((Enum<?>)v).name().equalsIgnoreCase("Arrow")).findFirst().orElse(arrows[0]);
+        popup=Class.forName("com.xuncorp.voxzen.ui.component.\u052c",false,host).getMethod("\u037f",
+                androidx.compose.ui.window.PopupPositionProvider.class,kotlin.jvm.functions.Function0.class,kotlin.jvm.functions.Function1.class,Composer.class,int.class,int.class);
+        popupItem=Class.forName("androidx.compose.ui.\u0924",false,host).getMethod("\u037f",
+                kotlin.jvm.functions.Function0.class,boolean.class,Function2.class);
+        popupText=popup.getDeclaringClass().getMethod("\u037f",String.class,Modifier.class,Function2.class,boolean.class,Composer.class,int.class,int.class);
         settingsScreen=Class.forName("androidx.compose.ui.\u0e16",false,host).getMethod("\u037f",
                 Modifier.class,Function2.class,String.class,String.class,Function2.class,Function4.class,
                 Class.forName("androidx.compose.ui.\u093d",false,host),Function4.class,Composer.class,int.class,int.class);
@@ -87,7 +100,7 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
             List<Object> dynamic=new ArrayList<>();
             for(Object item:filtered) {
                 if(listConstructor.getDeclaringClass().isInstance(item) && "ui.home".equals(invoke(valueMethod(item,"\u037f"),item))) {
-                    List<String> labels=new ArrayList<>(List.of("\u6062\u590d\u4e0a\u6b21","\u6b4c\u66f2","Bilibili","\u7f51\u6613\u4e91","QQ \u97f3\u4e50","Apple Music","酷狗"));
+                    List<String> labels=new ArrayList<>(List.of("\u6062\u590d\u4e0a\u6b21","\u6b4c\u66f2","Bilibili","\u7f51\u6613\u4e91","QQ \u97f3\u4e50","Apple Music","酷狗音乐"));
                     List<String> values=new ArrayList<>(List.of("restore","Track","BILIBILI","NETEASE","QQMUSIC","APPLEMUSIC","KUGOU"));
                     for(var playlist:uiPlaylists()) {labels.add("\u6b4c\u5355 \u00b7 "+playlist.title());values.add("playlist:"+playlist.id());}
                     try {item=listConstructor.newInstance("salt-home","ui.home","\u0053alt \u9996\u9875","\u542f\u52a8\u65f6\u6253\u5f00\u7684\u9875\u9762",labels,values,"restore","config.json");}
@@ -113,7 +126,7 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
         List<Object> switches=new ArrayList<>();
         Map<String,String> labels=Map.ofEntries(Map.entry("Track","\u6b4c\u66f2"),Map.entry("Genre","\u6d41\u6d3e"),Map.entry("Album","\u4e13\u8f91"),
                 Map.entry("Artist","\u827a\u672f\u5bb6"),Map.entry("Folder","\u6587\u4ef6\u5939"),Map.entry("MusicLibrary","\u97f3\u4e50\u5e93"),Map.entry("SoundEffects","\u97f3\u6548"),
-                Map.entry("NewPlaylist","\u65b0\u5efa\u6b4c\u5355"),Map.entry("ImportPlaylist","\u5bfc\u5165\u6b4c\u5355"),Map.entry("BILIBILI","Bilibili"),Map.entry("NETEASE","\u7f51\u6613\u4e91"),Map.entry("QQMUSIC","QQ \u97f3\u4e50"),Map.entry("APPLEMUSIC","Apple Music"),Map.entry("KUGOU","酷狗"));
+                Map.entry("NewPlaylist","\u65b0\u5efa\u6b4c\u5355"),Map.entry("ImportPlaylist","\u5bfc\u5165\u6b4c\u5355"),Map.entry("BILIBILI","Bilibili"),Map.entry("NETEASE","\u7f51\u6613\u4e91"),Map.entry("QQMUSIC","QQ \u97f3\u4e50"),Map.entry("APPLEMUSIC","Apple Music"),Map.entry("KUGOU","酷狗音乐"));
         try {
             for(String button:SidebarPolicy.BUTTONS) if(!"Settings".equals(button))
                 switches.add(switchConstructor.newInstance("sidebar-"+button,"ui.sidebar."+button,labels.get(button),"",true,"config.json"));
@@ -129,7 +142,27 @@ public final class SaltSidebarSettingsBindings implements AutoCloseable {
         return button;
     }
     public void switchSetting(boolean value,String label,kotlin.jvm.functions.Function1<Boolean,kotlin.Unit> action,Composer composer) {
-        invoke(switchWidget,null,value,action,label,null,false,null,null,null,"",composer,0,248);
+        switchSetting(value,label,"",action,composer);
+    }
+    public void switchSetting(boolean value,String label,String summary,kotlin.jvm.functions.Function1<Boolean,kotlin.Unit> action,Composer composer) {
+        invoke(switchWidget,null,value,action,label,null,false,null,null,null,summary,composer,0,248);
+    }
+    public void actionSetting(String title,String summary,String value,kotlin.jvm.functions.Function0<kotlin.Unit> action,Composer composer) {
+        invoke(actionWidget,null,action,title,null,false,null,null,null,0L,summary,0L,null,value,arrow,composer,0,0,1788);
+    }
+    public void choices(androidx.compose.ui.window.PopupPositionProvider position,kotlin.jvm.functions.Function0<kotlin.Unit> dismiss,
+                        List<String> labels,java.util.function.IntConsumer selected,Composer composer) {
+        kotlin.jvm.functions.Function1<Object,kotlin.Unit> content=scope->{
+            for(int index=0;index<labels.size();index++) {
+                final int choice=index;String label=labels.get(index);
+                Function2<Composer,Integer,kotlin.Unit> text=(c,f)->{invoke(popupText,null,label,null,null,false,c,0,14);return kotlin.Unit.INSTANCE;};
+                invoke(popupItem,scope,(kotlin.jvm.functions.Function0<kotlin.Unit>)()->{
+                    dismiss.invoke();selected.accept(choice);return kotlin.Unit.INSTANCE;
+                },true,text);
+            }
+            return kotlin.Unit.INSTANCE;
+        };
+        invoke(popup,null,position,dismiss,content,composer,0,0);
     }
     public void settingsScreen(String title,Object back,Object content,Composer composer) {
         // Same BasicScreenBox as ModConfigScreen, including theme material and player insets.

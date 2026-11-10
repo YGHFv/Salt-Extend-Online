@@ -54,6 +54,8 @@ public final class AppleMusicContractTest {
                         "attributes",Map.of("name","Playlist","curatorName","Owner"))));
                 else if(uri.getPath().endsWith("/tracks"))payload=Map.of("data",List.of(Map.of("id","i.local","type","library-songs","attributes",
                         Map.of("name","Library song","artistName","Artist","playParams",missingCatalog?Map.of("id","i.local"):Map.of("catalogId","12345")))));
+                else if(uri.getPath().endsWith("/songs/12345"))payload=Map.of("data",List.of(Map.of("id","12345","type","songs","attributes",
+                        Map.of("name","Song","artistName","Artist","albumName","Album","durationInMillis",123000))));
                 else if(uri.getPath().endsWith("/charts"))payload=Map.of("results",Map.of("songs",List.of(Map.of("data",List.of(track())))));
                 else payload=Map.of("results",Map.of("songs",Map.of("data",List.of(track()),"next","/v1/catalog/cn/search?offset=20")));
             }
@@ -76,6 +78,8 @@ public final class AppleMusicContractTest {
             check(fixture.requests.stream().filter(r->r.getURL().getHost().equals("music.apple.com"))
                     .allMatch(r->r.getRequestProperty("Music-User-Token")==null && r.getRequestProperty("Authorization")==null));
             var catalog=new AppleMusicCatalog(verified,CLOCK,http);
+            var info=new AppleMusicClient(verified,http).songInfo("cn:12345",request);
+            check(info.metadata().title().equals("Song") && info.metadata().album().equals("Album") && info.durationMillis()==123000);
             var mine=catalog.load(new Query(AccountPlatform.APPLEMUSIC,View.MINE,0,1),request);
             check(mine.items().getFirst().target().equals("albums/l.abc") && mine.hasMore());
             var folder=new Query(AccountPlatform.APPLEMUSIC,View.FOLDER,1,1,0,"",false,Sort.DEFAULT,"albums/l.abc");

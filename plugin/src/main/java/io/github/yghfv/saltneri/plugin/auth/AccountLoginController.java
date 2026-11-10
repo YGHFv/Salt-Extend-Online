@@ -255,7 +255,7 @@ public final class AccountLoginController implements AutoCloseable {
         phase = error instanceof AuthFailure safe && safe.requiresWebVerification() ? Phase.VERIFICATION_REQUIRED : Phase.ERROR;
         status = platform==AccountPlatform.APPLEMUSIC
                 ? "Apple Music 登录未完成 ["+(error instanceof java.io.IOException && error.getMessage()!=null && error.getMessage().matches("APPLE/[A-Z0-9_]{1,64}")?error.getMessage():"APPLE/WEB_LOGIN")+"]; 请在官方页面完成登录后重试"
-                : platform==AccountPlatform.KUGOU?"酷狗登录未完成 ["+(error.getMessage()!=null && error.getMessage().matches("KUGOU/[A-Z0-9_]{1,64}")?error.getMessage():"KUGOU/LOGIN")+"]; 请重新扫码或检查 API 服务"
+                : platform==AccountPlatform.KUGOU?"酷狗音乐登录未完成 ["+(error.getMessage()!=null && error.getMessage().matches("KUGOU/[A-Z0-9_]{1,64}")?error.getMessage():"KUGOU/LOGIN")+"]; 请重新扫码或检查 API 服务"
                 : AuthFailure.diagnostic(error);
     }
     public synchronized void cancelLogin() {

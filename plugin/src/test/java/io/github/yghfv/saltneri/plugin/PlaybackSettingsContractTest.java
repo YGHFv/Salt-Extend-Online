@@ -13,6 +13,12 @@ public final class PlaybackSettingsContractTest {
         check(PlaybackSettings.DEFAULT.cacheBytes()==2L*1024*1024*1024);
         check(!PlaybackSettings.DEFAULT.neteaseAutoSourceSwitch());
         check(!PlaybackSettings.DEFAULT.qqmusicAutoSourceSwitch());
+        for(var platform:io.github.yghfv.saltneri.plugin.auth.AccountPlatform.values())check(!PlaybackSettings.DEFAULT.autoSourceSwitch(platform));
+        var expanded=new PlaybackSettings(PlaybackSettings.DEFAULT.bili(),PlaybackSettings.DEFAULT.netease(),
+                PlaybackSettings.DEFAULT.cacheBytes(),PlaybackSettings.DEFAULT.coverMode(),true,PlaybackSettings.DEFAULT.qqmusic(),true,"128",true,true);
+        for(var platform:io.github.yghfv.saltneri.plugin.auth.AccountPlatform.values())
+            check(expanded.autoSourceSwitch(platform)==(platform!=io.github.yghfv.saltneri.plugin.auth.AccountPlatform.BILIBILI));
+        check(!expanded.qualityKey().equals(PlaybackSettings.DEFAULT.qualityKey()));
         for(var q:io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.values()) {
             check(io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.fromKey(q.key())==q);
             var qq=new PlaybackSettings(PlaybackSettings.DEFAULT.bili(),PlaybackSettings.DEFAULT.netease(),PlaybackSettings.DEFAULT.cacheBytes(),PlaybackSettings.DEFAULT.coverMode(),false,q,true);

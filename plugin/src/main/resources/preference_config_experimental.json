@@ -5,203 +5,32 @@
       "config": "config.json",
       "preferences": [
         {
-          "key": "ui.sidebarOptimization",
-          "type": "switch",
-          "title": "侧栏优化",
-          "summary": "收起侧栏时，将导航图标移至顶部侧栏切换按钮右侧；再次展开自动还原。包括在线平台和本地歌单，窄窗口可横向滚动。默认关闭。",
-          "default_value": false
-        },
-        {
-          "key": "ui.hiddenSidebar",
-          "type": "switch",
-          "title": "隐藏侧栏",
-          "summary": "仅在侧栏优化开启时生效。启用后收起侧栏，鼠标移到侧边或切换按钮不再自动展开；只有点击切换按钮才展开。",
-          "default_value": false
-        },
-        {
-          "key": "ui.hideSidebarToggle",
-          "type": "switch",
-          "title": "隐藏切换侧边栏按钮",
-          "summary": "隐藏窗口顶部的侧栏切换按钮，不改变侧栏状态；开启侧栏优化后快捷入口仍显示。可在模组设置中关闭以恢复。",
-          "default_value": false
-        },
-        {
-          "key": "ui.home",
-          "type": "list",
-          "title": "Salt 首页",
-          "summary": "启动时打开的页面；本地歌单自动逐个列出。恢复上次保留歌曲、平台或歌单页面。",
-          "entries": [
-            "恢复上次",
-            "歌曲",
-            "Bilibili",
-            "网易云",
-            "QQ 音乐",
-            "Apple Music",
-            "酷狗"
-          ],
-          "entry_values": [
-            "restore",
-            "Track",
-            "BILIBILI",
-            "NETEASE",
-            "QQMUSIC",
-            "APPLEMUSIC",
-            "KUGOU"
-          ],
-          "default_value": "restore"
-        },
-        {
           "type": "button",
           "title": "侧栏管理",
-          "summary": "设置入口固定保留，其他功能按钮在此配置显隐。",
+          "summary": "入口显隐、侧栏优化、隐藏侧栏和切换按钮。",
           "arrow_type": "arrow",
           "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openSidebarSettings"
         },
         {
-          "key": "bili.home",
-          "type": "list",
-          "title": "Bilibili 默认首页",
-          "summary": "首次进入平台时打开的栏目。",
-          "entries": [
-            "发现",
-            "收藏",
-            "订阅"
-          ],
-          "entry_values": [
-            "DISCOVER",
-            "MINE",
-            "SAVED"
-          ],
-          "default_value": "DISCOVER"
+          "type": "button",
+          "title": "自动换源",
+          "summary": "网易云、QQ 音乐、酷狗音乐和 Apple Music 的备用音源设置。",
+          "arrow_type": "arrow",
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openAutoSourceSettings"
         },
         {
-          "key": "bili.quality",
-          "type": "list",
-          "title": "Bilibili 音质",
-          "summary": "优先所选音质，不可用时降至当前账号合法可用音轨；下一次打开曲目生效。",
-          "entries": [
-            "杜比",
-            "Hi-Res",
-            "无损",
-            "高音质",
-            "中音质",
-            "低音质"
-          ],
-          "entry_values": [
-            "dolby",
-            "hires",
-            "lossless",
-            "high",
-            "medium",
-            "low"
-          ],
-          "default_value": "high"
+          "type": "button",
+          "title": "音质",
+          "summary": "设置各平台的播放音质。",
+          "arrow_type": "arrow",
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openQualitySettings"
         },
         {
-          "key": "netease.home",
-          "type": "list",
-          "title": "网易云 默认首页",
-          "summary": "首次进入平台时打开的栏目。",
-          "entries": [
-            "发现",
-            "收藏",
-            "订阅"
-          ],
-          "entry_values": [
-            "DISCOVER",
-            "MINE",
-            "SAVED"
-          ],
-          "default_value": "DISCOVER"
-        },
-        {
-          "key": "netease.quality",
-          "type": "list",
-          "title": "网易云音质",
-          "summary": "参考 NeriPlayer；会员档位需要相应权限，可接受服务端返回的较低音质，不播放试听。下一次打开曲目生效。",
-          "entries": [
-            "标准",
-            "较高",
-            "极高",
-            "无损",
-            "Hi-Res",
-            "高清环绕声",
-            "沉浸环绕声",
-            "超清母带"
-          ],
-          "entry_values": [
-            "standard",
-            "higher",
-            "exhigh",
-            "lossless",
-            "hires",
-            "jyeffect",
-            "sky",
-            "jymaster"
-          ],
-          "default_value": "standard"
-        },
-        {
-          "key": "netease.autoSourceSwitch",
-          "type": "switch",
-          "title": "网易云自动换源",
-          "summary": "网易云无法提供完整音轨时，按歌名、歌手及时长匹配 Bilibili 音源。需要已登录 B 站，保留原歌曲身份与歌词；不绕过会员、试听或风控。下一次打开曲目生效。",
-          "default_value": false
-        },
-        {
-          "key": "qqmusic.home",
-          "type": "list",
-          "title": "QQ 音乐 默认首页",
-          "summary": "首次进入平台时打开的栏目。",
-          "entries": [
-            "发现",
-            "收藏",
-            "订阅"
-          ],
-          "entry_values": [
-            "DISCOVER",
-            "MINE",
-            "SAVED"
-          ],
-          "default_value": "DISCOVER"
-        },
-        {
-          "key": "qqmusic.quality",
-          "type": "list",
-          "title": "QQ 音乐音质",
-          "summary": "参考 NeriPlayer，按当前账号授权降级；只播放完整音轨，不播放试听。下次打开曲目生效。",
-          "entries": [
-            "标准",
-            "较高",
-            "极高",
-            "无损",
-            "Hi-Res",
-            "臻品全景声 5.1",
-            "臻品全景声 7.1",
-            "杜比",
-            "DTS:X",
-            "臻品母带"
-          ],
-          "entry_values": [
-            "standard",
-            "higher",
-            "exhigh",
-            "lossless",
-            "hires",
-            "atmos51",
-            "atmos71",
-            "dolby",
-            "dtsx",
-            "master"
-          ],
-          "default_value": "standard"
-        },
-        {
-          "key": "qqmusic.autoSourceSwitch",
-          "type": "switch",
-          "title": "QQ 音乐自动换源",
-          "summary": "仅完整音轨不可用时按歌名、歌手、时长匹配 Bilibili。需要已登录 B 站，保留 QQ 歌曲身份与歌词；不对登录、网络或风控失败换源。默认关闭。",
-          "default_value": false
+          "type": "button",
+          "title": "默认栏目",
+          "summary": "设置 Salt 启动首页和各平台默认栏目。",
+          "arrow_type": "arrow",
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openHomeSettings"
         },
         {
           "key": "cover.mode",
@@ -277,67 +106,10 @@
         },
         {
           "type": "button",
-          "title": "修复侧栏入口",
-          "summary": "仅当 Bilibili / 网易云 / QQ 音乐入口未出现时使用。",
-          "arrow_type": "none",
-          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.installNativeUi"
-        },
-        {
-          "type": "button",
           "title": "查看诊断信息",
           "summary": "查看模组接入、登录阶段和播放适配状态；不显示凭据或音频地址。",
           "arrow_type": "none",
           "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.showStatus"
-        },
-        {
-          "key": "applemusic.home",
-          "type": "list",
-          "title": "Apple Music 默认栏目",
-          "entries": [
-            "发现",
-            "我的专辑",
-            "我的歌单"
-          ],
-          "entry_values": [
-            "DISCOVER",
-            "MINE",
-            "SAVED"
-          ],
-          "default_value": "DISCOVER"
-        },
-        {
-          "key": "kugou.home",
-          "type": "list",
-          "title": "酷狗首页",
-          "summary": "进入酷狗时显示的栏目。接入使用 KA Music API 服务。",
-          "entries": [
-            "推荐歌单",
-            "我的歌单",
-            "订阅歌单"
-          ],
-          "entry_values": [
-            "DISCOVER",
-            "MINE",
-            "SAVED"
-          ],
-          "default_value": "DISCOVER"
-        },
-        {
-          "key": "kugou.quality",
-          "type": "list",
-          "title": "酷狗音质",
-          "summary": "按当前账号可用权限读取完整音轨。",
-          "entries": [
-            "标准 128K",
-            "高品质 320K",
-            "无损 FLAC"
-          ],
-          "entry_values": [
-            "128",
-            "320",
-            "flac"
-          ],
-          "default_value": "128"
         }
       ]
     }

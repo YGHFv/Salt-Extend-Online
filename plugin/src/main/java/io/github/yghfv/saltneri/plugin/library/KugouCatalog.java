@@ -45,7 +45,7 @@ public final class KugouCatalog {
             var data=object(http.get("/playlist/track/all",Map.of("id",id,"page",q.page(),"pagesize",20),account,request));
             var rows=KugouHttp.rows(data,"songs");long total=number(data.get("count"),-1);
             if(rows.size()>20 || total<0 || total>10000 || q.page()*20L<total && rows.isEmpty())throw KugouHttp.failure("PLAYLIST_PAGE");
-            return page("酷狗歌单",songs(rows),q.page()*20L<total,total);
+            return page("酷狗音乐歌单",songs(rows),q.page()*20L<total,total);
         }
         boolean mine=q.view()==View.MINE || q.view()==View.SAVED;
         if(!mine && q.view()!=View.DISCOVER)throw KugouHttp.failure("VIEW");

@@ -109,6 +109,37 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
         var connection = new PinnedHttpsConnection(target); connection.loginForm(form); return connection;
     }
 
+    /** Explicit platform playlist writes, restricted to their individual endpoints. */
+    public static PinnedHttpsConnection playlistPost(io.github.yghfv.saltneri.plugin.auth.AccountPlatform platform,
+                                                     URI target,byte[] body) throws IOException {
+        String path=target.getPath();
+        boolean allowed="https".equals(target.getScheme()) && target.getPort()==-1
+                && target.getUserInfo()==null && target.getFragment()==null && switch(platform) {
+            case BILIBILI -> "api.bilibili.com".equals(target.getHost()) && target.getRawQuery()==null
+                    && Set.of("/x/v3/fav/resource/deal","/x/v3/fav/folder/fav","/x/v3/fav/season/fav").contains(path);
+            case NETEASE -> "music.163.com".equals(target.getHost())
+                    && Set.of("/weapi/playlist/manipulate/tracks","/weapi/playlist/subscribe").contains(path)
+                    && (target.getRawQuery()==null || target.getRawQuery().matches("csrf_token=[A-Za-z0-9_-]{0,256}"));
+            case KUGOU -> "music.api.hoilai.cn".equals(target.getHost()) && (path.equals("/playlist/tracks/add") && target.getRawQuery()==null
+                    || path.equals("/playlist/add") && target.getRawQuery()!=null && target.getRawQuery().length()<=4096);
+            case APPLEMUSIC -> "amp-api.music.apple.com".equals(target.getHost())
+                    && (path.matches("/v1/me/library/playlists/p\\.[A-Za-z0-9.-]{1,128}/tracks") && target.getRawQuery()==null
+                    || path.equals("/v1/me/library") && target.getRawQuery()!=null
+                    && target.getRawQuery().matches("ids%5Bplaylists%5D=[A-Za-z0-9.-]{1,128}"));
+            case QQMUSIC -> false; // Existing fixed QQ gateway handles these writes.
+        };
+        if(!allowed || body.length>32768)throw new IOException("Invalid playlist POST");
+        var connection=new PinnedHttpsConnection(target);
+        if(platform==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.BILIBILI
+                || platform==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.NETEASE)connection.loginForm(body);
+        else {
+            if(body.length>0)BoundedJson.object(BoundedJson.parse(body));
+            connection.formBody=body.clone();connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type","application/json; charset=utf-8");
+        }
+        return connection;
+    }
+
     public PinnedHttpsConnection(URI target) throws IOException {
         this(target, InetAddress::getAllByName, tlsSockets());
     }

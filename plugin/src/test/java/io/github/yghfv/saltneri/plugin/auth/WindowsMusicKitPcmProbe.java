@@ -46,6 +46,19 @@ public final class WindowsMusicKitPcmProbe {
                 "return saltApple.init({song:'123',duration:16000,userToken:'synthetic',developerToken:'synthetic',storefront:'us'});})()",true);
             var ready=eval(browser,session,"({ready:saltApple.ready,error:saltApple.error})",false);
             if(!Boolean.TRUE.equals(ready.get("ready")))throw new AssertionError("PCM init: "+ready);
+            var buffered=eval(browser,session,"(async()=>{await saltApple.seek(0);const end=Date.now()+9000;"+
+                "while(saltApple.ctx.state!=='suspended'&&!saltApple.error&&Date.now()<end)await new Promise(r=>setTimeout(r,20));"+
+                "return {bytes:saltApple.bytes,paused:saltApple.backpressured,desired:saltApple.desiredRunning,error:saltApple.error};})()",true);
+            int bufferedBytes=((Number)buffered.get("bytes")).intValue();
+            if(!Boolean.TRUE.equals(buffered.get("paused")) || !Boolean.TRUE.equals(buffered.get("desired"))
+                    || bufferedBytes<1024*1024 || bufferedBytes>=2*1024*1024 || !"".equals(buffered.get("error")))
+                throw new AssertionError("PCM bounded prebuffer failed: "+buffered);
+            var resumed=eval(browser,session,"(async()=>{while(saltApple.bytes>512*1024)saltApple.pull(32768);"+
+                "const end=Date.now()+3000;while(!saltApple.running&&!saltApple.error&&Date.now()<end)await new Promise(r=>setTimeout(r,20));"+
+                "return {running:saltApple.running,paused:saltApple.backpressured,error:saltApple.error};})()",true);
+            if(!Boolean.TRUE.equals(resumed.get("running")) || Boolean.TRUE.equals(resumed.get("paused")) || !"".equals(resumed.get("error")))
+                throw new AssertionError("PCM low-water resume failed: "+resumed);
+            System.out.println("PASS: real browser continuous prebuffer, bounded backpressure and low-water resume");
             for(long frame: new long[]{0,48000*7,48000}) {
                 var seek=eval(browser,session,"saltApple.seek("+frame+")",true);
                 if(!"".equals(seek.get("error")))throw new AssertionError("PCM seek failed");
@@ -70,7 +83,10 @@ public final class WindowsMusicKitPcmProbe {
             System.out.println("Browser EME availability (synthetic capability probe): "+drm);
             if(args.length==2) io.github.yghfv.saltneri.plugin.host.AppleMusicBassProbe.verify(new AppleMusicPcmSource.Decoder() {
                 boolean running;
-                public void seek(long frame) throws java.io.IOException {try{eval(browser,session,"saltApple.seek("+frame+")",true);running=true;}catch(Exception error){throw new java.io.IOException(error);}}
+                public void seek(long frame) throws java.io.IOException {try{
+                    System.out.println("Synthetic PCM producer seek: "+frame);
+                    eval(browser,session,"saltApple.seek("+frame+")",true);running=true;
+                }catch(Exception error){throw new java.io.IOException(error);}}
                 public byte[] pull(int maximum) throws java.io.IOException {try{
                     if(!running){eval(browser,session,"saltApple.resume()",true);running=true;}
                     var value=eval(browser,session,"saltApple.pull("+Math.min(maximum,32768)+")",false);

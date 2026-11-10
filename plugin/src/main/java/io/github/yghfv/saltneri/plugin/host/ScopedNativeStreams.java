@@ -31,6 +31,9 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
     private final BassFileStreamRuntime injected;
     private final java.util.function.Consumer<URI> failed;
     private final LocalFactory localFiles;
+    @FunctionalInterface interface Preparation {void prepare(URI uri) throws Exception;}
+    private Preparation preparation=uri->{};
+    ScopedNativeStreams preparation(Preparation value) {preparation=value;return this;}
     private final Set<Scope> scopes = new HashSet<>();
     private final ThreadPoolExecutor aborts = new ThreadPoolExecutor(0, 2, 10, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(), runnable -> {
@@ -87,7 +90,17 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
                 } catch (Exception failure) {
                     throw new IllegalStateException("Online media staging failed", failure);
                 }
-                return runtime.getCreateStream().invoke(nativeFlags, procs);
+                int handle=runtime.getCreateStream().invoke(nativeFlags, procs);
+                if(handle!=0) {
+                    try {
+                        preparation.prepare(uri);
+                        if(scope.terminal.get() || !active.getAsBoolean())throw new CancellationException("Stream open cancelled");
+                    } catch(Exception failure) {
+                        runtime.getFreeChannel().invoke(handle);
+                        throw new IllegalStateException("Online audio preparation failed",failure);
+                    }
+                }
+                return handle;
             }, runtime.getFreeChannel(), runtime.getGetErrorCode());
             Object result = abi.create.invoke(abi.singleton, uri.toString(), flags, guarded, abi.owner);
             transferred = result instanceof Integer handle && handle != 0;

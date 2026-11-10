@@ -20,12 +20,27 @@ public final class AppleMusicBassProbe {
         if(!bass.BASS_Init(0,48000,0,null,null))throw new AssertionError("BASS no-sound initialization failed");
         var streams=new ScopedNativeStreams(AppleMusicBassProbe.class.getClassLoader());
         try(var transport=new LoopbackRangeServer();var pcm=new Memory(65536)) {
+            streams.preparation(transport::prepareForPlayback);
             var source=new AppleMusicPcmSource(16000,()->true,()->decoder);
             var uri=transport.register(MediaLease.appleMusic(source,"apple:fixture",Instant.now().plusSeconds(60),()->true));
             transport.onRevoke(streams::revoke);
             Object raw=streams.create(uri,0x200000);kotlin.ResultKt.throwOnFailure(raw);int handle=(int)raw;
             if(handle==0)throw new AssertionError("Native WAV stream creation failed");
             try {
+                long next=System.nanoTime(),worstMillis=0;
+                for(int block=0;block<34;block++) {
+                    long start=System.nanoTime();
+                    int count=bass.BASS_ChannelGetData(handle,pcm,65536);
+                    long millis=(System.nanoTime()-start)/1000000;
+                    if(count!=65536)throw new AssertionError("Continuous native PCM read incomplete");
+                    worstMillis=Math.max(worstMillis,millis);
+                    if(block>0 && millis>250)throw new AssertionError("Continuous PCM block "+block+" stalled for "+millis+"ms");
+                    if(block==0) {next=System.nanoTime();worstMillis=0;}
+                    next+=65536L*1000000000L/192000;
+                    long remaining=next-System.nanoTime();
+                    if(remaining>0)java.util.concurrent.TimeUnit.NANOSECONDS.sleep(remaining);
+                }
+                System.out.println("PASS: paced native PCM playback for 11s; worst read="+worstMillis+"ms");
                 for(long position:new long[]{0,7L*48000*4,48000*4}) {
                     if(!bass.BASS_ChannelSetPosition(handle,position,0))throw new AssertionError("BASS seek failed");
                     int count=bass.BASS_ChannelGetData(handle,pcm,65536);

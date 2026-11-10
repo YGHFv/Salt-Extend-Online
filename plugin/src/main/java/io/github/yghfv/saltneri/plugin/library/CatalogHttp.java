@@ -156,5 +156,6 @@ public final class CatalogHttp implements AutoCloseable {
         String cookie = cookies.header(uri); if (!cookie.isEmpty()) connection.setRequestProperty("Cookie", cookie);
     }
     private void check(RequestScope request) { request.check(); if (account != null && !account.isActive()) throw new java.util.concurrent.CancellationException("Catalog account retired"); }
+    String cookieHeader(URI uri,RequestScope request) throws IOException {check(request);return cookies.header(uri);}
     @Override public void close() { cookies.clear(); wbiMixin = null; }
 }

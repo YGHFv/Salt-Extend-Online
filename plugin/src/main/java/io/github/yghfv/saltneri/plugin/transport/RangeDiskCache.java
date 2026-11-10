@@ -24,6 +24,7 @@ public final class RangeDiskCache implements AutoCloseable {
     synchronized long revision() { return revision; }
     public synchronized void limit(long bytes) {
         if(bytes<0 || bytes>8L*1024*1024*1024) throw new IllegalArgumentException("Invalid cache budget");
+        if(limit==bytes) return;
         limit=bytes; revision++; trim(0);
     }
     private boolean safeDirectory() {

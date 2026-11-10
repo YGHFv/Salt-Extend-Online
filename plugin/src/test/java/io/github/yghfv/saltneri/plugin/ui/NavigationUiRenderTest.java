@@ -52,6 +52,71 @@ public final class NavigationUiRenderTest {
             return javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data.getBytes()));
         }
     }
+    static void choiceClick(ImageComposeScene scene,String label) throws Exception {
+        var text=SemanticsProperties.INSTANCE.getText();var click=SemanticsActions.INSTANCE.getOnClick();
+        SemanticsNode selected=null;
+        for(var owner:scene.getSemanticsOwners()) {
+            var queue=new ArrayDeque<SemanticsNode>();queue.add(owner.getRootSemanticsNode());
+            while(!queue.isEmpty()) {
+                var node=queue.removeFirst();var config=node.getConfig();
+                if(config.contains(text) && config.get(text).stream().anyMatch(t->t.getText().equals(label)) && config.contains(click)){selected=node;break;}
+                queue.addAll(node.getChildren());
+            }
+            if(selected!=null)break;
+        }
+        check(selected!=null);check(Boolean.TRUE.equals(selected.getConfig().get(click).getAction().invoke()));render(scene);
+    }
+    @SuppressWarnings("unchecked")
+    private static void secondaryPages(SaltNativeUi ui,Object nav,List<Object> stack,Function3<Object,Composer,Integer,Object> cached,
+                                       ProvidableCompositionLocal<Object> local,Config config) throws Exception {
+        var blur=Class.forName("com.xuncorp.voxzen.ui.component.\u052c");
+        var haze=Class.forName("dev.chrisbanes.haze.HazeState").getConstructor().newInstance();
+        var values=new ProvidedValue[]{
+                local.provides(nav),
+                ((ProvidableCompositionLocal<Object>)blur.getMethod("\u037f").invoke(null)).provides(haze),
+                ((ProvidableCompositionLocal<Object>)blur.getMethod("\u0528").invoke(null)).provides(haze)};
+        var changes=new AtomicInteger();ui.settingsChanged(c->changes.incrementAndGet());
+        for(var page:List.of(SettingsCatalog.Page.AUTO_SOURCE,SettingsCatalog.Page.QUALITY,SettingsCatalog.Page.HOME)) {
+            ui.openConfiguration(page);SwingUtilities.invokeAndWait(()->{});
+            check(ui.settingsPageKind(stack.getLast())==page);
+            SwingUtilities.invokeAndWait(()->{
+                var scene=new ImageComposeScene(900,1100,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(c,f)->{
+                    CompositionLocalKt.CompositionLocalProvider(values,(composer,flags)->{cached.invoke(stack.getLast(),composer,flags);return Unit.INSTANCE;},c,0);
+                    return Unit.INSTANCE;
+                });
+                try {
+                    render(scene);
+                    if(page==SettingsCatalog.Page.AUTO_SOURCE) {
+                        for(var setting:ui.settingsItems(page)) {
+                            check(find(scene,setting.title(),SemanticsProperties.INSTANCE.getToggleableState())!=null);
+                            click(scene,setting.title());check(config.get(setting.key(),false));
+                        }
+                        check(!config.values.containsKey("bili.autoSourceSwitch"));
+                        var setting=ui.settingsItems(page).getFirst();config.fail=true;int changed=changes.get();
+                        click(scene,setting.title());check(config.get(setting.key(),false) && changes.get()==changed);config.fail=false;
+                    } else {
+                        var setting=ui.settingsItems(page).getFirst();click(scene,setting.title());
+                        var label=page==SettingsCatalog.Page.QUALITY?"Hi-Res":"酷狗音乐";
+                        check(find(scene,label,SemanticsActions.INSTANCE.getOnClick())!=null);
+                        choiceClick(scene,label);
+                        Object saved=config.get(setting.key(),"");
+                        if(!saved.equals(page==SettingsCatalog.Page.QUALITY?"hires":"KUGOU"))throw new AssertionError("Choice not saved: "+setting.key()+"="+saved);
+                        checks++;
+                        check(find(scene,label,SemanticsActions.INSTANCE.getGetTextLayoutResult())!=null);
+                        var invalid=new Object();check(!ui.changeSetting(setting,invalid));
+                    }
+                    pixels(scene,"settings-"+page.id());ui.settingsBack();check(!ui.settingsPage(stack.getLast()));
+                } catch(Exception failure){throw new AssertionError(failure);}
+                finally {scene.close();}
+            });
+        }
+        check(changes.get()==6);
+        ui.homePlaylistChoices(List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("91","Fixture local playlist",new Object())));
+        var home=ui.settingsItems(SettingsCatalog.Page.HOME).getFirst();
+        check(home.entries().contains("歌单 · Fixture local playlist") && home.values().contains("playlist:91"));
+        check(ui.changeSetting(home,"playlist:91") && config.get("ui.home","").equals("playlist:91"));
+        check(home.label("bad").equals("恢复上次"));
+    }
     @SuppressWarnings("unchecked")
     private static void styleParity(SaltNativeUi ui,Object nav,Object route,Function3<Object,Composer,Integer,Object> cached,
                                     ProvidableCompositionLocal<Object> local) throws Exception {
@@ -72,6 +137,17 @@ public final class NavigationUiRenderTest {
         Function4<androidx.compose.foundation.layout.BoxScope,androidx.compose.foundation.layout.PaddingValues,Composer,Integer,Unit> body=(scope,insets,c,f)->{
             Function1<androidx.compose.foundation.lazy.LazyListScope,Unit> items=list->{
                 list.item(null,null,(item,composer,flags)->{invoke(caption,CAPTION,null,composer,0,2);return Unit.INSTANCE;});
+                list.item(null,null,(item,composer,flags)->{
+                    Function3<androidx.compose.foundation.layout.ColumnScope,Composer,Integer,Unit> controls=(s,c2,f2)->{
+                        for(var setting:ui.settingsItems(SettingsCatalog.Page.SIDEBAR)) {
+                            if(setting.key().equals("ui.hiddenSidebar") && !ui.sidebarOptimized())continue;
+                            if(setting.type().equals("switch"))ui.settingSwitch(setting,c2);
+                            else ui.settingAction(setting,()->{ui.repairSidebarSetting();return Unit.INSTANCE;},c2);
+                        }
+                        return Unit.INSTANCE;
+                    };
+                    invoke(column,null,null,0L,controls,composer,0,7);return Unit.INSTANCE;
+                });
                 list.item(null,null,(item,composer,flags)->{invoke(column,null,null,0L,switches,composer,0,7);return Unit.INSTANCE;});
                 return Unit.INSTANCE;
             };
@@ -157,9 +233,15 @@ public final class NavigationUiRenderTest {
                 });
                 try {
                     render(scene);
+                    pixels(scene,"sidebar-before-scroll");
                     check(find(scene,"\u4fa7\u680f\u7ba1\u7406",null)!=null);
+                    check(find(scene,"修复侧栏入口",SemanticsActions.INSTANCE.getOnClick())!=null);
+                    var scroll=find(scene,null,SemanticsActions.INSTANCE.getScrollBy());
+                    check(scroll!=null && Boolean.TRUE.equals(scroll.getConfig().get(SemanticsActions.INSTANCE.getScrollBy()).getAction().invoke(0f,10000f)));
+                    render(scene);
+                    pixels(scene,"sidebar-after-scroll");
                     check(find(scene,"Bilibili",SemanticsProperties.INSTANCE.getToggleableState())!=null);
-                    check(find(scene,"\u8bbe\u7f6e",SemanticsProperties.INSTANCE.getToggleableState())==null);
+                    check(find(scene,"ui.sidebar.Settings",SemanticsProperties.INSTANCE.getToggleableState())==null);
                     click(scene,"Bilibili");check(config.get("ui.sidebar.BILIBILI",true)==false && !ui.sidebarVisible("BILIBILI"));
                     config.fail=true;click(scene,"Bilibili");
                     check(config.get("ui.sidebar.BILIBILI",true)==false && !ui.sidebarVisible("BILIBILI"));
@@ -174,6 +256,7 @@ public final class NavigationUiRenderTest {
                 catch(Exception failure) {throw new AssertionError(failure);}
             });
             ui.settingsBack();
+            secondaryPages(ui,nav,stack,cached,local,config);
             config.set("ui.home","restore");ui.observeNavigation(nav);SwingUtilities.invokeAndWait(()->{});
             check(preferences.initial().equals("BILIBILI"));
             permitted.set(false);check(!ui.settingsPage(stack.getLast()));

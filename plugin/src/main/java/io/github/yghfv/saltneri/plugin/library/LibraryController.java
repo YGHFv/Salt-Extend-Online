@@ -426,6 +426,23 @@ public final class LibraryController implements AutoCloseable {
     public synchronized void saveRow(String token,java.util.function.BiConsumer<OnlinePlaybackController.Target,Item> save) {
         playRow(token,target->{State s=stateFor(token);save.accept(target,withAuthor(s,s.rows.get(token)));});
     }
+    public record Selection(AccountPlatform platform,Item item,AccountCredentials account) { }
+    public synchronized Selection selection(String token) {
+        State s=stateFor(token);if(s==null)throw new IllegalStateException("Stale row");
+        refresh(s);Item item=s.rows.get(token);
+        if(item==null || !item.enabled())throw new IllegalStateException("Stale row");
+        return new Selection(s.platform,withAuthor(s,item),s.account);
+    }
+    public synchronized void requestPlaylist(String token) {
+        Selection selection=selection(token);
+        if(selection.item().kind()==Kind.TRACK)throw new IllegalArgumentException("Select a playlist");
+        choose(token);requestPlaylist();
+    }
+    public synchronized void playlistsChanged(AccountPlatform changed) {
+        State s=states.get(changed);s.cache.clear();
+        s.history.clear();
+        if(s.query!=null && (s.query.view()==View.MINE || s.query.view()==View.SAVED))load(s,s.query);
+    }
     public synchronized boolean currentRow(String token) { State s = stateFor(token); if (s == null) return false; refresh(s); return s.rows.containsKey(token); }
     private void invalidate(State s) { s.cache.clear(); s.resolvedCovers.clear(); reset(s); s.history.clear(); s.authorName=""; s.rows.clear(); s.visible=null; s.query=null; s.loader.invalidate(""); }
     public synchronized void accountChanged(AccountPlatform changed) { invalidate(states.get(changed)); if(platform==changed) navigation.run(); }

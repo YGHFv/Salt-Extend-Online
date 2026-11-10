@@ -6,7 +6,7 @@ package io.github.yghfv.saltneri.plugin.library;
 import java.util.*;
 import java.util.regex.Pattern;
 
-/** Shared by NetEase today and a future QQ Music adapter; never resolves credentials or URLs. */
+/** Shared by all music platforms using Bilibili as a backup; never resolves credentials or URLs. */
 public final class AutoSourceMatcher {
     public static final int SEARCH_LIMIT=6, MIN_SCORE=70;
     public record Song(String title,String artist,long durationMillis) { }

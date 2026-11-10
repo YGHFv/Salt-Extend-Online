@@ -29,7 +29,7 @@
 | 一般外部歌词时长门禁 | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/matching/ExternalLyricMatchPolicy.kt` |
 | AMLL 搜索、逐字与时间门禁 | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/repository/AmllLyricsResolver.kt`、`modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/matching/AmllMatchPolicy.kt` |
 | QQ 原生与 AMLL 选择 | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/repository/QQMusicLyricsRepository.kt`、`modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/matching/QQMusicLyricSelection.kt` |
-| 酷狗 KRC | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/api/codec/KugouLyricCodec.kt` |
+| 酷狗音乐 KRC | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/lyrics/api/codec/KugouLyricCodec.kt` |
 | CC 轨道选择与字幕解析 | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/bilibili/lyrics/BiliSubtitleParser.kt` |
 | CC 读取、失败回退和缓存 | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/bilibili/lyrics/BiliSubtitleLyricsLoader.kt` |
 | 网易云专辑封面 | `modules/platform/src/main/java/moe/ouom/neriplayer/platform/netease/mapping/NeteaseSongMapping.kt` |
@@ -48,7 +48,7 @@
 | 歌词源 | `automatic` | 相同 |
 | 网易云指定源 | `cloud_music` | 相同，不用自定义 `netease` 冒充迁移值 |
 | QQ 指定源 | `qq_music` | 相同 |
-| 酷狗／LRCLIB／AMLL | `kugou` / `lrclib` / `amll_ttml` | 相同 |
+| 酷狗音乐／LRCLIB／AMLL | `kugou` / `lrclib` / `amll_ttml` | 相同 |
 | 优先逐字 | `true` | 相同 |
 | AMLL 补全 | `true` | 相同 |
 | B 站 CC 开关 | `true` | 相同 |
@@ -88,7 +88,7 @@
 
 CC 成功、平台已有逐字、关闭逐字偏好、关闭 AMLL，任一成立就不走逐字升级。
 其他条件满足时 AMLL 仅接受可解析且真正逐字的候选，失败保留平台词。
-不是所有没有歌词的 B 站视频都会轮询 QQ／酷狗；通用多源搜索主要属于指定来源和人工匹配路径。
+不是所有没有歌词的 B 站视频都会轮询 QQ／酷狗音乐；通用多源搜索主要属于指定来源和人工匹配路径。
 
 ### 原文、翻译、音译
 
@@ -110,13 +110,13 @@ CC 成功、平台已有逐字、关闭逐字偏好、关闭 AMLL，任一成立
 
 ## 5. 人工匹配和自动应用
 
-上游手动来源搜索顺序：酷狗、网易云、QQ、LRCLIB、AMLL、YouTube。
+上游手动来源搜索顺序：酷狗音乐、网易云、QQ、LRCLIB、AMLL、YouTube。
 本需求只启用前五个，YouTube 不包含在首版功能中。这是**搜索汇总顺序**，不是最终获胜顺序。
 
 - 每源最多 5 个搜索结果，最多 4 个详情候选，最终最多 20 项。
 - 独立来源可并发，汇总与排序保持确定性；取消异常原样传播。
 - 排序：开启逐字偏好时先按逐字层级，再按置信度、分数、时长差、来源优先级等稳定字段。
-- 同层来源优先级数值为酷狗 5、网易云 4、QQ 3、LRCLIB 2、AMLL 1。
+- 同层来源优先级数值为酷狗音乐 5、网易云 4、QQ 3、LRCLIB 2、AMLL 1。
 - 自动应用要求高置信度、可靠歌名／主歌手身份、版本兼容和已知兼容时长；
   高排名的低置信度逐字结果仍不能自动替换。
 - 一般时长容差：6%，下限 7 秒，上限 15 秒；边界包含等号，未知时长拒绝。

@@ -38,6 +38,15 @@ def verify():
         assert (ROOT / "plugin/src/main/java/io/github/yghfv/saltneri/plugin" / path).is_file(), name
     for name in ("preference_config.json", "preference_config_experimental.json"):
         json.loads((ROOT / "plugin/src/main/resources" / name).read_text(encoding="utf-8"))
+    pages = json.loads((ROOT / "plugin/src/main/resources/settings-pages.json").read_text(encoding="utf-8"))
+    assert set(pages) == {"sidebar", "auto-source", "quality", "home"}
+    for items in pages.values():
+        for item in items:
+            if item["type"] == "list":
+                assert len(item["entries"]) == len(item["entry_values"]) and item["default_value"] in item["entry_values"]
+            elif item["type"] == "switch":
+                assert isinstance(item["default_value"], bool)
+    assert not any(item.get("key") == "bili.autoSourceSwitch" for items in pages.values() for item in items)
     print(f"PASS: metadata {metadata['version']}; {len(entries)} inventoried contracts, "
           f"{sum(e['offline'] for e in entries)} host-free plugin contracts")
 

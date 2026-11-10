@@ -44,6 +44,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private NativeDesk desk;
     private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
     private SavedPlaylistController savedPlaylists;
+    private PlatformPlaylistController platformPlaylists;
     private java.util.concurrent.ScheduledExecutorService savedRestore;
     private io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery savedRecovery;
     private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
@@ -51,12 +52,19 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
     private io.github.yghfv.saltneri.plugin.ui.NavigationPreferences navigationPreferences;
     private void applySettings(ConfigHelper config) {
+        PlaybackSettings previous=settings;
         var parsed=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
         settings=new PlaybackSettings(parsed.bili(),parsed.netease(),parsed.cacheBytes(),parsed.coverMode(),config.get("netease.autoSourceSwitch",false),
-                io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.fromKey(config.get("qqmusic.quality","standard")),config.get("qqmusic.autoSourceSwitch",false),config.get("kugou.quality","128"));
+                io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.fromKey(config.get("qqmusic.quality","standard")),config.get("qqmusic.autoSourceSwitch",false),config.get("kugou.quality","128"),
+                config.get("kugou.autoSourceSwitch",false),config.get("applemusic.autoSourceSwitch",false));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
         LibraryController catalog=library; if(catalog!=null) catalog.pageLimit(CatalogPaging.parse(config.get("catalog.pageLimit","30")));
         SaltNativeUi ui=nativeUi; if(ui!=null) applySidebarSettings(ui,config);
+        if(!previous.qualityKey().equals(settings.qualityKey())) {
+            if(bili!=null)bili.invalidate("Playback preferences changed; prepare again explicitly.");
+            if(netease!=null)netease.invalidate("Playback preferences changed; prepare again explicitly.");
+            if(online!=null)online.invalidate("Playback preferences changed; prepare again explicitly.");
+        }
     }
     private void applySidebarSettings(SaltNativeUi ui,ConfigHelper config) {
         var hidden=new java.util.HashSet<String>();
@@ -64,6 +72,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
             if(!config.get("ui.sidebar."+button,true))hidden.add(button);
         ui.sidebarSettings(config.get("ui.sidebarOptimization",false),config.get("ui.hiddenSidebar",false),config.get("ui.hideSidebarToggle",false),hidden);
         ui.configuration(configManager,navigationPreferences);
+        ui.settingsChanged(this::applySettings);
     }
 
     public ExperimentalPlugin(PluginContext context) { super(context); }
@@ -115,6 +124,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
             }
         });
         desk.errorToast(text -> toast(text,WorkshopApi.Ui.ToastType.Error));
+        platformPlaylists=new PlatformPlaylistController(new PlatformPlaylistGateway(),this::credentials,
+                ()->generation==started && granted(),library::currentRow,library::playlistsChanged,
+                text->toast(text,text.startsWith("已")?WorkshopApi.Ui.ToastType.Success:WorkshopApi.Ui.ToastType.Error));
+        desk.platformPlaylists(platformPlaylists);
         desk.coverMode(()->settings.coverMode());
         desk.platformHome(navigationPreferences::platformHome);
         desk.preferences(new io.github.yghfv.saltneri.plugin.ui.CatalogPreferences(configManager.getConfig("catalog-ui.json")));
@@ -142,21 +155,14 @@ public final class ExperimentalPlugin extends SpwPlugin {
             if(current==null) throw new IllegalStateException("Adapter unavailable");
             current.playPlaylist(playlist,valid);
         }));
-        BiliResolutionController startedBili = bili;
-        NeteaseResolutionController startedNetease = netease;
         configListener = config -> {
-            PlaybackSettings previous=settings; applySettings(config);
+            applySettings(config);
             boolean remember = true;
             AccountLoginController a = biliLogin, b = neteaseLogin;
             if (a != null) a.setRememberEnabled(remember);
             if (b != null) b.setRememberEnabled(remember);
             if (qqmusicLogin != null) qqmusicLogin.setRememberEnabled(remember);
             if(kugouLogin!=null)kugouLogin.setRememberEnabled(remember);
-            if(!previous.qualityKey().equals(settings.qualityKey())) {
-                startedBili.invalidate("Quality changed; prepare again explicitly.");
-                startedNetease.invalidate("Quality changed; prepare again explicitly.");
-                startedOnline.invalidate("Quality changed; prepare again explicitly.");
-            }
         };
         configManager.addConfigChangeListener(configListener);
         profile = Salt1193Probe.inspect(WorkshopApi.class.getClassLoader(),
@@ -239,9 +245,15 @@ public final class ExperimentalPlugin extends SpwPlugin {
         nativeUi.repairSidebar();
     }
     public static void openSidebarSettings() {
+        openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.SIDEBAR);
+    }
+    public static void openAutoSourceSettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.AUTO_SOURCE);}
+    public static void openQualitySettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.QUALITY);}
+    public static void openHomeSettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.HOME);}
+    private static void openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page page) {
         ExperimentalPlugin plugin=active;
         if(plugin==null)return;
-        try {plugin.ensureNativeUi();plugin.nativeUi.openSidebarConfiguration();}
+        try {plugin.ensureNativeUi();plugin.nativeUi.openConfiguration(page);}
         catch(Exception failure) {toast("Sidebar settings unavailable",WorkshopApi.Ui.ToastType.Error);}
     }
     private synchronized void startLogin(AccountPlatform platform) throws Exception {
@@ -328,6 +340,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
         if(savedRestore!=null) {savedRestore.shutdownNow();savedRestore=null;}
         if(savedPlaylists!=null) {savedPlaylists.close();savedPlaylists=null;}
+        if(platformPlaylists!=null) {platformPlaylists.close();platformPlaylists=null;}
         if(mediaIdentity!=null) { mediaIdentity.close(); mediaIdentity=null; }
         stopped = true;
         generation = null;

@@ -49,6 +49,7 @@ Copy-Item -LiteralPath (Join-Path $root "plugin/src/main/resources/$configName")
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/host-profiles') -Destination $classes -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/auth') -Destination $classes -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/musickit') -Destination $classes -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/settings-pages.json') -Destination $classes
 $licenseDirectory = Join-Path $classes 'META-INF/licenses'
 New-Item -ItemType Directory -Path $licenseDirectory -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/META-INF/extensions.idx') -Destination (Join-Path $classes 'META-INF/extensions.idx')

@@ -48,6 +48,11 @@
   ],
   "tests": [
     {
+      "class": "io.github.yghfv.saltneri.plugin.library.PlatformPlaylistContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.library.KugouContractTest",
       "baseOnly": true,
       "offline": false

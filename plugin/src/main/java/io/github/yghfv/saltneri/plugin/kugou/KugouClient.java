@@ -25,6 +25,13 @@ public final class KugouClient {
     public KugouClient(AccountCredentials account,Clock clock,KugouHttp.Opener opener) {
         this.account=account;this.clock=clock;this.opener=opener;this.http=new KugouHttp(opener);
     }
+    public Song songInfo(String id,RequestScope request) throws IOException {
+        String hash=KugouHttp.hash(id);
+        var rows=KugouHttp.rows(http.get("/privilege/lite",Map.of("hash",hash),account,request),"data","list");
+        var raw=rows.stream().filter(v->v instanceof Map<?,?> m && hash.equalsIgnoreCase(String.valueOf(m.get("hash"))))
+                .findFirst().orElseThrow(()->KugouHttp.failure("HASH_MISMATCH"));
+        return parseSong(object(raw));
+    }
     public Resolved resolve(String id,String quality,String scope,RequestScope request) throws IOException {
         String hash=KugouHttp.hash(id);
         if(scope==null || scope.isBlank() || account!=null && !scope.equals(account.accountScope()))throw KugouHttp.failure("SCOPE");

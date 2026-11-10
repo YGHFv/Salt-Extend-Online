@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.*;
 public final class AppleMusicNativeAudioTest {
     private static void check(boolean value,String reason) {if(!value)throw new AssertionError(reason);}
     public static void main(String[] args) throws Exception {
-        AtomicBoolean active=new AtomicBoolean(true);AtomicInteger opens=new AtomicInteger(),closes=new AtomicInteger(),seeks=new AtomicInteger();
+        AtomicBoolean active=new AtomicBoolean(true);AtomicInteger opens=new AtomicInteger(),closes=new AtomicInteger(),seeks=new AtomicInteger(),pauses=new AtomicInteger();
         AppleMusicPcmSource source=new AppleMusicPcmSource(16000,active::get,()->{
             opens.incrementAndGet();
             return new AppleMusicPcmSource.Decoder() {
@@ -22,7 +22,7 @@ public final class AppleMusicNativeAudioTest {
                     while(data.hasRemaining()) {short sample=(short)(frame++%30000+1);data.putShort(sample).putShort(sample);}
                     return data.array();
                 }
-                public void pause() {}
+                public void pause() {pauses.incrementAndGet();}
                 public void close() {closes.incrementAndGet();}
             };
         });
@@ -55,6 +55,7 @@ public final class AppleMusicNativeAudioTest {
             byte[] oddB=source.read(new ByteRange(109,172),()->true);
             System.arraycopy(oddA,0,joined,0,oddA.length);System.arraycopy(oddB,0,joined,oddA.length,oddB.length);
             check(java.util.Arrays.equals(joined,both),"Consecutive unaligned frame skipped bytes");
+            check(pauses.get()==0,"Range boundaries paused the continuous PCM producer");
             check(transport.cacheBytes()==0,"Decrypted Apple PCM entered disk cache");
             transport.revoke(uri);
             check(closes.get()==1 && !transport.isAvailable(uri),"Revoke did not close browser");

@@ -136,6 +136,8 @@ public final class KugouContractTest {
                     check(playlists.items().getLast().title().equals("Account playlist "+(view==View.MINE?58:59)));
                 }
                 var client=new KugouClient(account,CLOCK,fixture);
+                var info=client.songInfo(HASH,request);
+                check(info.hash().equals(HASH) && info.duration()>0 && !info.title().isBlank());
                 var audio=client.resolve(HASH,"128",account.accountScope(),request);
                 check(audio.key().equals(TrackKey.kugou(HASH)) && audio.lease().length()==4096);
                 check(fixture.requests.getLast().getRequestProperty("X-Kg-Session-Id")==null && fixture.requests.getLast().getRequestProperty("Cookie")==null);

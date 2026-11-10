@@ -37,7 +37,9 @@ final class SaltContextMenuBindings {
 
     void menu(PopupPositionProvider position, Function0<Unit> dismiss, Consumer<QueueAction> select,
               io.github.yghfv.saltneri.plugin.library.SavedPlaylistController.Snapshot playlists,
-              Consumer<String> save,Runnable create,Composer composer) {
+              Consumer<String> save,Runnable create,
+              io.github.yghfv.saltneri.plugin.library.PlatformPlaylistController.Snapshot favorites,
+              Consumer<String> favorite,Composer composer) {
         Function1<Object, Unit> children = scope -> {
             QueueAction[] actions = {QueueAction.AFTER_CURRENT, QueueAction.AFTER_LAST_ADDED, QueueAction.AT_QUEUE_END};
             for (int index = 0; index < actions.length; index++) {
@@ -61,9 +63,27 @@ final class SaltContextMenuBindings {
         Function1<Object, Unit> content = scope -> {
             invoke(submenu, scope, children, true, insertion);
             invoke(submenu,scope,playlistChildren,true,addToPlaylist);
+            if(favorites!=null)invoke(submenu,scope,(Function1<Object,Unit>)childScope->{
+                if(favorites.entries().isEmpty())invoke(item,childScope,(Function0<Unit>)()->Unit.INSTANCE,false,
+                        label(favorites.loading()?"正在读取平台歌单":favorites.status().isEmpty()?"暂无可添加的歌单":favorites.status()));
+                for(var entry:favorites.entries())invoke(item,childScope,(Function0<Unit>)()->{
+                    dismiss.invoke();favorite.accept(entry.choice().id());return Unit.INSTANCE;
+                },entry.checked() && !entry.contains(),label(entry.choice().title()+(entry.contains()?" · 已收藏":entry.checked()?"":" · 正在读取")));
+                return Unit.INSTANCE;
+            },true,label("收藏"));
             return Unit.INSTANCE;
         };
         invoke(popup, null, position, dismiss, content, composer, 0, 0);
+    }
+    void playlistMenu(PopupPositionProvider position,Function0<Unit> dismiss,Runnable play,Runnable subscribe,
+                      io.github.yghfv.saltneri.plugin.library.PlatformPlaylistController.Snapshot state,Composer composer) {
+        Function1<Object,Unit> content=scope->{
+            invoke(item,scope,(Function0<Unit>)()->{dismiss.invoke();play.run();return Unit.INSTANCE;},true,label("播放全部"));
+            invoke(item,scope,(Function0<Unit>)()->{dismiss.invoke();subscribe.run();return Unit.INSTANCE;},
+                    state.subscriptionKnown() && !state.subscribed(),label(state.subscribed()?"已订阅歌单":"订阅歌单"));
+            return Unit.INSTANCE;
+        };
+        invoke(popup,null,position,dismiss,content,composer,0,0);
     }
     private Function2<Composer,Integer,Unit> label(String label) {
         return (composer,flags)->{invoke(text,null,label,null,null,false,composer,0,14);return Unit.INSTANCE;};

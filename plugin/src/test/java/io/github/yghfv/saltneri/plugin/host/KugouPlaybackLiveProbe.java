@@ -18,6 +18,7 @@ public final class KugouPlaybackLiveProbe {
         int BASS_ChannelGetData(int handle,Pointer buffer,int length);
         boolean BASS_ChannelSetPosition(int handle,long position,int mode);
         long BASS_ChannelGetLength(int handle,int mode);
+        double BASS_ChannelBytes2Seconds(int handle,long bytes);
         boolean BASS_StreamFree(int handle);
         boolean BASS_Free();
     }
@@ -30,7 +31,6 @@ public final class KugouPlaybackLiveProbe {
         int verified=0;
         try(var request=new RequestScope(account::isActive,300000);
             var transport=new LoopbackRangeServer();var pcm=new Memory(65536)) {
-            transport.cacheLimit(0);
             var catalog=new KugouCatalog(account,Clock.systemUTC(),new KugouHttp());
             var candidates=new ArrayList<Catalog.Item>();
             for(String keyword:List.of("If I were a Bird","unjust life"))
@@ -60,6 +60,20 @@ public final class KugouPlaybackLiveProbe {
                         requireAudio(count,pcm,bass,handle);
                         long length=bass.BASS_ChannelGetLength(handle,0);
                         if(length<65536 || length>2L*1024*1024*1024)throw new AssertionError("Invalid decoded length");
+                        if(verified==0) {
+                            long period=(long)(bass.BASS_ChannelBytes2Seconds(handle,65536)*1000000000L);
+                            if(period<1000000 || period>1000000000L)throw new AssertionError("Invalid native frame duration");
+                            long next=System.nanoTime(),worst=0;
+                            for(int frame=0;frame<40;frame++) {
+                                long before=System.nanoTime();
+                                requireAudio(bass.BASS_ChannelGetData(handle,pcm,65536),pcm,bass,handle);
+                                worst=Math.max(worst,(System.nanoTime()-before)/1000000);
+                                next+=period;
+                                long remaining=next-System.nanoTime();
+                                if(remaining>0)java.util.concurrent.TimeUnit.NANOSECONDS.sleep(remaining);
+                            }
+                            System.out.println("PASS: paced real Kugou native playback; frames=40; worstReadMs="+worst);
+                        }
                         for(long seek:new long[]{length/2/4*4,0}) {
                             if(!bass.BASS_ChannelSetPosition(handle,seek,0))throw new AssertionError("Native Kugou seek failed");
                             requireAudio(bass.BASS_ChannelGetData(handle,pcm,65536),pcm,bass,handle);

@@ -45,7 +45,8 @@ final class NeteaseAutoSourceResolver {
             String scope,RequestScope request,Function<AccountPlatform,AccountCredentials> accounts,AccountCredentials biliAccount,
             IOException unavailable,Backend backend) throws IOException {
         request.check();
-        if(target.platform()!=AccountPlatform.NETEASE && target.platform()!=AccountPlatform.QQMUSIC || original!=null && !scope.equals(original.accountScope()))
+        if(target.platform()==AccountPlatform.BILIBILI || original!=null
+                && (original.platform()!=target.platform() || !scope.equals(original.accountScope())))
             throw new SecurityException("Alternative source original identity mismatch");
         if(biliAccount==null || !biliAccount.isActive())throw unavailable;
         Set<String> visited=new HashSet<>();
@@ -54,6 +55,7 @@ final class NeteaseAutoSourceResolver {
             return accounts.apply(AccountPlatform.BILIBILI)==biliAccount && biliAccount.isActive()
                     && accounts.apply(target.platform())==original && (original==null || original.isActive());
         },20000)) {
+            work.check();
             var info=backend.songInfo(work);
             var song=new AutoSourceMatcher.Song(info.metadata().title(),info.metadata().artist(),info.durationMillis());
             for(String query:AutoSourceMatcher.queries(song)) {
@@ -75,20 +77,31 @@ final class NeteaseAutoSourceResolver {
                                 .max(Comparator.comparingInt(p->AutoSourceMatcher.score(song,p.title(),p.author(),p.durationMillis())));
                         if(page.isEmpty())continue;
                         var resolved=backend.audio(page.get().target(),work);
-                        work.check();request.check();
-                        if(resolved.key().platform()!=TrackKey.Platform.BILIBILI || !resolved.transportMatches()
-                                || !resolved.lease().belongsTo(biliAccount.accountScope()))
-                            throw new SecurityException("Alternative source account mismatch");
-                        var lease=resolved.lease().bindTo(scope,()->biliAccount.isActive()
-                                && accounts.apply(AccountPlatform.BILIBILI)==biliAccount
-                                && accounts.apply(target.platform())==original && (original==null || original.isActive()));
-                        // Queue identity/lyrics/title stay NetEase; transport/cache policy stay Bilibili.
-                        return new OnlinePlaybackController.Audio(target.platform()==AccountPlatform.NETEASE?TrackKey.netease(target.id()):TrackKey.qqmusic(target.id()),info.metadata(),lease,
-                                resolved.expiresAt(),target,resolved.key());
+                        boolean published=false;
+                        try {
+                            work.check();request.check();
+                            if(resolved.key().platform()!=TrackKey.Platform.BILIBILI || !resolved.transportMatches()
+                                    || !resolved.lease().belongsTo(biliAccount.accountScope()))
+                                throw new SecurityException("Alternative source account mismatch");
+                            var lease=resolved.lease().bindTo(scope,()->biliAccount.isActive()
+                                    && accounts.apply(AccountPlatform.BILIBILI)==biliAccount
+                                    && accounts.apply(target.platform())==original && (original==null || original.isActive()));
+                            // Original queue identity/lyrics/metadata; Bilibili transport and cache policy.
+                            var result=new OnlinePlaybackController.Audio(originalKey(target),info.metadata(),lease,
+                                    resolved.expiresAt(),target,resolved.key());
+                            published=true;return result;
+                        } finally {if(!published)resolved.lease().release();}
                     } catch(IOException candidateFailure) {work.check();}
                 }
             }
         } catch(java.util.concurrent.CancellationException stopped) {request.check();throw stopped;}
         throw unavailable;
+    }
+    static TrackKey originalKey(OnlinePlaybackController.Target target) {
+        return switch(target.platform()) {
+            case NETEASE->TrackKey.netease(target.id());case QQMUSIC->TrackKey.qqmusic(target.id());
+            case KUGOU->TrackKey.kugou(target.id());case APPLEMUSIC->TrackKey.appleMusic(target.id());
+            case BILIBILI->throw new IllegalArgumentException("Bilibili is the backup source");
+        };
     }
 }

@@ -5,7 +5,8 @@ import io.github.yghfv.saltneri.plugin.netease.NeteaseClient;
 import java.util.Set;
 
 /** Immutable settings snapshot; callers capture it once per resolution. */
-public record PlaybackSettings(BiliAudioSelector.Quality bili, NeteaseClient.Quality netease, long cacheBytes, io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode, boolean neteaseAutoSourceSwitch, io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic, boolean qqmusicAutoSourceSwitch,String kugou) {
+public record PlaybackSettings(BiliAudioSelector.Quality bili, NeteaseClient.Quality netease, long cacheBytes, io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode, boolean neteaseAutoSourceSwitch, io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic, boolean qqmusicAutoSourceSwitch,String kugou,boolean kugouAutoSourceSwitch,boolean appleMusicAutoSourceSwitch) {
+    public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode,boolean auto,io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic,boolean qqauto,String kugou) {this(bili,netease,cacheBytes,coverMode,auto,qqmusic,qqauto,kugou,false,false);}
     public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode,boolean auto,io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic,boolean qqauto) {this(bili,netease,cacheBytes,coverMode,auto,qqmusic,qqauto,"128");}
     public PlaybackSettings {if(!Set.of("128","320","flac").contains(kugou))kugou="128";}
     public PlaybackSettings(BiliAudioSelector.Quality bili,NeteaseClient.Quality netease,long cacheBytes,io.github.yghfv.saltneri.plugin.ui.CoverMode coverMode,boolean neteaseAutoSourceSwitch,io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality qqmusic) {this(bili,netease,cacheBytes,coverMode,neteaseAutoSourceSwitch,qqmusic,false);}
@@ -24,5 +25,9 @@ public record PlaybackSettings(BiliAudioSelector.Quality bili, NeteaseClient.Qua
         if(cacheMiB!=null && Set.of("0","512","1024","2048","4096","8192").contains(cacheMiB)) limit=Long.parseLong(cacheMiB)*MIB;
         return new PlaybackSettings(BiliAudioSelector.Quality.fromKey(bili),quality,limit,io.github.yghfv.saltneri.plugin.ui.CoverMode.parse(cover));
     }
-    public String qualityKey() { return bili.name()+"/"+netease.key()+"/"+coverMode.name()+"/auto="+neteaseAutoSourceSwitch+"/qq="+qqmusic.key()+"/qqauto="+qqmusicAutoSourceSwitch+"/kg="+kugou; }
+    public boolean autoSourceSwitch(io.github.yghfv.saltneri.plugin.auth.AccountPlatform platform) {
+        return switch(platform){case NETEASE->neteaseAutoSourceSwitch;case QQMUSIC->qqmusicAutoSourceSwitch;
+            case KUGOU->kugouAutoSourceSwitch;case APPLEMUSIC->appleMusicAutoSourceSwitch;case BILIBILI->false;};
+    }
+    public String qualityKey() { return bili.name()+"/"+netease.key()+"/"+coverMode.name()+"/auto="+neteaseAutoSourceSwitch+"/qq="+qqmusic.key()+"/qqauto="+qqmusicAutoSourceSwitch+"/kg="+kugou+"/kgauto="+kugouAutoSourceSwitch+"/appleauto="+appleMusicAutoSourceSwitch; }
 }

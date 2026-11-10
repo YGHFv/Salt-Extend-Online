@@ -39,10 +39,25 @@ import io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection;
 public final class LoopbackRangeServer implements AutoCloseable {
     public Instant now() { return clock.instant(); }
     private final RangeDiskCache cache=new RangeDiskCache();
-    public void cacheLimit(long bytes) { cache.limit(bytes); cancelReadAhead(); }
+    public synchronized void cacheLimit(long bytes) {
+        if(cache.limitBytes()==bytes) return;
+        cache.limit(bytes); cancelReadAhead();
+    }
     public long cacheBytes() { return cache.usedBytes(); }
     public long cacheRevision() {return cache.revision();}
     public void clearCache() { cache.clear(); cancelReadAhead(); }
+    /** Native WAV open probes the tail. Restore a continuous producer before handing it to playback. */
+    public void prepareForPlayback(URI uri) throws IOException {
+        if(!"http".equals(uri.getScheme()) || uri.getPort()!=listener.getLocalPort() || !"127.0.0.1".equals(uri.getHost())
+                || uri.getRawQuery()!=null || uri.getRawFragment()!=null || uri.getRawUserInfo()!=null
+                || uri.getRawPath()==null || !uri.getRawPath().matches("/media/[0-9a-f]{64}"))throw new IOException("Foreign media");
+        Entry entry=leases.get(uri.getPath().substring("/media/".length()));
+        if(entry==null || entry.lease==null || entry.lease.decoded()==null)return;
+        for(long first=HOST_CHUNK_BYTES;first<Math.min(entry.length(),3*HOST_CHUNK_BYTES);first+=HOST_CHUNK_BYTES) {
+            ensureValid(entry);
+            entry.lease.decoded().read(new ByteRange(first,Math.min(entry.length(),first+HOST_CHUNK_BYTES)-1),()->valid(entry));
+        }
+    }
     @FunctionalInterface
     interface ConnectionOpener { HttpURLConnection open(URI uri) throws IOException; }
 
@@ -74,11 +89,47 @@ public final class LoopbackRangeServer implements AutoCloseable {
         final byte[] fixture;
         final Instant fixtureExpiry;
         final AtomicBoolean revoked = new AtomicBoolean();
-        final java.util.concurrent.locks.ReentrantLock downloadLock = new java.util.concurrent.locks.ReentrantLock(true);
+        final Map<ByteRange,RangeDownload> downloads = new ConcurrentHashMap<>();
         Entry(MediaLease lease) { this.lease = lease; fixture = null; fixtureExpiry = null; }
         Entry(byte[] fixture, Instant expiresAt) { lease = null; this.fixture = fixture; fixtureExpiry = expiresAt; }
         long length() { return lease == null ? fixture.length : lease.length(); }
         Instant expiresAt() { return lease == null ? fixtureExpiry : lease.expiresAt(); }
+    }
+
+    private static final class RangeDownload {
+        final java.util.concurrent.locks.ReentrantLock lock = new java.util.concurrent.locks.ReentrantLock(true);
+        int users; // Updated only inside downloads.compute.
+    }
+
+    private static RangeDownload retainDownload(Entry entry,ByteRange range) {
+        return entry.downloads.compute(range,(key,current)->{
+            if(current==null) current=new RangeDownload();
+            current.users++;
+            return current;
+        });
+    }
+
+    private static void releaseDownload(Entry entry,ByteRange range,RangeDownload download,boolean locked) {
+        if(locked) download.lock.unlock();
+        entry.downloads.compute(range,(key,current)->{
+            if(current!=download) throw new IllegalStateException("Download ownership changed");
+            return --current.users==0?null:current;
+        });
+    }
+
+    private static boolean lockDownload(Request request,RangeDownload download,boolean foreground) throws IOException {
+        long deadline=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(200);
+        try {
+            do {
+                request.check();
+                if(download.lock.tryLock(50,TimeUnit.MILLISECONDS)) return true;
+                // A stalled speculative copy must not hold up the audio callback indefinitely.
+                // Fast copies still coalesce; after this grace period the host can fetch its own copy.
+                if(foreground && System.nanoTime()>=deadline) return false;
+            } while(true);
+        } catch(InterruptedException stopped) {
+            Thread.currentThread().interrupt(); throw new IOException("Download interrupted",stopped);
+        }
     }
 
     private static final class Request implements AutoCloseable {
@@ -358,18 +409,19 @@ public final class LoopbackRangeServer implements AutoCloseable {
         long revision=cache.revision();
         ensureValid(entry); request.check();
         byte[] data=cache.get(entry,range);
-        // Coalesce host/prefix/read-ahead requests for the same lease; no duplicate CDN downloads.
-        // Cached foreground bytes must not wait behind another slow speculative chunk.
+        // Coordinate only identical ranges. A slow future chunk must not block a different host read.
         if(data==null) {
-            entry.downloadLock.lock();
+            RangeDownload download=retainDownload(entry,range);
+            boolean locked=false;
             try {
+                locked=lockDownload(request,download,foreground);
                 ensureValid(entry); request.check();
                 data=cache.get(entry,range);
                 if(data==null) {
                     data=download(request,entry,range);
                     cache.put(entry,range,data,revision,()->valid(entry));
                 }
-            } finally { entry.downloadLock.unlock(); }
+            } finally { releaseDownload(entry,range,download,locked); }
         }
         ensureValid(entry); request.check();
         // Publish only complete verified ranges; the host buffers the same aligned chunk.
@@ -439,8 +491,10 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 requests.add(request);
                 ScheduledFuture<?> deadline=deadlines.schedule(request::close,2500,TimeUnit.MILLISECONDS);
                 try {
-                    entry.downloadLock.lock();
+                    RangeDownload download=retainDownload(entry,range);
+                    boolean locked=false;
                     try {
+                        locked=lockDownload(request,download,false);
                         if(!aheadValid(plan)) return;
                         request.check();
                         if(cache.get(entry,range)==null) {
@@ -450,7 +504,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
                             // Advancing one chunk retains overlapping in-flight work instead of downloading twice.
                             cache.put(entry,range,data,plan.cacheRevision(),()->aheadRangeValid(plan,range));
                         }
-                    } finally { entry.downloadLock.unlock(); }
+                    } finally { releaseDownload(entry,range,download,locked); }
                 } finally { deadline.cancel(false); request.close(); requests.remove(request); }
             }
         } catch(IOException | RuntimeException ignored) { /* A speculative failure never fails playback. */ }
