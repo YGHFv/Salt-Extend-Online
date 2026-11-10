@@ -108,7 +108,11 @@ public final class LazyPlaylistSession implements AutoCloseable {
         synchronized(cache) {
             check();
             if(persistent==null) preloader=new PlaylistPrefetch(this::plan,new PlaylistPrefetch.Source() {
-                public boolean contains(String id) {return byId.containsKey(id);}
+                public boolean contains(String id) {
+                    Entry entry=byId.get(id);
+                    return entry!=null && (entry.key==null || entry.key.platform()!=io.github.yghfv.saltneri.core.TrackKey.Platform.APPLEMUSIC)
+                        && !entry.row.target().matches("[a-z]{2}:[1-9][0-9]{0,18}");
+                }
                 public URI resolve(String id,BooleanSupplier valid) throws Exception {return LazyPlaylistSession.this.resolve(byId.get(id),valid);}
                 public Object revision() {return resolver.revision();}
             },transport,()->!closed && opened!=null && active.getAsBoolean());

@@ -2,7 +2,7 @@
 
 # Salt Extend Online
 
-**在 Salt Player 中听 Bilibili、网易云、QQ 音乐和酷狗，并浏览 Apple Music**
+**在 Salt Player 中听 Bilibili、网易云、QQ 音乐、酷狗和 Apple Music**
 
 浏览、搜索、管理歌单，沿用 Salt 原生播放队列、音效与歌词页。
 
@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**0.8.50-kugou · 开发预览** · Windows / Steam Salt 1.19.3
+**0.9.0 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -48,7 +48,7 @@
 | 五平台浏览 | Bilibili / 网易云 / QQ 音乐 / 酷狗发现、搜索、收藏；Apple Music 热门、搜索、资料库专辑和歌单 |
 | 酷狗在线接入 | KA Music API 服务接入，扫码登录、推荐歌单、搜索、歌单、原生播放与 KRC 逐字歌词 |
 | QQ 个性化推荐 | 发现页增加每日推荐和猜你喜欢，登录后读取账号专属歌曲 |
-| Apple Music 点播 | 独立官方网页登录并加密保存资料库凭据，双击曲目通过 Windows 官方客户端播放 |
+| Apple Music 播放 | MusicKit 浏览器解码并将 PCM 交给 Salt 原生播放器，支持队列、音量、跳转和歌单；需要有效订阅 |
 | 原生播放与歌单 | 双击播放、整单播放、插播、添加到 Salt 歌单，在线队列与歌单支持重启恢复 |
 | 逐字歌词 | 网易云 YRC、QQ 音乐 QRC、酷狗 KRC，兼容普通 LRC 与翻译，显示在 Salt 原生歌词页 |
 | 列表与封面 | 卡片／单列／双列切换，合集搜索、排序、分页，列表及播放封面加载 |
@@ -63,15 +63,16 @@
 
 网易云扫码和网易云／QQ「官方网页登录」需要 **Microsoft Edge**。登录使用独立临时浏览器环境，不读取日常浏览器已有账号；遇到平台风控时需在官方页面完成验证。
 
-Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击账号图标在独立 Edge 中登录。双击歌曲会调用已安装、已登录的 Windows Apple Music 官方客户端，并由系统播放状态验证结果。此版本支持单曲点播；Apple Music 不进入 Salt 音频队列，不支持 Salt 音效、整单播放和随机播放。缺少 catalog ID 的资料库曲目显示为不可点播。
+Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击账号图标在独立 Edge 中登录后，双击歌曲进入 Salt 原生队列。播放使用后台私有 Edge 的 MusicKit 解码，PCM 音频交给 Salt 的 BASS 通道，使用 Salt 的音量、音效、暂停和进度控制。整单播放、插播和本地歌单保存沿用原生队列。需要有效 Apple Music 订阅；缺少 catalog ID 的资料库曲目不可点播。插件的 PCM 缓存有内存上限，Salt 的原生读取器另有临时 Range 文件；未启用持久音频缓存或后三首预下载。浏览器 PCM 到 BASS 已完成合成音频验证，订阅账号的实际歌曲播放仍待登录验收。
 
 酷狗接入使用参考项目的第三方 **KA Music API 服务**（`music.api.hoilai.cn`）。扫码后会保存该服务的 session ID，用于酷狗账号、歌单和音轨请求；退出即撤销本地凭据。公开搜索与推荐可匿名浏览，播放可能要求扫码并完成平台验证。
+音轨地址保留接口的原始协议：两个官方 `fs.youthandroid*.kugou.com` 音频节点使用 HTTP，其余地址使用 HTTPS；账号凭据仅发送至 HTTPS API。已验证三首真实酷狗音轨经 Salt 原生解码器完整解码及进度跳转。
 
 音质以当前账号的官方权限为准，只播放可访问的完整音轨，不提供试听替代、会员或风控绕过。B站搜索需要登录，网易云部分匿名接口也可能要求登录。
 
 ## 版本与兼容
 
-当前版本 **0.8.50-kugou** 增加酷狗在线接入，修复网易云私人歌单重复 `creator` 字段造成的加载失败，网易云音乐漫游和 QQ 猜你喜欢改为一次请求显示一批，修复 Apple Music 客户端发现、启动和等待时限，详见 [本次更新与验证](docs/KUGOU_0.8.50.md)。历史修复见 [更新记录](docs/HISTORY.md)。
+当前版本 **0.9.0** 修复酷狗音频 CDN 的 TLS 失败并验证实际原生解码，详见 [酷狗播放修复](docs/KUGOU_PLAYBACK_0.9.0.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。网易云私人歌单和推荐加载优化见 [0.8.50 更新与验证](docs/KUGOU_0.8.50.md)。历史修复见 [更新记录](docs/HISTORY.md)。
 
 实际回归基线为 **Windows / Steam Salt 1.19.3**。模组使用官方插件接口及部分原生 UI／播放内部绑定，按所需接口结构检查兼容性；未来宿主更新可能影响部分功能。
 

@@ -73,6 +73,7 @@ public final class LazyPlaylistCoverContractTest {
                         case BILIBILI -> TrackKey.bilibili("BV17x411w7KC",number);
                         case QQMUSIC -> TrackKey.qqmusic(String.format(Locale.ROOT,"00%012d",number));
                         case KUGOU -> TrackKey.kugou(String.format(Locale.ROOT,"%032X",number));
+                        case APPLEMUSIC -> TrackKey.appleMusic("us:"+number);
                     };
                     Instant expiry=time.instant().plusSeconds(60);
                     URI source=URI.create(switch(platform) {
@@ -80,9 +81,14 @@ public final class LazyPlaylistCoverContractTest {
                         case BILIBILI -> "https://test.bilivideo.com/fixture";
                         case QQMUSIC -> "https://dl.stream.qqmusic.qq.com/fixture";
                         case KUGOU -> "https://fs.kugou.com/fixture";
+                        case APPLEMUSIC -> "https://music.apple.com/fixture";
                     });
+                    MediaLease lease=platform==MediaLease.Platform.APPLEMUSIC?
+                        MediaLease.appleMusic(new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicPcmSource(1000,allowed::get,
+                            ()->{throw new java.io.IOException("Artwork-only fixture");}),scope,expiry,allowed::get):
+                        new MediaLease(platform,source,Map.of(),scope,expiry,100);
                     return new OnlinePlaybackController.Audio(key,new Salt1193PlaybackSession.Metadata("Resolved "+row.target(),"Artist","","",pictures.get(number-1)),
-                            new MediaLease(platform,source,Map.of(),scope,expiry,100),expiry);
+                            lease,expiry);
                 },row->request->"[00:01.000]"+row.title())) {
                     check(resolutions.get()==0 && queued.isEmpty());
                     session.play(); check(resolutions.get()==1 && queued.size()==12);

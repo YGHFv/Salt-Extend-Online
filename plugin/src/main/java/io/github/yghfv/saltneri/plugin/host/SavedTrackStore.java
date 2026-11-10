@@ -173,7 +173,7 @@ public final class SavedTrackStore implements AutoCloseable {
     }
     private static Target canonical(Target target) {
         if(target.platform()==AccountPlatform.KUGOU)return new Target(target.platform(),io.github.yghfv.saltneri.plugin.kugou.KugouHttp.hash(target.id()));
-        if(target.platform()==AccountPlatform.APPLEMUSIC)throw new IllegalArgumentException("Apple Music uses its official client library");
+        if(target.platform()==AccountPlatform.APPLEMUSIC)return new Target(target.platform(),io.github.yghfv.saltneri.core.TrackKey.appleMusic(target.id()).remoteId());
         if(target.platform()==AccountPlatform.QQMUSIC) return new Target(target.platform(),io.github.yghfv.saltneri.plugin.qqmusic.QqMusicTarget.parse(target.id()).mid());
         if(target.platform()==AccountPlatform.NETEASE) {
             long id=Long.parseLong(target.id()); if(id<=0) throw new IllegalArgumentException("Invalid song ID");

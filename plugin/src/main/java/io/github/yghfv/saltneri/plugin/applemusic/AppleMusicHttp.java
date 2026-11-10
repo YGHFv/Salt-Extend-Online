@@ -35,7 +35,7 @@ public final class AppleMusicHttp {
         request.check();if(account!=null && !account.isActive())throw failure("SESSION_REVOKED");
         return BoundedJson.object(BoundedJson.parse(bytes));
     }
-    private String publicBearer(RequestScope request) throws IOException {
+    public String publicBearer(RequestScope request) throws IOException {
         synchronized(this) {if(clock.instant().plusSeconds(60).isBefore(bearerUntil))return bearer;}
         String html=new String(read(URI.create("https://music.apple.com/us/browse"),Map.of(),4*1024*1024,request),StandardCharsets.UTF_8);
         var script=Pattern.compile("<script[^>]+src=\"(/assets/index[A-Za-z0-9_~.-]+\\.js)\"").matcher(html);

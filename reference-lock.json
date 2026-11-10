@@ -58,7 +58,7 @@
     "repository": "https://github.com/FHJI-lgtm/MineRadio-Apple-Music-Specially-Customized-Edition",
     "commit": "e0ddc69ff62d717515e804c3c2d9be7a5e4a35fd",
     "license": "GPL-3.0",
-    "resources": {
+    "historicalControlResources": {
       "am-common.ps1": {
         "upstreamSha256": "0911b577db01efa370c8f29d430e5c4e712ad5852208ea52e2345047bca500d3",
         "adaptedSha256": "0911b577db01efa370c8f29d430e5c4e712ad5852208ea52e2345047bca500d3"
@@ -88,6 +88,18 @@
       "lib/services/music_api.dart",
       "lib/core/api_client.dart",
       "lib/models/music_models.dart"
+    ]
+  },
+  "ciderPlaybackInvestigation": {
+    "repository": "https://github.com/ciderapp/Cider",
+    "commit": "953bb5a9e26080bba2bb20438f0ddf38b0a8b260",
+    "architectureOnly": true,
+    "sourceOrRuntimeBundled": false,
+    "files": [
+      "package.json",
+      "src/renderer/index.js",
+      "src/renderer/main/vueapp.js",
+      "src/renderer/audio/audio.js"
     ]
   }
 }

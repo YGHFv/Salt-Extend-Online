@@ -17,8 +17,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Class inspector tests failed.' }
 $pluginMetadata = Get-Content -LiteralPath (Join-Path $root 'plugin.properties') -Raw | ConvertFrom-StringData
 & python (Join-Path $root 'scripts/verify-vendor.py')
 if ($LASTEXITCODE -ne 0) { throw 'Vendored QR source verification failed.' }
-& (Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe') -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'test-apple-launch.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'Apple Music launcher contract failed.' }
 $salt = [System.IO.Path]::GetFullPath($SaltHome)
 $javac = Join-Path $JdkHome 'bin/javac.exe'
 $java = Join-Path $JdkHome 'bin/java.exe'
@@ -50,7 +48,7 @@ $configName = if ($Experimental) { 'preference_config_experimental.json' } else 
 Copy-Item -LiteralPath (Join-Path $root "plugin/src/main/resources/$configName") -Destination (Join-Path $classes 'preference_config.json')
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/host-profiles') -Destination $classes -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/auth') -Destination $classes -Recurse
-Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/applemusic') -Destination $classes -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/musickit') -Destination $classes -Recurse
 $licenseDirectory = Join-Path $classes 'META-INF/licenses'
 New-Item -ItemType Directory -Path $licenseDirectory -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'plugin/src/main/resources/META-INF/extensions.idx') -Destination (Join-Path $classes 'META-INF/extensions.idx')

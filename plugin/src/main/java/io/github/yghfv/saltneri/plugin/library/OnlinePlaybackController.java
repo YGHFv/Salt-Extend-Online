@@ -57,6 +57,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
     private String status = "No track prepared.";
     private boolean consumed;
     private boolean submissionFailed;
+    private final java.util.Set<MediaLease> transferred=java.util.concurrent.ConcurrentHashMap.newKeySet();
     private record PlayIntent(String token, Runnable setup, long deadline, QueueAction action) { }
     private PlayIntent intent;
     private final ScheduledExecutorService playbackWorker;
@@ -75,7 +76,10 @@ public final class OnlinePlaybackController implements AutoCloseable {
         this.accounts = accounts; this.authorized = authorized; this.armed = armed; this.player = player;
         resolver = new PlatformResolutionController<>("Online", account -> testResolver == null ? (target, quality, scope, request) -> resolveAudio(account,target,scope,request,settings.get(),accounts)
             : testResolver.apply(account), () -> accounts.apply(platform), authorized, clock, Audio::expiresAt,
-                audio -> "\u97f3\u8f68\u5df2\u51c6\u5907\uff0c\u5c1a\u672a\u64ad\u653e\u3002", error -> null);
+                audio -> "\u97f3\u8f68\u5df2\u51c6\u5907\uff0c\u5c1a\u672a\u64ad\u653e\u3002",
+                error -> error instanceof java.io.IOException && error.getMessage()!=null && error.getMessage().matches("(APPLE|KUGOU)/[A-Z0-9_]{1,48}")
+                    ? (error.getMessage().startsWith("KUGOU/")?"酷狗音轨加载失败 ["+error.getMessage()+"]":error.getMessage()):null);
+        resolver.onDiscard(audio->{if(!transferred.remove(audio.lease()))audio.lease().release();});
         playbackWorker = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "salt-neri-doubleclick-play"); thread.setDaemon(true); return thread;
         });
@@ -92,8 +96,9 @@ public final class OnlinePlaybackController implements AutoCloseable {
     }
     public static Audio resolveAudio(AccountCredentials account, Target target, String scope, io.github.yghfv.saltneri.plugin.net.RequestScope request, PlaybackSettings settings,Function<AccountPlatform,AccountCredentials> accounts) throws Exception {
             Audio audio;
-            if(target.platform()==AccountPlatform.APPLEMUSIC)throw new java.io.IOException("APPLE/OFFICIAL_CLIENT_REQUIRED");
-            if(target.platform()==AccountPlatform.KUGOU) {
+            if(target.platform()==AccountPlatform.APPLEMUSIC) {
+                audio=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicClient(account).resolve(target.id(),scope,request);
+            } else if(target.platform()==AccountPlatform.KUGOU) {
                 var r=new io.github.yghfv.saltneri.plugin.kugou.KugouClient(account).resolve(target.id(),settings.kugou(),scope,request);
                 audio=withCover(new Audio(r.key(),r.metadata(),r.lease(),r.expiresAt()),r.coverCandidate(),request,settings.coverMode());
             } else if (target.platform() == AccountPlatform.BILIBILI) {
@@ -141,6 +146,8 @@ public final class OnlinePlaybackController implements AutoCloseable {
         });
     }
     static String playbackFailureReason(Throwable failure) {
+        if(failure instanceof java.io.IOException && failure.getMessage()!=null && failure.getMessage().matches("(APPLE|KUGOU)/[A-Z0-9_]{1,48}"))
+            return failure.getMessage();
         if(failure instanceof AuthFailure safe)return safe.getMessage();
         if(failure instanceof io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.MediaRejected rejected)
             return "QQ_MEDIA_"+rejected.reason().name();
@@ -239,12 +246,15 @@ public final class OnlinePlaybackController implements AutoCloseable {
         try {
             BooleanSupplier active = () -> authorized.getAsBoolean() && (playingAccount == null || playingAccount.isActive()) && accounts.apply(playingPlatform) == playingAccount;
             if (action == QueueAction.PLAY) player.play(audio, active); else player.insert(audio, active, action);
+            transferred.add(audio.lease());
             status = action == QueueAction.PLAY
                     ? "\u5df2\u5411 Salt \u63d0\u4ea4\u64ad\u653e [SUBMITTED]\uff1b\u8bf7\u68c0\u67e5\u5e95\u90e8\u64ad\u653e\u5668\u548c\u58f0\u97f3\uff0c\u63d0\u4ea4\u4e0d\u4ee3\u8868\u5df2\u53d1\u58f0\u3002"
                     : "\u5df2\u5411 Salt \u63d0\u4ea4\u63d2\u64ad [SUBMITTED]\uff0c\u4e0d\u6539\u53d8\u5f53\u524d\u64ad\u653e\u72b6\u6001\u3002";
-        } catch (Exception | LinkageError failure) { submissionFailed = true; status = "\u64ad\u653e\u63d0\u4ea4\u5931\u8d25 [QUEUE_SUBMIT/" + failure.getClass().getSimpleName() + "]\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5\u3002"; throw failure; }
+        } catch (Exception | LinkageError failure) { audio.lease().release();submissionFailed = true; status = "\u64ad\u653e\u63d0\u4ea4\u5931\u8d25 [QUEUE_SUBMIT/" + failure.getClass().getSimpleName() + "]\uff0c\u4e0d\u81ea\u52a8\u91cd\u8bd5\u3002"; throw failure; }
     }
-    public synchronized void invalidate(String detail) { intent = null; token = ""; consumed = false; submissionFailed = false; resolver.invalidate(detail); status = detail; }
+    public synchronized void invalidate(String detail) {
+        intent = null; token = ""; consumed = false; submissionFailed = false; resolver.invalidate(detail); status = detail;
+    }
     public synchronized void accountChanged(AccountPlatform changed) { if (platform == changed) invalidate("Account changed; old preparation retired."); }
     @Override public synchronized void close() { invalidate("Online playback disabled."); playbackWorker.shutdownNow(); resolver.close(); }
 }

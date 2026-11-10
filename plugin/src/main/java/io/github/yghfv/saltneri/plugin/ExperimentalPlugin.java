@@ -42,7 +42,6 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile LibraryController library;
     private volatile SaltNativeUi nativeUi;
     private NativeDesk desk;
-    private io.github.yghfv.saltneri.plugin.applemusic.AppleMusicPlayback applePlayback;
     private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
     private SavedPlaylistController savedPlaylists;
     private java.util.concurrent.ScheduledExecutorService savedRestore;
@@ -115,8 +114,6 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 login(platform).startCookieLogin(cookie,true);
             }
         });
-        applePlayback=new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicPlayback(this::granted,text->desk.error(text));
-        desk.externalPlayback((target,item)->applePlayback.play(target.id(),item.title(),item.subtitle()));
         desk.errorToast(text -> toast(text,WorkshopApi.Ui.ToastType.Error));
         desk.coverMode(()->settings.coverMode());
         desk.platformHome(navigationPreferences::platformHome);
@@ -201,11 +198,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
         return !stopped && WorkshopApi.manager().isPermissionGranted(PluginPermission.CLASS_TRANSFORM);
     }
     private void accountChanged(AccountPlatform platform) {
-        if(platform==AccountPlatform.APPLEMUSIC && applePlayback!=null)applePlayback.cancel();
         OnlinePlaybackController player = online; if (player != null) player.accountChanged(platform);
         LibraryController browser = library; if (browser != null) browser.accountChanged(platform);
         Salt1193DiagnosticRuntime currentRuntime = runtime;
-        if (currentRuntime != null && platform!=AccountPlatform.APPLEMUSIC) currentRuntime.revokePlatform(MediaLease.Platform.valueOf(platform.name()));
+        if (currentRuntime != null) currentRuntime.revokePlatform(MediaLease.Platform.valueOf(platform.name()));
         if (platform == AccountPlatform.BILIBILI) {
             BiliResolutionController resolver = bili;
             if (resolver != null) resolver.invalidate("Bilibili account revision changed; old prepared resolution retired. Resolve explicitly again.");
@@ -348,7 +344,6 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 if (qqmusicLogin != null) { qqmusicLogin.close(); qqmusicLogin = null; }
                 if(kugouLogin!=null){kugouLogin.close();kugouLogin=null;}
                 if (appleMusicLogin != null) { appleMusicLogin.close(); appleMusicLogin = null; }
-                if (applePlayback != null) {applePlayback.close();applePlayback=null;}
                 if (bili != null) { bili.close(); bili = null; }
                 if (netease != null) { netease.close(); netease = null; }
                 if (configManager != null && configListener != null) configManager.removeConfigChangeListener(configListener);

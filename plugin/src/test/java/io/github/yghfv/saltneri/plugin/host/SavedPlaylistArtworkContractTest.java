@@ -55,7 +55,7 @@ public final class SavedPlaylistArtworkContractTest {
             case QQMUSIC->TrackKey.qqmusic(id);
             case KUGOU->TrackKey.kugou(id);
             case BILIBILI->TrackKey.bilibili(id,123);
-            case APPLEMUSIC->throw new IllegalArgumentException("External player");
+            case APPLEMUSIC->TrackKey.appleMusic(id);
         };
         var platform=MediaLease.Platform.valueOf(target.platform().name());
         URI media=URI.create(switch(target.platform()) {
@@ -63,11 +63,15 @@ public final class SavedPlaylistArtworkContractTest {
             case QQMUSIC->"https://dl.stream.qqmusic.qq.com/fixture";
             case KUGOU->"https://fs.kugou.com/fixture";
             case BILIBILI->"https://test.bilivideo.com/fixture";
-            case APPLEMUSIC->throw new IllegalArgumentException("External player");
+            case APPLEMUSIC->"https://music.apple.com/fixture";
         });
         Instant expiry=Instant.now().plusSeconds(900);
+        MediaLease lease=platform==MediaLease.Platform.APPLEMUSIC?
+            MediaLease.appleMusic(new io.github.yghfv.saltneri.plugin.applemusic.AppleMusicPcmSource(1000,()->true,
+                ()->{throw new IOException("Artwork-only fixture");}),"fixture",expiry,()->true):
+            new MediaLease(platform,media,Map.of(),"fixture",expiry,100);
         return new Audio(key,new Salt1193PlaybackSession.Metadata("Fixture","Artist","",""),
-                new MediaLease(platform,media,Map.of(),"fixture",expiry,100),expiry,target,key,image,CoverMode.FIT);
+                lease,expiry,target,key,image,CoverMode.FIT);
     }
     private static byte[] read(Object original,Salt1193Probe.Result profile) throws Exception {
         String path=profile.mediaFactory().read(original)[5];
@@ -83,10 +87,10 @@ public final class SavedPlaylistArtworkContractTest {
         var profile=Salt1193Probe.inspect(SavedPlaylistArtworkContractTest.class.getClassLoader(),"1.19.3","Steam");
         check(profile.matched(),"Missing host");
         byte[] png=PlaybackCoverContractTest.png();
-        for(var platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC)) {
+        for(var platform:List.of(AccountPlatform.BILIBILI,AccountPlatform.NETEASE,AccountPlatform.QQMUSIC,AccountPlatform.APPLEMUSIC)) {
             Path root=Files.createTempDirectory("salt-cover-switch-fixture-").toRealPath();
-            String id=platform==AccountPlatform.QQMUSIC?"00123456789abc":platform==AccountPlatform.NETEASE?"120":"BV17x411w7KC";
-            String other=platform==AccountPlatform.QQMUSIC?"00987654321abc":platform==AccountPlatform.NETEASE?"121":"BV1Q541167Qg";
+            String id=platform==AccountPlatform.APPLEMUSIC?"us:120":platform==AccountPlatform.QQMUSIC?"00123456789abc":platform==AccountPlatform.NETEASE?"120":"BV17x411w7KC";
+            String other=platform==AccountPlatform.APPLEMUSIC?"us:121":platform==AccountPlatform.QQMUSIC?"00987654321abc":platform==AccountPlatform.NETEASE?"121":"BV1Q541167Qg";
             URI source=URI.create("https://i0.hdslb.com/fixture-first.png"),nextSource=URI.create("https://i1.hdslb.com/fixture-next.png");
             var resolves=new AtomicInteger();var attempts=new AtomicInteger();var allowLate=new AtomicBoolean();var active=new AtomicBoolean(true);
             var queue=new Queue();var adapter=new Adapter();String originalPath;

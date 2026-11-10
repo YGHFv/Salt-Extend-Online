@@ -4,6 +4,8 @@
 
 | 版本／主题 | 记录 |
 | --- | --- |
+| 0.9.0 酷狗与 Apple 内播放 | [CDN 原始协议、备用地址与真实原生解码](KUGOU_PLAYBACK_0.9.0.md)；[MusicKit PCM 通路](APPLE_NATIVE_0.8.51.md) |
+| 0.8.51 Apple 原生播放 | [MusicKit PCM 与 Salt 原生播放通路](APPLE_NATIVE_0.8.51.md) |
 | 0.8.50 酷狗与加载修复 | [酷狗、私人歌单、推荐速度和 Apple 客户端](KUGOU_0.8.50.md) |
 | 0.8.49 登录与推荐 | [QQ 授权、网易云每日／漫游推荐与 Apple Music 接入](QQ_APPLE_0.8.49.md) |
 | 0.8.48 登录认证 | [Cookie 就绪、账号验证、浏览器上下文与保存锁顺序](AUTH_FLOW_0.8.48.md) |

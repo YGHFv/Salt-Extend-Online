@@ -87,6 +87,9 @@ jobs:
           $classpath = "$($build.FullName)/test-classes;$($build.FullName)/classes;$hostPackage"
           & (Join-Path $env:SALT_JDK_HOME 'bin/java.exe') --enable-native-access=ALL-UNNAMED "-Djava.io.tmpdir=$($build.FullName)/tmp" -cp $classpath io.github.yghfv.saltneri.plugin.auth.WindowsNativeWebLoginProbe --explicit-headless-fixture
           if ($LASTEXITCODE -ne 0) { throw 'Isolated native Edge compatibility regression failed.' }
+          $bass = Join-Path $env:SALT_HOME 'app/resources/bass.dll'
+          & (Join-Path $env:SALT_JDK_HOME 'bin/java.exe') --enable-native-access=ALL-UNNAMED "-Djava.io.tmpdir=$($build.FullName)/tmp" "-Dsalt.cast.bassLibraryPath=$bass" -cp $classpath io.github.yghfv.saltneri.plugin.auth.WindowsMusicKitPcmProbe --explicit-headless-fixture $bass
+          if ($LASTEXITCODE -ne 0) { throw 'Apple browser PCM to native BASS regression failed.' }
       - name: Identify validated artifact
         id: artifact
         shell: pwsh

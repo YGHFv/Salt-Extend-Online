@@ -1,4 +1,4 @@
-"""Validate vendored QR sources and adapted Apple Music control scripts."""
+"""Validate vendored QR sources; no Apple Music external controller is shipped."""
 import hashlib
 import json
 import pathlib
@@ -13,9 +13,8 @@ for name, digest in lock["sha256"].items():
         raise SystemExit("QR source fingerprint mismatch: " + name)
 print("PASS: 4 pinned Nayuki MIT QR source fingerprints")
 
-resources = json.loads((root / "reference-lock.json").read_text(encoding="utf-8"))["mineradio"]["resources"]
-for name, entry in resources.items():
-    source = root / "plugin/src/main/resources/applemusic/lib" / name
-    if hashlib.sha256(source.read_bytes()).hexdigest() != entry["adaptedSha256"]:
-        raise SystemExit("Apple control source fingerprint mismatch: " + name)
-print("PASS: 4 pinned GPL-3.0 Apple Music control resource fingerprints")
+if any((root / "plugin/src/main/resources/applemusic").rglob("*.ps1")):
+    raise SystemExit("Removed Apple external playback script remains in resources")
+if (root / "plugin/src/main/java/io/github/yghfv/saltneri/plugin/applemusic/AppleMusicPlayback.java").exists():
+    raise SystemExit("Removed Apple external playback controller remains")
+print("PASS: no Apple Music external playback implementation bundled")

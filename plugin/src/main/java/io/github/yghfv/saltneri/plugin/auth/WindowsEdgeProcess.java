@@ -172,7 +172,8 @@ final class WindowsEdgeProcess implements AutoCloseable {
                 (explicitPipeHandles?" --remote-debugging-io-pipes="+
                     Long.toUnsignedString(Pointer.nativeValue(childInput.getPointer()))+","+
                     Long.toUnsignedString(Pointer.nativeValue(childOutput.getPointer())):"")+
-                " --no-first-run --no-default-browser-check --disable-sync --disable-extensions --disable-background-mode "+
+                " --no-first-run --no-default-browser-check --disable-sync --disable-extensions --disable-background-mode"+
+                " --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding "+
                 (headless?"--headless=new about:blank":"--app="+url);
             if(command.length()>30000) throw failure(AuthFailure.Reason.BROWSER_LAUNCH);
             startup.write();

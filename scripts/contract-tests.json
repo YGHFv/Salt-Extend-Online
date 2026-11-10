@@ -43,7 +43,8 @@
     "auth/WindowsAppleMusicWebLogin.java",
     "auth/CookieLogin.java",
     "auth/KugouQrClient.java",
-    "kugou/KugouHttp.java"
+    "kugou/KugouHttp.java",
+    "transport/DecodedAudioSource.java"
   ],
   "tests": [
     {
@@ -454,6 +455,16 @@
     {
       "class": "io.github.yghfv.saltneri.plugin.library.AppleMusicContractTest",
       "baseOnly": true,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.AppleMusicNativeAudioTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.AppleMusicQueueContractTest",
+      "baseOnly": false,
       "offline": false
     }
   ]

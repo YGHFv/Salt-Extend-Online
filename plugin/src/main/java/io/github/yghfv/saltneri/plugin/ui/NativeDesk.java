@@ -26,8 +26,7 @@ public final class NativeDesk {
         if(platform!=AccountPlatform.NETEASE && platform!=AccountPlatform.QQMUSIC)throw new IllegalArgumentException("Cookie login unavailable");
         cookieLogin.login(platform,cookie);
     }
-    private BiConsumer<OnlinePlaybackController.Target,Catalog.Item> externalPlayback=(t,i)->{throw new IllegalStateException("External player unavailable");};
-    public void externalPlayback(BiConsumer<OnlinePlaybackController.Target,Catalog.Item> player) {externalPlayback=Objects.requireNonNull(player);}
+    public static final String APPLE_PLAYBACK_INFO="登录有订阅的 Apple Music 账号后，双击歌曲即可在 Salt 内播放。";
     private Consumer<String> errorToast = text -> {};
     private final Map<String,String> reportedErrors = new java.util.HashMap<>();
     public void errorToast(Consumer<String> notifier) { errorToast=Objects.requireNonNull(notifier); }
@@ -45,7 +44,6 @@ public final class NativeDesk {
     public void addToPlaylist(String token,String playlist) {
         check(); if(savedPlaylists==null) throw new IllegalStateException("Native playlists unavailable");
         library.saveRow(token,(target,row)->{
-            if(target.platform()==AccountPlatform.APPLEMUSIC)throw new IllegalStateException("Apple Music uses its official client library");
             savedPlaylists.add(target,row,playlist,()->permitted.getAsBoolean() && library.currentRow(token));
         });
     }
@@ -95,16 +93,12 @@ public final class NativeDesk {
     public boolean back(AccountPlatform platform) { check(); return library.back(platform); }
     public void playRow(String token) {
         check();
-        var external=new java.util.concurrent.atomic.AtomicBoolean();
-        library.saveRow(token,(target,row)->{if(target.platform()==AccountPlatform.APPLEMUSIC) {external.set(true);externalPlayback.accept(target,row);}});
-        if(external.get())return;
         library.playRow(token, target -> player.playSelected(target, () -> {
             check(); actions.accept(target.platform(), Action.ARM);
         }));
     }
     public void insertRow(String token, OnlinePlaybackController.QueueAction action) {
         check(); library.playRow(token, target -> {
-            if(target.platform()==AccountPlatform.APPLEMUSIC)throw new IllegalStateException("Apple Music plays through its official client");
             player.insertSelected(target, () -> {
             check(); actions.accept(target.platform(), Action.ARM);
         }, action);});

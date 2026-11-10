@@ -184,7 +184,7 @@ public final class LibraryController implements AutoCloseable {
         if (item.kind() != Kind.TRACK) {
             remember(s); reset(s); s.totalCount = item.count(); s.creator = item.subtitle(); s.title=item.title();
             load(s,platform==AccountPlatform.APPLEMUSIC || platform==AccountPlatform.KUGOU?new Query(platform,View.FOLDER,1,1,0,"",false,Sort.DEFAULT,item.target()):new Query(platform,item.kind() == Kind.COLLECTION ? View.COLLECTION : View.FOLDER,Long.parseLong(item.target()),1,item.owner()));
-        } else if(platform!=AccountPlatform.APPLEMUSIC)prepare.accept(new OnlinePlaybackController.Target(platform,item.target()));
+        } else prepare.accept(new OnlinePlaybackController.Target(platform,item.target()));
     }
     private void remember(State s) {
         if(s.query==null) return;
@@ -347,7 +347,7 @@ public final class LibraryController implements AutoCloseable {
         complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
     public synchronized void requestPlaylist() {
-        State s=current(); requireFolder(s); if(s.platform==AccountPlatform.APPLEMUSIC)throw new IllegalStateException("Apple Music uses official-client single-song playback"); s.playPending=true; s.error="";
+        State s=current(); requireFolder(s); s.playPending=true; s.error="";
         if(!s.fullMode) {s.preserveWindow=true;s.resultPage=s.query.page();}
         complete(s);
     }

@@ -77,9 +77,32 @@ public final class TransportContractTest {
         fails(IllegalArgumentException.class, () -> lease("", NOW, 1));
         fails(IllegalArgumentException.class, () -> lease("a", NOW, 0));
         fails(IllegalArgumentException.class, () -> lease("a", NOW, 2L * 1024 * 1024 * 1024 + 1));
+        URI plain=URI.create("http://fs.youthandroid.kugou.com/audio");
+        new MediaLease(MediaLease.Platform.KUGOU,plain,Map.of("User-Agent","fixture"),"a",NOW,100);
+        checks++;
+        fails(IllegalArgumentException.class,()->new MediaLease(MediaLease.Platform.KUGOU,plain,Map.of("Cookie","secret"),"a",NOW,100));
+        fails(IllegalArgumentException.class,()->MediaLease.requireRedirect(MediaLease.Platform.KUGOU,
+                URI.create("https://fs.youthandroid.kugou.com/audio"),plain));
+        for(String target:List.of("http://fs.kugou.com/audio","http://fs.youthandroid.kugou.com:443/audio","http://fs.youthandroid.kugou.com.evil/audio"))
+            fails(IllegalArgumentException.class,()->MediaLease.requireTarget(MediaLease.Platform.KUGOU,URI.create(target)));
     }
 
     private static void requests() throws Exception {
+        List<FakeConnection> plainOpened=new CopyOnWriteArrayList<>();
+        URI plainTarget=URI.create("http://fs.youthandroid2.kugou.com/audio");
+        try(LoopbackRangeServer server=server(uri->{
+            eq(plainTarget,uri);
+            var connection=new FakeConnection(uri,100);plainOpened.add(connection);return connection;
+        })) {
+            URI local=server.register(new MediaLease(MediaLease.Platform.KUGOU,plainTarget,
+                    Map.of("User-Agent","fixture","Referer","https://www.kugou.com/"),"kg",NOW.plusSeconds(60),100));
+            var response=call(local,"GET","Range: bytes=50-59\r\nCookie: local-secret\r\n","");
+            eq(206,response.code());eq("bytes 50-59/100",response.header("Content-Range"));
+            eq(10,response.body().length);eq(1,plainOpened.size());
+            eq(null,plainOpened.getFirst().getRequestProperty("Cookie"));
+            eq(null,plainOpened.getFirst().getRequestProperty("X-Kg-Session-Id"));
+            check(plainOpened.getFirst().disconnected.get(),"Plain media connection not released");
+        }
         List<FakeConnection> opened = new CopyOnWriteArrayList<>();
         try (LoopbackRangeServer server = server(uri -> {
             FakeConnection connection = new FakeConnection(uri, 100);

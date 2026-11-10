@@ -39,7 +39,8 @@ public final class KugouContractTest {
     }
     private static final class Fixture implements KugouHttp.Opener {
         final List<Response> requests=new ArrayList<>();
-        int discovery,searchRequests,qrStatus=1;boolean wrongHash,preview,shortMedia,denied,highQuality,freePart;
+        int discovery,searchRequests,qrStatus=1;boolean wrongHash,preview,shortMedia,denied,highQuality,freePart,plainEdges,firstEdgeFails,allEdgesFail;
+        final List<URI> mediaAttempts=new ArrayList<>();
         public HttpURLConnection open(URI uri) throws IOException {
             Object body;Map<String,String> headers=Map.of();int code=200;
             String path=uri.getPath();
@@ -79,11 +80,16 @@ public final class KugouContractTest {
                         "info",Map.of("duration",120000,"filesize",4096,"image","http://imge.kugou.com/cover.jpg"),
                         "relate_goods",highQuality?List.of(Map.of("hash","A".repeat(32),"quality","320","info",Map.of("duration",120000,"filesize",8192))):List.of()));
                 case "/song/url" -> body=Map.of("hash",wrongHash?"F".repeat(32):highQuality && query(uri,"quality").equals("320")?"A".repeat(32):HASH,
-                        "url",List.of(preview?"https://fs.kugou.com/preview/clip.mp3":"https://fs.kugou.com/"+HASH+".mp3"),
+                        "url",plainEdges?List.of("http://fs.youthandroid2.kugou.com/"+HASH+".mp3","http://fs.youthandroid.kugou.com/"+HASH+".mp3"):
+                            List.of(preview?"https://fs.kugou.com/preview/clip.mp3":"https://fs.kugou.com/"+HASH+".mp3"),
                         "err_code",denied?403:0,"free_part",freePart);
                 case "/search/lyric" -> body=Map.of("status",200,"candidates",List.of(Map.of("id","123","accesskey","ACCESSSECRET","adjust",100)));
                 case "/lyric" -> body=Map.of("decodedContent","[offset:50]\n[1000,700]<0,300,0>你<400,300,0>好\n","decodedTranslation","");
                 default -> {
+                    mediaAttempts.add(uri);
+                    if(plainEdges && uri.getScheme().equals("https"))throw new javax.net.ssl.SSLHandshakeException("No matching CDN certificate");
+                    if(allEdgesFail || firstEdgeFails && uri.getHost().equals("fs.youthandroid2.kugou.com"))
+                        throw new IOException("Unreachable edge SECRET");
                     code=206;body=new byte[]{42};headers=Map.of("Content-Length","1","Content-Range","bytes 0-0/"+(shortMedia?4095:highQuality?8192:4096));
                 }
             }
@@ -141,6 +147,14 @@ public final class KugouContractTest {
                 check(query(fixture.requests.get(fixture.requests.size()-2).getURL().toURI(),"quality").equals("320"));
                 fixture.highQuality=false;fixture.freePart=true;
                 fails(()->client.resolve(HASH,"128",account.accountScope(),request));fixture.freePart=false;
+                fixture.plainEdges=true;fixture.mediaAttempts.clear();
+                check(client.resolve(HASH,"128",account.accountScope(),request).lease().length()==4096);
+                check(fixture.mediaAttempts.size()==1 && fixture.mediaAttempts.getFirst().getScheme().equals("http"));
+                fixture.firstEdgeFails=true;fixture.mediaAttempts.clear();
+                check(client.resolve(HASH,"128",account.accountScope(),request).lease().length()==4096);
+                check(fixture.mediaAttempts.size()==2 && fixture.mediaAttempts.getLast().getHost().equals("fs.youthandroid.kugou.com"));
+                fixture.allEdgesFail=true;fails(()->client.resolve(HASH,"128",account.accountScope(),request));
+                fixture.allEdgesFail=false;fixture.firstEdgeFails=false;fixture.plainEdges=false;
                 check(client.lyrics(HASH,request).contains("<00:01.150>你<00:01.450><00:01.550>好<00:01.850>"));
                 fixture.wrongHash=true;fails(()->client.resolve(HASH,"128",account.accountScope(),request));fixture.wrongHash=false;
                 fixture.preview=true;fails(()->client.resolve(HASH,"128",account.accountScope(),request));fixture.preview=false;

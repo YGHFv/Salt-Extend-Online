@@ -129,7 +129,7 @@ public final class AccountLoginController implements AutoCloseable {
             rememberEnabled=remember; startupAttempted=true; operation=begin(); phase=Phase.WEB_LOGIN;
             status="\u8bf7\u5728\u65b0\u6253\u5f00\u7684\u7f51\u6613\u4e91\u5b98\u65b9\u9875\u9762\u70b9\u51fb\u767b\u5f55\uff0c\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u3002\u4ec5\u4f7f\u7528\u72ec\u7acb\u4e34\u65f6\u7a97\u53e3\uff0c\u4e0d\u8bfb\u53d6\u6d4f\u89c8\u5668\u5df2\u6709\u8d26\u53f7\uff1b5\u5206\u949f\u5185\u6709\u6548\u3002";
             if(platform==AccountPlatform.QQMUSIC) status="\u8bf7\u5728 QQ \u97f3\u4e50\u5b98\u65b9\u9875\u9762\u9009\u62e9 QQ \u6216\u5fae\u4fe1\u767b\u5f55\u5e76\u624b\u52a8\u5b8c\u6210\u9a8c\u8bc1\u3002\u4f7f\u7528\u72ec\u7acb\u4e34\u65f6 Edge\uff0c\u4e0d\u8bfb\u53d6\u73b0\u6709\u8d26\u53f7\uff1b5 \u5206\u949f\u5185\u6709\u6548\u3002";
-            if(platform==AccountPlatform.APPLEMUSIC) status="请在独立 Edge 中登录 Apple Music。资料库登录会加密保存；播放需要 Windows 官方客户端已登录。";
+            if(platform==AccountPlatform.APPLEMUSIC) status="请在独立 Edge 中登录 Apple Music。资料库登录会加密保存；有订阅的账号可在 Salt 内播放。";
         }
         changed();
         submit(operation,()->{

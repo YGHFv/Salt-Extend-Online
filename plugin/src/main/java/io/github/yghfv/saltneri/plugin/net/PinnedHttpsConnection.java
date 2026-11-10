@@ -24,7 +24,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocket;
 
-/** DNS-pinned, isolated HTTP/1.1 over verified TLS. Never consults global cookies, auth or proxies. */
+/** DNS-pinned HTTP/1.1 over verified TLS, with a credential-free HTTP port for two Kugou audio edges. */
 public final class PinnedHttpsConnection extends HttpURLConnection {
     @FunctionalInterface interface Resolver { InetAddress[] resolve(String host) throws IOException; }
     interface Sockets {
@@ -42,6 +42,16 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
     private InputStream body;
     private String statusLine;
     private byte[] formBody;
+    private final int targetPort;
+
+    /** Keep API TLS strict; only the explicit Kugou media policy can open an original HTTP audio URL. */
+    public static PinnedHttpsConnection kugouMedia(URI target) throws IOException {
+        if ("https".equalsIgnoreCase(target.getScheme())) return new PinnedHttpsConnection(target);
+        try { io.github.yghfv.saltneri.plugin.transport.MediaLease.requireTarget(
+                io.github.yghfv.saltneri.plugin.transport.MediaLease.Platform.KUGOU, target); }
+        catch (IllegalArgumentException | NullPointerException rejected) { throw new IOException("Invalid Kugou media target"); }
+        return new PinnedHttpsConnection(target, InetAddress::getAllByName, plainSockets(), true);
+    }
 
     /** POST is deliberately unavailable to media pull requests or arbitrary targets. */
     public static PinnedHttpsConnection neteaseFormPost(URI target, byte[] form) throws IOException {
@@ -104,10 +114,17 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
     }
 
     PinnedHttpsConnection(URI target, Resolver resolver, Sockets sockets) throws IOException {
+        this(target, resolver, sockets, false);
+    }
+    PinnedHttpsConnection(URI target, Resolver resolver, Sockets sockets, boolean plainKugou) throws IOException {
         super(target.toURL());
-        if (!"https".equals(target.getScheme()) || target.getHost() == null
+        if (plainKugou) try { io.github.yghfv.saltneri.plugin.transport.MediaLease.requireTarget(
+                io.github.yghfv.saltneri.plugin.transport.MediaLease.Platform.KUGOU, target); }
+        catch (IllegalArgumentException rejected) { throw new IOException("Invalid Kugou media target"); }
+        targetPort = plainKugou ? 80 : 443;
+        if (!(plainKugou ? "http" : "https").equalsIgnoreCase(target.getScheme()) || target.getHost() == null
                 || !target.getHost().matches("[A-Za-z0-9.-]+")
-                || (target.getPort() != -1 && target.getPort() != 443)
+                || (target.getPort() != -1 && target.getPort() != targetPort)
                 || target.getRawUserInfo() != null || target.getRawFragment() != null) {
             throw new IOException("Invalid HTTPS target");
         }
@@ -119,6 +136,7 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
         if (connected) throw new IllegalStateException("Already connected");
         String lower = key.toLowerCase(Locale.ROOT);
         if (!lower.matches("[!#$%&'*+.^_`|~a-z0-9-]+") || List.of("host", "connection", "content-length", "transfer-encoding", "expect").contains(lower)
+                || targetPort == 80 && !List.of("user-agent", "referer", "accept", "accept-encoding", "range").contains(lower)
                 || value == null || value.length() > 8192 || value.chars().anyMatch(c -> c < 32 || c > 126)) {
             throw new IllegalArgumentException("Invalid HTTPS request header");
         }
@@ -145,7 +163,7 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
                 requireOpen();
                 candidate.setSoTimeout(getReadTimeout());
                 // Pass the already-validated InetAddress, never the hostname, to the actual TCP connect.
-                candidate.connect(new InetSocketAddress(addresses[index], 443), getConnectTimeout());
+                candidate.connect(new InetSocketAddress(addresses[index], targetPort), getConnectTimeout());
                 candidate = sockets.secure(candidate, target.getHost());
                 socket = candidate;
                 requireOpen();
@@ -271,6 +289,12 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
                 tls.startHandshake();
                 return tls;
             }
+        };
+    }
+    private static Sockets plainSockets() {
+        return new Sockets() {
+            @Override public Socket create() { return new Socket(Proxy.NO_PROXY); }
+            @Override public Socket secure(Socket socket, String host) { return socket; }
         };
     }
     private static long positiveLength(String text) throws IOException {

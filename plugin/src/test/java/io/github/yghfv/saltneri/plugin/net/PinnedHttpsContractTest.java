@@ -73,6 +73,23 @@ public final class PinnedHttpsContractTest {
         for (String uri : List.of("http://api.bilibili.com/", "https://x:8443/", "https://u:p@x/", "https://x/#f", "https://[::1]/")) {
             fails(() -> new PinnedHttpsConnection(URI.create(uri)));
         }
+        for (String uri : List.of("http://music.api.hoilai.cn/song/url", "http://fs.kugou.com/a", "http://fs.youthandroid.kugou.com.evil/a",
+                "http://fs.youthandroid.kugou.com:443/a", "http://u@fs.youthandroid.kugou.com/a", "http://fs.youthandroid.kugou.com/a#f")) {
+            fails(() -> PinnedHttpsConnection.kugouMedia(URI.create(uri)));
+        }
+        URI plainTarget=URI.create("http://fs.youthandroid.kugou.com/audio?signature=secret");
+        FixtureSocket plainSocket=new FixtureSocket("HTTP/1.1 206 Partial Content\r\nContent-Length: 1\r\n\r\nx");
+        var plain=new PinnedHttpsConnection(plainTarget,h->new InetAddress[]{PUBLIC},new PinnedHttpsConnection.Sockets() {
+            public Socket create(){return plainSocket;}
+            public Socket secure(Socket raw,String host){return raw;}
+        },true);
+        for(String header:List.of("Cookie","Authorization","X-Kg-Session-Id","X-Token","Content-Type"))
+            fails(()->plain.setRequestProperty(header,"SECRET"));
+        plain.setRequestProperty("Range","bytes=0-0");plain.setRequestProperty("User-Agent","fixture");
+        check(plain.getResponseCode()==206 && plain.getInputStream().read()=='x');
+        check(((InetSocketAddress)plainSocket.address).getPort()==80 && ((InetSocketAddress)plainSocket.address).getAddress().equals(PUBLIC));
+        check(!plainSocket.output.toString(StandardCharsets.US_ASCII).contains("SECRET"));
+        plain.disconnect();check(plainSocket.closed);
         FixtureSocket socket = new FixtureSocket("HTTP/1.1 206 Partial Content\r\nContent-Length: 1\r\nContent-Range: bytes 0-0/99\r\n\r\nxignored");
         AtomicInteger dns = new AtomicInteger();
         PinnedHttpsConnection pinned = new PinnedHttpsConnection(TARGET, host -> { dns.incrementAndGet(); return new InetAddress[]{PUBLIC}; },

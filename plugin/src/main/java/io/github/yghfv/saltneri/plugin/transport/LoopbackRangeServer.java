@@ -114,7 +114,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
     }
 
     public LoopbackRangeServer(BooleanSupplier authorized) throws IOException {
-        this(Clock.systemUTC(), LoopbackRangeServer::openHttps, authorized);
+        this(Clock.systemUTC(), LoopbackRangeServer::openMedia, authorized);
         cache.limit(RangeDiskCache.DEFAULT_LIMIT);
     }
 
@@ -186,6 +186,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 || uri.getRawUserInfo()!=null || uri.getRawQuery()!=null || uri.getRawFragment()!=null
                 || uri.getRawPath()==null || !uri.getRawPath().matches("/media/[0-9a-f]{64}")) throw new IOException("Foreign prefetch");
         Entry entry=leases.get(uri.getRawPath().substring(7)); if(entry==null) return;
+        if(entry.lease!=null && entry.lease.decoded()!=null)return;
         ensureValid(entry); request.check();
         if(entry.length()>cache.limitBytes()) throw new IOException("Track exceeds audio cache budget");
         long revision=cache.revision();
@@ -251,6 +252,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
             leases.remove(token, entry);
             requests.forEach(request -> { if (request.entry == entry) request.close(); });
             cache.revoke(entry);
+            if(entry.lease!=null)entry.lease.release();
         }
     }
 
@@ -339,6 +341,14 @@ public final class LoopbackRangeServer implements AutoCloseable {
     }
 
     private void fetch(Request request, Entry entry, ByteRange range, boolean foreground) throws IOException {
+        if(entry.lease.decoded()!=null) {
+            // Decrypted PCM stays in the bounded live source, never the persistent CDN cache.
+            byte[] data=entry.lease.decoded().read(range,()->valid(entry));
+            ensureValid(entry);request.check();
+            if(data.length!=range.length())throw new IOException("Incomplete decoded audio range");
+            reply(request,206,Map.of("Content-Length",Long.toString(data.length),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
+            request.socket.getOutputStream().write(data);return;
+        }
         ReadAheadPlan previous=readAheadPlan;
         if(foreground && previous!=null && (previous.entry()!=entry || range.first()<previous.first()
                 || range.first()>=previous.first()+READ_AHEAD_CHUNKS*HOST_CHUNK_BYTES)) {
@@ -550,8 +560,8 @@ public final class LoopbackRangeServer implements AutoCloseable {
         request.socket.getOutputStream().write(text.append("\r\n").toString().getBytes(StandardCharsets.US_ASCII));
     }
 
-    private static HttpURLConnection openHttps(URI uri) throws IOException {
-        return new PinnedHttpsConnection(uri);
+    private static HttpURLConnection openMedia(URI uri) throws IOException {
+        return PinnedHttpsConnection.kugouMedia(uri);
     }
 
     private static Thread daemon(Runnable runnable, String name) {

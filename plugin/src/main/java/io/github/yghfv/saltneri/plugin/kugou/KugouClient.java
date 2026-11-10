@@ -21,7 +21,7 @@ public final class KugouClient {
     private final Clock clock;
     private final KugouHttp http;
     private final KugouHttp.Opener opener;
-    public KugouClient(AccountCredentials account) {this(account,Clock.systemUTC(),PinnedHttpsConnection::new);}
+    public KugouClient(AccountCredentials account) {this(account,Clock.systemUTC(),PinnedHttpsConnection::kugouMedia);}
     public KugouClient(AccountCredentials account,Clock clock,KugouHttp.Opener opener) {
         this.account=account;this.clock=clock;this.opener=opener;this.http=new KugouHttp(opener);
     }
@@ -58,19 +58,31 @@ public final class KugouClient {
                 || number(data.get("priv_status"),0)<0)throw KugouHttp.failure("TRACK_UNAVAILABLE");
         var urls=data.get("url") instanceof String s?List.of(s):array(data.get("url"));
         if(urls.isEmpty())throw KugouHttp.failure("TRACK_UNAVAILABLE");
-        URI uri=null;
+        var candidates=new LinkedHashSet<URI>();
         for(Object value:urls)try {
-            URI candidate=URI.create(String.valueOf(value).replaceFirst("^http:","https:"));
+            URI candidate=URI.create(String.valueOf(value));
             MediaLease.requireTarget(MediaLease.Platform.KUGOU,candidate);
             // Reject preview resources even when hosted on the legitimate media CDN.
             if(candidate.getPath().matches("(?i).*\\b(preview|clip|trial)\\b.*"))continue;
-            uri=candidate;break;
+            candidates.add(candidate);
+            if(candidates.size()==6)break;
         } catch(IllegalArgumentException rejected) {}
-        if(uri==null)throw KugouHttp.failure("MEDIA_TARGET");
+        if(candidates.isEmpty())throw KugouHttp.failure("MEDIA_TARGET");
         var headers=Map.of("User-Agent",AGENT,"Referer","https://www.kugou.com/");
         Instant expiry=clock.instant().plusSeconds(600);
-        var probe=MediaRangeProbe.probe(MediaLease.Platform.KUGOU,uri,headers,selectedSong.size(),expiry,clock,opener::open,request,
-                ()->{request.check();if(account!=null && !account.isActive())throw new java.util.concurrent.CancellationException();});
+        MediaRangeProbe.Result probe=null;IOException last=null;
+        // Probe original API candidates, preserving their protocol. Never publish an unreachable first edge.
+        for(URI candidate:candidates) {
+            request.check();
+            try {
+                probe=MediaRangeProbe.probe(MediaLease.Platform.KUGOU,candidate,headers,selectedSong.size(),expiry,clock,opener::open,request,
+                    ()->{request.check();if(account!=null && !account.isActive())throw new java.util.concurrent.CancellationException();});
+                break;
+            } catch(IOException failure) {request.check();last=failure;}
+        }
+        if(probe==null)throw KugouHttp.failure(last instanceof javax.net.ssl.SSLException?"MEDIA_TLS":
+                last instanceof java.net.SocketTimeoutException?"MEDIA_TIMEOUT":
+                last instanceof java.net.UnknownHostException?"MEDIA_DNS":"MEDIA_UNAVAILABLE");
         var lease=new MediaLease(MediaLease.Platform.KUGOU,probe.uri(),headers,scope,probe.expiresAt(),probe.length());
         if(account!=null)lease=lease.bindTo(scope,account::isActive);
         return new Resolved(TrackKey.kugou(hash),new Metadata(song.title(),song.artist(),song.album(),song.artist()),song.cover(),song.duration(),lease,probe.expiresAt());

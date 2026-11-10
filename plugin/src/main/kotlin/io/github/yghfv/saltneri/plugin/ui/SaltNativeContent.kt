@@ -587,7 +587,7 @@ private fun CatalogRow(ui: SaltNativeUi,platform: AccountPlatform,row: Map<*,*>,
     val modifier=Modifier.fillMaxWidth().clip(palette.shape())
         .background(if(memory.selectedRow==token) Color(palette.background().toULong()).copy(alpha=0.65f) else Color.Transparent)
         .onPointerEvent(PointerEventType.Press) { event ->
-            if(platform!=AccountPlatform.APPLEMUSIC && track && row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
+            if(track && row["enabled"]==true && ui.nativeContextMenuAvailable() && event.buttons.isSecondaryPressed) {
                 event.changes.forEach {it.consume()}
                 memory.selectedRow=token; menu=true
             }
@@ -696,7 +696,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
         if(!secondary) AccountHeader(ui, platform, login, action, memory, narrowHeader, catalog, enabled)
         if(enabled) {
             val title=catalog?.get("title") as? String ?: ""
-            val folder=platform!=AccountPlatform.APPLEMUSIC && catalog?.get("view") in listOf("FOLDER","COLLECTION")
+            val folder=catalog?.get("view") in listOf("FOLDER","COLLECTION")
             val author=catalog?.get("view") in listOf("AUTHOR_VIDEOS","AUTHOR_COLLECTIONS")
             Column(Modifier.fillMaxWidth().padding(horizontal=if(secondary && ui.nativeSecondaryHeaderAvailable()) 0.dp else 16.dp).padding(bottom=8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 CatalogTitle(ui,platform,if(author) (catalog?.get("authorName") as? String).orEmpty() else title,
@@ -749,7 +749,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
                         }
                     }
                 }
-                if(platform==AccountPlatform.APPLEMUSIC) item {NativeText(ui,"双击歌曲由 Windows Apple Music 官方客户端播放；客户端需要已安装并登录。",modifier=Modifier.padding(8.dp))}
+                if(platform==AccountPlatform.APPLEMUSIC) item {NativeText(ui,NativeDesk.APPLE_PLAYBACK_INFO,modifier=Modifier.padding(8.dp))}
                 if(platform==AccountPlatform.BILIBILI && catalog?.get("view") in listOf("DISCOVER","MUSIC_HOT","MUSIC_ORIGINAL")) item {
                     NativeButtons(ui, listOf(Catalog.View.DISCOVER to "\u70ed\u95e8\u89c6\u9891",Catalog.View.MUSIC_HOT to "\u97f3\u4e50\u70ed\u95e8\u699c",Catalog.View.MUSIC_ORIGINAL to "\u539f\u521b\u699c").map { (destination,label) ->
                         NativeButton(label, catalog?.get("view")==destination.name) {

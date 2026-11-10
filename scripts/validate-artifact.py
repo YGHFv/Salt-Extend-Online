@@ -98,9 +98,13 @@ def validate(path, experimental):
                          "host/SavedTrackSession"):
             if "classes/io/github/yghfv/saltneri/plugin/" + required + ".class" not in names:
                 raise ValueError("Missing native login/artwork implementation: " + required)
-        for resource in ("play.ps1", "lib/am-common.ps1", "lib/am-smtc.ps1", "lib/am-uia.ps1", "lib/am-play.ps1"):
-            if "classes/applemusic/" + resource not in names:
-                raise ValueError("Missing Apple Music control resource: " + resource)
+        if any(name.startswith("classes/applemusic/") or name.endswith("/AppleMusicPlayback.class") for name in names):
+            raise ValueError("Removed Apple Music external playback controller bundled")
+        for required in ("classes/musickit/pcm.js",
+                         "classes/io/github/yghfv/saltneri/plugin/applemusic/AppleMusicPcmSource.class",
+                         "classes/io/github/yghfv/saltneri/plugin/auth/WindowsMusicKitDecoder.class"):
+            if required not in names:
+                raise ValueError("Missing Apple Music native PCM playback: " + required)
         extension = "io.github.yghfv.saltneri.plugin.OnlineLyricsExtension"
         if archive.read("classes/META-INF/extensions.idx").decode("ascii").splitlines() != [extension]:
             raise ValueError("Missing lyric extension registration")

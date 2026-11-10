@@ -65,7 +65,10 @@ public final class SavedTrackSession implements AutoCloseable {
                     return bindings.values().stream().filter(b->b.entry.trackId().equals(id)).findFirst().orElse(null);
                 }
             }
-            public boolean contains(String id) {return binding(id)!=null;}
+            public boolean contains(String id) {
+                Binding found=binding(id);
+                return found!=null && found.entry.target().platform()!=AccountPlatform.APPLEMUSIC;
+            }
             public URI resolve(String id,BooleanSupplier valid) throws Exception {
                 Binding binding=binding(id);if(binding==null)throw new java.util.concurrent.CancellationException();
                 return SavedTrackSession.this.resolve(binding,valid);

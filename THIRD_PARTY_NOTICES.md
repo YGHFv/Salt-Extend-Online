@@ -201,14 +201,14 @@ Explicit QQ Cookie login accepts the music-key and loginType aliases used in `Qq
 - Reviewed revision: `e0ddc69ff62d717515e804c3c2d9be7a5e4a35fd` (2026-11-09).
 - License: GPL-3.0, included in `licenses/MineRadio-GPL-3.0.txt` and the artifact license directory.
 
-`plugin/src/main/resources/applemusic/lib/am-common.ps1`, `am-smtc.ps1`, `am-uia.ps1`
-and `am-play.ps1` are adapted from `experiment/apple-music-windows-control/poc/lib/`.
-Original headers are preserved. The adapter adds hidden process launch parameters and a bounded
-UTF-8 stdin/JSON wrapper; it does not bundle Electron, Node.js, MusicKit or Apple client binaries.
+Versions 0.8.49 and 0.8.50 adapted `am-common.ps1`, `am-smtc.ps1`, `am-uia.ps1`
+and `am-play.ps1` from `experiment/apple-music-windows-control/poc/lib/`.
+Version 0.9.0 removes the external Apple playback controller and all those scripts.
+No Electron, Node.js, MusicKit or Apple client binaries are bundled.
 Apple public bearer discovery, Web API headers, artwork and library/catalog identity mapping
 follow `apple-music-web-lyrics.js`, `desktop/apple-music-web-api.js` and `apple-music-api.js`.
-The pinned original and adapted resource hashes are recorded in `reference-lock.json`.
-Apple Music audio is played only by the user's official Windows client, verified by SMTC.
+Historical resource hashes are retained as `historicalControlResources` in `reference-lock.json`.
+Apple Music playback now uses an independently implemented MusicKit-to-PCM bridge into Salt.
 NetEase private playlist and daily recommendation response mapping follow `server.js`.
 The NetEase private FM protocol was cross-checked with
 https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced at
@@ -229,5 +229,16 @@ playlist, privilege, audio URL and decoded KRC interfaces. The reference's fixed
 API endpoint `music.api.hoilai.cn` is disclosed in the README and login UI. Credentials are
 sent as `X-Kg-Session-Id` only to that service, never to artwork or media CDNs.
 
-The Apple UIA adapter in 0.8.50 adds installed-package AUMID discovery, window-bearing process
-selection and dedicated launch diagnostics; updated adapted hashes remain in reference-lock.json.
+The Apple UIA adapter added in 0.8.50 is removed in 0.9.0.
+
+## Cider playback architecture reference
+
+- Repository: https://github.com/ciderapp/Cider
+- Reviewed revision: `953bb5a9e26080bba2bb20438f0ddf38b0a8b260` (2026-11-10).
+
+Architecture reference only: MusicKit browser playback, Web Audio media-element nodes,
+AudioWorklet output and the Castlabs Electron/Widevine runtime declaration were reviewed.
+No Cider source or runtime is copied, adapted or bundled. Salt independently implements a
+MusicKit media-element / AudioWorklet PCM bridge using the installed Microsoft Edge runtime.
+The Apple MusicKit SDK is loaded from Apple at runtime and is not redistributed. Browser CDM
+components retain ownership of protected playback and subscription authorization.

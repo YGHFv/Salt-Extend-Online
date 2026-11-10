@@ -27,7 +27,7 @@ final class WindowsAppleMusicCapture {
                                 BoundedJson.string(cookie.get("domain")).replaceFirst("^\\.","")))token=BoundedJson.string(cookie.get("value"));
                     }
                     if(token.isEmpty())try {
-                        String expression="(()=>{try{let m=window.MusicKit?.getInstance();return m?.musicUserToken||localStorage.getItem('media-user-token')||''}catch(e){return ''}})()";
+                        String expression="(()=>{try{let m=window.MusicKit?.getInstance();return m?.musicUserToken||localStorage.getItem('music.ampwebplay.media-user-token')||localStorage.getItem('media-user-token')||''}catch(e){return ''}})()";
                         var result=browser.call("Runtime.evaluate",Map.of("expression",expression,"returnByValue",true),session);
                         var value=BoundedJson.object(result.get("result")).get("value");
                         if(value instanceof String text)token=text;

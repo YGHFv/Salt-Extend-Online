@@ -33,6 +33,10 @@ public final class CoreContractTest {
         eq("bilibili:video:BV1xx411c7mD:cid:100", TrackKey.bilibili("BV1xx411c7mD", 100).stableId());
         check(!TrackKey.bilibili("BV1xx411c7mD", 100).equals(TrackKey.bilibili("BV1xx411c7mD", 101)));
         eq(TrackKey.netease("42"), TrackKey.netease("42"));
+        eq("applemusic:song:cn:42",TrackKey.appleMusic("cn:42").stableId());
+        check(!TrackKey.appleMusic("cn:42").equals(TrackKey.appleMusic("us:42")));
+        rejects(IllegalArgumentException.class,()->TrackKey.appleMusic("library:i.local"));
+        rejects(IllegalArgumentException.class,()->TrackKey.appleMusic("cn:0"));
         rejects(IllegalArgumentException.class, () -> TrackKey.netease("0"));
         rejects(IllegalArgumentException.class, () -> TrackKey.netease("0042"));
         rejects(IllegalArgumentException.class, () -> TrackKey.netease("42?token=secret"));

@@ -157,7 +157,7 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         String sessionId=lease.platform().name()+":"+lease.scope();
         Salt1193PlaybackSession session = sessions.get(sessionId);
         if (session == null) {
-            if (sessions.size() >= 4) throw new IllegalStateException("Too many active account sessions");
+            if (sessions.size() >= 5) throw new IllegalStateException("Too many active account sessions");
             session = new Salt1193PlaybackSession(profile, lease.scope(), () -> permitted() && accountActive.getAsBoolean(), adapter, transport, false);
             sessions.put(sessionId, session); sessionPlatforms.put(sessionId, lease.platform());
         }

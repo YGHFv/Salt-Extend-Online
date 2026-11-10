@@ -22,7 +22,12 @@ public final class RequestScope implements AutoCloseable {
     }
     public RequestScope(BooleanSupplier active) { this(active, 30000); }
     public RequestScope(BooleanSupplier active, long deadlineMillis) {
-        if (deadlineMillis < 1 || deadlineMillis > 300000) throw new IllegalArgumentException("Invalid operation deadline");
+        this(active,deadlineMillis,300000);
+    }
+    /** Playback lifetime is owned by its media lease, independently of the preparation request. */
+    public static RequestScope playback(BooleanSupplier active) {return new RequestScope(active,1800000,1800000);}
+    private RequestScope(BooleanSupplier active,long deadlineMillis,long maximum) {
+        if (deadlineMillis < 1 || deadlineMillis > maximum) throw new IllegalArgumentException("Invalid operation deadline");
         this.active = Objects.requireNonNull(active);
         timer = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "salt-neri-platform-request"); thread.setDaemon(true); return thread;

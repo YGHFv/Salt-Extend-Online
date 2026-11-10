@@ -83,12 +83,37 @@ public final class NativeUiContractTest {
              LibraryController library = new LibraryController(p -> null, permitted::get, target -> prepare.incrementAndGet(), () -> player.invalidate("Navigation"), clock,
                      account -> (query, quality, scope, request) -> {
                          upstream.incrementAndGet();
-                         return new Catalog.Page("Fixture", List.of(new Catalog.Item(Catalog.Kind.TRACK, "123", "Song", "Artist", 1, true,
+                         return new Catalog.Page("Fixture", List.of(new Catalog.Item(Catalog.Kind.TRACK, query.platform()==AccountPlatform.APPLEMUSIC?"us:123":"123", "Song", "Artist", 1, true,
                                  java.net.URI.create("https://p1.music.126.net/fixture.jpg"))), false, clock.instant().plusSeconds(300));
                      })) {
             NativeDesk desk = new NativeDesk(library, player,
                     p -> new AccountLoginController.Snapshot(AccountLoginController.Phase.IDLE, "Not logged in", null, ""),
                     (p,a) -> actions.incrementAndGet(), permitted::get);
+            var appleError=new AtomicReference<String>("");
+            desk.errorToast(appleError::set);
+            library.enter(AccountPlatform.APPLEMUSIC);
+            Map<String,Object> appleCatalog=Map.of();
+            long appleDeadline=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+            do {
+                appleCatalog=library.snapshot(AccountPlatform.APPLEMUSIC);
+                if(Boolean.TRUE.equals(appleCatalog.get("loaded")))break;
+                Thread.sleep(10);
+            } while(System.nanoTime()<appleDeadline);
+            check(Boolean.TRUE.equals(appleCatalog.get("loaded")));
+            var appleRows=(List<?>)appleCatalog.get("items");
+            String appleToken=(String)((Map<?,?>)appleRows.getFirst()).get("token");
+            desk.playRow(appleToken);
+            check(appleError.get().isEmpty());
+            check(queue.get()==0 && actions.get()==0);
+            desk.insertRow(appleToken,OnlinePlaybackController.QueueAction.AFTER_CURRENT);
+            check(appleError.get().isEmpty());
+            try(var appleRequest=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {
+                try {
+                    OnlinePlaybackController.resolveAudio(null,new OnlinePlaybackController.Target(AccountPlatform.APPLEMUSIC,"us:123"),"public",appleRequest);
+                    throw new AssertionError("Anonymous Apple subscription stream accepted");
+                } catch(IOException expected) {check(expected.getMessage().equals("APPLE/LOGIN_REQUIRED"));}
+            }
+            library.invalidate();upstream.set(0);desk.errorToast(text->{});
             var noSearch=new ClassLoader(host) {
                 @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
                     if(name.equals("com.xuncorp.voxzen.ui.component.\u078f$\u037f")) throw new ClassNotFoundException("Fixture missing optional search visuals");
