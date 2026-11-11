@@ -76,6 +76,11 @@ public class BiliClient {
         if (credentials != null && credentials.platform() != AccountPlatform.BILIBILI) throw new IllegalArgumentException("Bilibili account required");
     }
     public record VideoPage(BiliTarget target,String title,String author,long durationMillis) { }
+    public record VideoResolved(TrackKey key, Metadata metadata, long durationMillis, MediaLease lease) {
+        @Override public String toString() { return "BiliVideo[" + key.stableId() + ", URL redacted]"; }
+    }
+    private record Resolution(TrackKey key, Metadata metadata, URI cover, long durationMillis,
+                              BiliAudioSelector.Audio audio, MediaLease lease) { }
     public List<VideoPage> pages(String bvid,RequestScope scope) throws IOException {
         BiliTarget target=BiliTarget.parse(bvid);
         var view=successful(json(BiliWbi.sign(API+"/x/web-interface/wbi/view",Map.of("bvid",target.id()),key(scope),now()),scope));
@@ -98,6 +103,17 @@ public class BiliClient {
     }
 
     public Resolved resolve(BiliTarget target, BiliAudioSelector.Quality quality, String accountScope, RequestScope scope) throws IOException {
+        var resolved=resolveMedia(target,quality,accountScope,scope,false);
+        return new Resolved(resolved.key(),resolved.metadata(),resolved.cover(),resolved.durationMillis(),
+                resolved.audio(),resolved.lease(),resolved.lease().expiresAt());
+    }
+    /** Recheck the exact page and permissions; request video only after the user selects video mode. */
+    public VideoResolved resolveVideo(BiliTarget target,String accountScope,RequestScope scope) throws IOException {
+        var resolved=resolveMedia(target,BiliAudioSelector.Quality.HIGH,accountScope,scope,true);
+        return new VideoResolved(resolved.key(),resolved.metadata(),resolved.durationMillis(),resolved.lease());
+    }
+    private Resolution resolveMedia(BiliTarget target,BiliAudioSelector.Quality quality,String accountScope,
+                                    RequestScope scope,boolean video) throws IOException {
         Objects.requireNonNull(target); Objects.requireNonNull(quality); Objects.requireNonNull(scope);
         if (accountScope == null || accountScope.isBlank()) throw new IllegalArgumentException("Missing operation scope");
         if (credentials != null && (!credentials.isActive() || !credentials.accountScope().equals(accountScope))) throw new java.util.concurrent.CancellationException("Account revision changed");
@@ -134,7 +150,7 @@ public class BiliClient {
         Metadata metadata = new Metadata(title, owner, "Bilibili", owner);
         URI cover = cover(view.get("pic"));
         // DASH + Dolby + FLAC. No try_look, gaia avoidance, session or credentials.
-        Map<String, String> parameters = Map.of("bvid", bvid, "cid", Long.toString(cid), "fnval", "1104",
+        Map<String, String> parameters = Map.of("bvid", bvid, "cid", Long.toString(cid), "fnval", video ? "16" : "1104",
                 "fnver", "0", "fourk", "0", "otype", "json", "platform", "pc");
         Map<String, Object> play = successful(json(BiliWbi.sign(API + "/x/player/wbi/playurl", parameters, key, now()), scope));
         if (flag(play.get("is_preview")) || flag(play.get("is_trial"))) throw new PlatformRejected(-1);
@@ -142,10 +158,10 @@ public class BiliClient {
         if (play.get("cid") != null && cid != BoundedJson.integer(play.get("cid"))) throw invalid();
         long millis = positive(play.get("timelength"));
         if (Math.abs(millis - expectedMillis) > Math.max(2000, expectedMillis / 100)) throw new IOException("Incomplete or mismatched Bilibili duration");
-        List<BiliAudioSelector.Audio> audio = audio(play);
-        BiliAudioSelector.Audio selected = BiliAudioSelector.select(audio, quality);
-        if (selected == null) throw new IOException("No permitted Bilibili DASH audio; progressive fallback unsupported");
-        for (URI candidate : selected.candidates()) {
+        BiliAudioSelector.Audio selected = video ? null : BiliAudioSelector.select(audio(play), quality);
+        if (!video && selected == null) throw new IOException("No permitted Bilibili DASH audio; progressive fallback unsupported");
+        List<URI> candidates=video ? videoCandidates(play) : selected.candidates();
+        for (URI candidate : candidates) {
             check(scope);
             try {
                 MediaRangeProbe.Result probe;
@@ -155,11 +171,44 @@ public class BiliClient {
                 check(scope);
                 MediaLease lease = new MediaLease(MediaLease.Platform.BILIBILI, probe.uri(), HEADERS,
                         accountScope, probe.expiresAt(), probe.length());
-                return new Resolved(track, metadata, cover, millis, selected, lease, probe.expiresAt());
+                return new Resolution(track, metadata, cover, millis, selected, lease);
             } catch (PlatformRejected denied) { throw denied; }
             catch (IOException failure) { check(scope); /* Try only server-supplied backups of the selected audio. */ }
         }
-        throw new IOException("Bilibili audio range probe failed");
+        throw new IOException("Bilibili media range probe failed");
+    }
+    private static List<URI> videoCandidates(Map<String,Object> play) throws IOException {
+        var dash=BoundedJson.object(play.get("dash"));
+        var rows=BoundedJson.array(dash.get("video"));
+        if(rows.size()>128)throw invalid();
+        Map<String,Object> selected=null;long rank=-1;
+        for(Object value:rows) {
+            var row=BoundedJson.object(value);
+            String mime=BoundedJson.string(row.getOrDefault("mime_type",row.get("mimeType")));
+            String codec=BoundedJson.string(row.get("codecs"));
+            long height=positive(row.get("height")),bandwidth=positive(row.get("bandwidth"));
+            // AVC up to 1080p gives the installed renderer a predictable, inexpensive stream.
+            if(!mime.equals("video/mp4") || !codec.startsWith("avc1.") || height>1080)continue;
+            long score=height*1_000_000_000L+Math.min(bandwidth,999_999_999L);
+            if(score>rank){rank=score;selected=row;}
+        }
+        if(selected==null)throw new IOException("No permitted Bilibili video stream");
+        var urls=new ArrayList<URI>();
+        Object primary=selected.getOrDefault("base_url",selected.get("baseUrl"));
+        urls.add(videoUri(primary));
+        Object backups=selected.getOrDefault("backup_url",selected.get("backupUrl"));
+        if(backups!=null) {
+            var list=BoundedJson.array(backups);if(list.size()>8)throw invalid();
+            for(Object url:list)urls.add(videoUri(url));
+        }
+        return List.copyOf(urls);
+    }
+    private static URI videoUri(Object value) throws IOException {
+        try {
+            String text=BoundedJson.string(value);if(text.length()>8192)throw invalid();
+            URI uri=URI.create(text.replaceFirst("^http:","https:"));
+            MediaLease.requireTarget(MediaLease.Platform.BILIBILI,uri);return uri;
+        } catch(IllegalArgumentException failure) {throw invalid();}
     }
     private void check(RequestScope scope) {
         scope.check();

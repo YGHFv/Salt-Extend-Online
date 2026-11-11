@@ -48,6 +48,21 @@
   ],
   "tests": [
     {
+      "class": "io.github.yghfv.saltneri.plugin.ui.PlaybackVideoPacingTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.PlaybackVideoRenderTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.video.MusicVideoContractTest",
+      "baseOnly": true,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.library.PlatformPlaylistContractTest",
       "baseOnly": false,
       "offline": false

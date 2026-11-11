@@ -63,6 +63,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
 
     private static final int TIMEOUT_MILLIS = 8000;
     private static final long HOST_CHUNK_BYTES = 512L * 1024;
+    private static final long VIDEO_CHUNK_BYTES = 2L * 1024 * 1024;
     private static final int READ_AHEAD_CHUNKS = 2;
     private final ServerSocket listener;
     private final Thread acceptThread;
@@ -75,6 +76,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
     private final Clock clock;
     private final ConnectionOpener opener;
     private final BooleanSupplier authorized;
+    private final boolean streamingVideo;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, Entry> leases = new ConcurrentHashMap<>();
     private final Set<Request> requests = ConcurrentHashMap.newKeySet();
@@ -165,20 +167,29 @@ public final class LoopbackRangeServer implements AutoCloseable {
     }
 
     public LoopbackRangeServer(BooleanSupplier authorized) throws IOException {
-        this(Clock.systemUTC(), LoopbackRangeServer::openMedia, authorized);
+        this(Clock.systemUTC(), LoopbackRangeServer::openMedia, authorized, false);
         cache.limit(RangeDiskCache.DEFAULT_LIMIT);
     }
 
+    /** MPV uses open-ended HTTP reads. Keep each upstream request bounded and video off the audio cache. */
+    public static LoopbackRangeServer video(BooleanSupplier authorized) throws IOException {
+        return new LoopbackRangeServer(Clock.systemUTC(), LoopbackRangeServer::openMedia, authorized, true);
+    }
     LoopbackRangeServer(Clock clock, ConnectionOpener opener) throws IOException {
         this(clock, opener, () -> true);
     }
 
     LoopbackRangeServer(Clock clock, ConnectionOpener opener, BooleanSupplier authorized) throws IOException {
+        this(clock,opener,authorized,false);
+    }
+
+    LoopbackRangeServer(Clock clock, ConnectionOpener opener, BooleanSupplier authorized, boolean streamingVideo) throws IOException {
         // Injected transport fixtures opt in explicitly when testing the disk cache.
         cache.limit(0);
         this.clock = Objects.requireNonNull(clock);
         this.opener = Objects.requireNonNull(opener);
         this.authorized = Objects.requireNonNull(authorized);
+        this.streamingVideo = streamingVideo;
         listener = new ServerSocket();
         listener.bind(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 16);
         workers = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(16),
@@ -320,11 +331,11 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 request.socket.setSoTimeout(TIMEOUT_MILLIS);
                 ScheduledFuture<?> deadline = null;
                 try {
-                    deadline = deadlines.schedule(request::close, 12, TimeUnit.SECONDS);
+                    if(!streamingVideo)deadline = deadlines.schedule(request::close, 12, TimeUnit.SECONDS);
                     ScheduledFuture<?> timeout = deadline;
                     workers.execute(() -> {
                         try { serve(request); }
-                        finally { request.close(); requests.remove(request); timeout.cancel(false); }
+                        finally { request.close(); requests.remove(request); if(timeout!=null)timeout.cancel(false); }
                     });
                 } catch (RejectedExecutionException failure) {
                     if (deadline != null) deadline.cancel(false);
@@ -372,6 +383,9 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if (start[0].equals("HEAD")) {
                 reply(request, 200, Map.of("Content-Length", Long.toString(total), "Accept-Ranges", "bytes")); return;
             }
+            if(streamingVideo) {
+                streamVideo(request,entry,headers.get("range"));return;
+            }
             ByteRange range;
             try { range = ByteRange.parse(headers.get("range"), total); }
             catch (IllegalArgumentException failure) {
@@ -388,6 +402,42 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if (!request.replied) {
                 try { reply(request, request.entry == null ? 400 : 502, Map.of()); } catch (IOException ignored) { }
             }
+        }
+    }
+
+    private void streamVideo(Request request,Entry entry,String header) throws IOException {
+        long total=entry.length(),first=0,last=total-1;
+        try {
+            if(header!=null) {
+                if(header.length()>80 || !header.matches("bytes=[0-9]*-[0-9]*"))throw new IllegalArgumentException();
+                String[] parts=header.substring(6).split("-",-1);
+                if(parts[0].isEmpty()) {
+                    long suffix=Long.parseLong(parts[1]);if(suffix<1)throw new IllegalArgumentException();
+                    first=Math.max(0,total-suffix);
+                } else {
+                    first=Long.parseLong(parts[0]);
+                    if(!parts[1].isEmpty())last=Math.min(Long.parseLong(parts[1]),total-1);
+                }
+                if(first>=total || last<first)throw new IllegalArgumentException();
+            }
+        } catch(IllegalArgumentException invalid) {
+            reply(request,416,Map.of("Content-Range","bytes */"+total));return;
+        }
+        ensureValid(entry);request.check();
+        var headers=new HashMap<String,String>();
+        headers.put("Content-Length",Long.toString(last-first+1));headers.put("Accept-Ranges","bytes");
+        if(header!=null)headers.put("Content-Range","bytes "+first+"-"+last+"/"+total);
+        // Validate the first chunk before accepting the native player's request.
+        ByteRange range=new ByteRange(first,Math.min(last,first+HOST_CHUNK_BYTES-1));
+        byte[] data=download(request,entry,range);
+        reply(request,header==null?200:206,headers);
+        for(;;) {
+            ensureValid(entry);request.check();
+            request.socket.getOutputStream().write(data);request.socket.getOutputStream().flush();
+            first=range.last()+1;if(first>last)break;
+            // Preserve a short startup read; sustained video needs fewer CDN round trips than audio.
+            range=new ByteRange(first,Math.min(last,first+VIDEO_CHUNK_BYTES-1));
+            data=download(request,entry,range);
         }
     }
 

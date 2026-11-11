@@ -41,6 +41,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile OnlinePlaybackController online;
     private volatile LibraryController library;
     private volatile SaltNativeUi nativeUi;
+    private volatile io.github.yghfv.saltneri.plugin.ui.SaltVideoBindings playbackVideo;
+    private String playbackVideoFailure = "";
     private NativeDesk desk;
     private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
     private SavedPlaylistController savedPlaylists;
@@ -228,7 +230,19 @@ public final class ExperimentalPlugin extends SpwPlugin {
                     () -> generation == owner && granted());
             applySidebarSettings(nativeUi,configManager.getConfig());
         }
-        status = "0.7.6: Salt native UI requested; remembered plugin logins are verified in background. No automatic playback.";
+        if(playbackVideo==null && savedTracks!=null) {
+            Object owner=generation;
+            try {
+                playbackVideo=new io.github.yghfv.saltneri.plugin.ui.SaltVideoBindings(WorkshopApi.class.getClassLoader(),
+                        WorkshopApi.hookRegistrar(),()->generation==owner && granted(),
+                        (id,path)->savedTracks==null?null:savedTracks.find(id,path),this::credentials,
+                        text->toast(text,WorkshopApi.Ui.ToastType.Error));
+                playbackVideoFailure="";
+            } catch(Exception | LinkageError unavailable) {
+                playbackVideoFailure="; playback video unavailable: "+unavailable.getClass().getSimpleName();
+            }
+        }
+        status = "Salt native UI requested; remembered plugin logins are verified in background. No automatic playback."+playbackVideoFailure;
         boolean remember = true;
         biliLogin.restoreOnStartup(remember);
         neteaseLogin.restoreOnStartup(remember);
@@ -337,6 +351,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        if(playbackVideo!=null){playbackVideo.close();playbackVideo=null;}
         if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
         if(savedRestore!=null) {savedRestore.shutdownNow();savedRestore=null;}
         if(savedPlaylists!=null) {savedPlaylists.close();savedPlaylists=null;}

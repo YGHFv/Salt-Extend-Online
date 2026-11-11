@@ -87,6 +87,22 @@ public final class BiliClientContractTest {
     public static void main(String[] args) throws Exception {
         try(var request=new RequestScope(()->true)) {
             var fixture=new Fixture();
+            fixture.play="{\"code\":0,\"data\":{\"cid\":20,\"timelength\":120000,\"dash\":{\"video\":["
+                    +"{\"height\":720,\"bandwidth\":1000000,\"mime_type\":\"video/mp4\",\"codecs\":\"avc1.640028\",\"base_url\":\"https://upos-fixture.bilivideo.com/720.m4s\"},"
+                    +"{\"height\":1080,\"bandwidth\":2000000,\"mime_type\":\"video/mp4\",\"codecs\":\"avc1.640028\",\"base_url\":\"https://upos-fixture.bilivideo.com/1080.m4s\"},"
+                    +"{\"height\":2160,\"bandwidth\":4000000,\"mime_type\":\"video/mp4\",\"codecs\":\"avc1.640033\",\"base_url\":\"https://upos-fixture.bilivideo.com/4k.m4s\"}]}}}";
+            var video=fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request);
+            check(video.key().cid()==20 && video.durationMillis()==120000);
+            check(fixture.requests.stream().anyMatch(r->r.getURL().getPath().equals("/1080.m4s")));
+            check(fixture.requests.stream().noneMatch(r->r.getURL().getPath().equals("/4k.m4s")));
+            check(!video.toString().contains("https"));
+            fixture.play=fixture.play.replace("\"cid\":20","\"cid\":10");
+            fails(()->fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request));
+            fixture.play=fixture.play.replace("\"cid\":10","\"cid\":20").replace("\"timelength\":120000","\"is_preview\":true,\"timelength\":120000");
+            fails(()->fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request));
+        }
+        try(var request=new RequestScope(()->true)) {
+            var fixture=new Fixture();
             var pages=fixture.client().pages(BV,request);
             check(pages.size()==2 && pages.getLast().target().page()==2 && pages.getLast().durationMillis()==120000);
             check(pages.getLast().title().equals("Part 2 Fixture title"));

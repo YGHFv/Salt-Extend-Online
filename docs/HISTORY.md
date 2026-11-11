@@ -4,6 +4,9 @@
 
 | 版本／主题 | 记录 |
 | --- | --- |
+| 0.9.4 视频流畅度修复 | [连续帧测量、后台转换与音频时钟同步](VIDEO_PACING_0.9.4.md) |
+| 0.9.3 视频渲染修复 | [Direct3D 实际窗口绘制、异常恢复与播放图标](VIDEO_RENDER_0.9.3.md) |
+| 0.9.2 播放页视频 | [B站视频、网易云／QQ MV、原生视频画面与音频进度同步](PLAYBACK_VIDEO_0.9.2.md) |
 | 0.9.1 播放缓冲、配置与平台歌单 | [断续修复、二级设置、四平台换源、歌曲收藏、歌单订阅与播放全部](SETTINGS_PLAYLISTS_0.9.1.md) |
 | 0.9.0 酷狗音乐与 Apple 内播放 | [CDN 原始协议、备用地址与真实原生解码](KUGOU_PLAYBACK_0.9.0.md)；[MusicKit PCM 通路](APPLE_NATIVE_0.8.51.md) |
 | 0.8.51 Apple 原生播放 | [MusicKit PCM 与 Salt 原生播放通路](APPLE_NATIVE_0.8.51.md) |

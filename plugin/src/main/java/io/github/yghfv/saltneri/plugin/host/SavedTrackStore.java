@@ -85,6 +85,9 @@ public final class SavedTrackStore implements AutoCloseable {
         }
     }
     public synchronized List<Entry> entries() { return List.copyOf(entries.values()); }
+    public synchronized Entry find(String trackId,String path) {
+        return owns(trackId,path) ? entries.get(trackId.substring("saltneri:saved:".length())) : null;
+    }
     public synchronized boolean owns(String trackId,String path) {
         if(closed || trackId==null || !trackId.startsWith("saltneri:saved:")) return false;
         Entry entry=entries.get(trackId.substring("saltneri:saved:".length()));

@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**0.9.1 · 开发预览** · Windows / Steam Salt 1.19.3
+**0.9.4 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -50,6 +50,7 @@
 | QQ 个性化推荐 | 发现页增加每日推荐和猜你喜欢，登录后读取账号专属歌曲 |
 | Apple Music 播放 | MusicKit 浏览器解码并将 PCM 交给 Salt 原生播放器，支持队列、音量、跳转和歌单；需要有效订阅 |
 | 原生播放与歌单 | 双击播放、整单播放、插播、添加到 Salt 歌单，在线队列与歌单支持重启恢复 |
+| 播放页视频 | B站曲目及带 MV 的网易云／QQ 歌曲，在播放页右上角全屏按钮左侧显示视频按钮，点击在页内播放，再次点击返回封面和歌词 |
 | 逐字歌词 | 网易云 YRC、QQ 音乐 QRC、酷狗音乐 KRC，兼容普通 LRC 与翻译，显示在 Salt 原生歌词页 |
 | 列表与封面 | 卡片／单列／双列切换，合集搜索、排序、分页，列表及播放封面加载 |
 | 音质与缓存 | B站 6 档、网易云 8 档、QQ 音乐 10 档、酷狗音乐 3 档音质偏好，按实际队列预缓存后三首 |
@@ -75,7 +76,7 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 
 ## 版本与兼容
 
-当前版本 **0.9.1** 整理配置二级页面、扩展自动换源，并增加平台歌曲收藏和歌单订阅菜单，详见 [配置与歌单更新](docs/SETTINGS_PLAYLISTS_0.9.1.md)。0.9.0 修复酷狗音乐音频 CDN 的 TLS 失败并验证实际原生解码，详见 [酷狗音乐播放修复](docs/KUGOU_PLAYBACK_0.9.0.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。网易云私人歌单和推荐加载优化见 [0.8.50 更新与验证](docs/KUGOU_0.8.50.md)。历史修复见 [更新记录](docs/HISTORY.md)。
+当前版本 **0.9.4** 修复视频取帧的额外等待、重复读取和音频同步的频繁精确跳转，详见 [视频流畅度修复](docs/VIDEO_PACING_0.9.4.md)。0.9.3 的 Direct3D 崩溃修复与播放图标见 [视频渲染修复](docs/VIDEO_RENDER_0.9.3.md)。0.9.2 播放页内 B站视频和网易云／QQ MV 见 [播放页视频](docs/PLAYBACK_VIDEO_0.9.2.md)。0.9.1 配置、收藏与订阅操作见 [配置与歌单更新](docs/SETTINGS_PLAYLISTS_0.9.1.md)。0.9.0 修复酷狗音乐音频 CDN 的 TLS 失败并验证实际原生解码，详见 [酷狗音乐播放修复](docs/KUGOU_PLAYBACK_0.9.0.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。历史修复见 [更新记录](docs/HISTORY.md)。
 
 实际回归基线为 **Windows / Steam Salt 1.19.3**。模组使用官方插件接口及部分原生 UI／播放内部绑定，按所需接口结构检查兼容性；未来宿主更新可能影响部分功能。
 

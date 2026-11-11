@@ -24,6 +24,22 @@ public final class TransportContractTest {
     public static LoopbackRangeServer offlineServer(Clock clock,java.util.function.BooleanSupplier active) throws IOException {
         return new LoopbackRangeServer(clock,uri->{throw new AssertionError("Unexpected network");},active);
     }
+    public static LoopbackRangeServer videoServer(byte[] bytes,java.util.function.BooleanSupplier active) throws IOException {
+        return videoServer(bytes,active,range->{});
+    }
+    private static LoopbackRangeServer videoServer(byte[] bytes,java.util.function.BooleanSupplier active,
+            java.util.function.Consumer<ByteRange> observed) throws IOException {
+        return new LoopbackRangeServer(Clock.systemUTC(),uri->new HttpURLConnection(uri.toURL()) {
+            private ByteRange range(){return ByteRange.parse(getRequestProperty("Range"),bytes.length);}
+            public void connect(){}
+            public void disconnect(){}
+            public boolean usingProxy(){return false;}
+            public int getResponseCode(){observed.accept(range());return 206;}
+            public long getContentLengthLong(){return range().length();}
+            public String getHeaderField(String name){return name.equals("Content-Range")?range().contentHeader(bytes.length):null;}
+            public InputStream getInputStream(){var r=range();return new ByteArrayInputStream(bytes,(int)r.first(),(int)r.length());}
+        },active,true);
+    }
     private static int checks;
     private static final URI TARGET = URI.create("https://test.bilivideo.com/audio?signature=secret");
     private static final Instant NOW = Instant.parse("2026-11-06T00:00:00Z");
@@ -37,7 +53,33 @@ public final class TransportContractTest {
         diagnostic();
         cancellation();
         recovery();
+        videoStreaming();
         System.out.println("PASS: " + checks + " transport contract checks (offline fake upstream, real loopback HTTP)");
+    }
+    private static void videoStreaming() throws Exception {
+        byte[] bytes=new byte[5*1024*1024+17];Arrays.fill(bytes,(byte)37);
+        var chunks=new CopyOnWriteArrayList<ByteRange>();
+        try(var server=videoServer(bytes,()->true,chunks::add)) {
+            var uri=server.register(new MediaLease(MediaLease.Platform.BILIBILI,TARGET,Map.of(),"video",
+                    Instant.now().plusSeconds(60),bytes.length));
+            var connection=(HttpURLConnection)uri.toURL().openConnection();
+            connection.setRequestProperty("Range","bytes=0-");connection.setReadTimeout(5000);
+            eq(206,connection.getResponseCode());
+            eq("bytes 0-"+(bytes.length-1)+"/"+bytes.length,connection.getHeaderField("Content-Range"));
+            try(var input=connection.getInputStream()) {check(Arrays.equals(bytes,input.readAllBytes()),"Video open range truncated");}
+            connection.disconnect();
+            eq(4,chunks.size());
+            eq(512L*1024,chunks.getFirst().length());
+            check(chunks.stream().allMatch(range->range.length()<=2L*1024*1024),"Video read exceeded bounded memory");
+            chunks.clear();
+            connection=(HttpURLConnection)uri.toURL().openConnection();connection.setReadTimeout(5000);
+            eq(200,connection.getResponseCode());
+            try(var input=connection.getInputStream()) {check(Arrays.equals(bytes,input.readAllBytes()),"Video GET truncated");}
+            connection.disconnect();
+            eq(0L,server.cacheBytes());
+            server.revoke(uri);
+            connection=(HttpURLConnection)uri.toURL().openConnection();eq(404,connection.getResponseCode());connection.disconnect();
+        }
     }
 
     private static void ranges() {
