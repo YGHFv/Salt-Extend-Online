@@ -27,6 +27,19 @@ public final class SaltVideoBindings implements AutoCloseable {
     public static final String TRANSPORT="com.xuncorp.voxzen.ui.player.mini.\u052b",TRANSPORT_CALLER="androidx.compose.ui.\u0525";
     public static final List<String> TRANSPORT_PARAMETERS=List.of("kotlin.jvm.functions.Function0","androidx.compose.ui.Modifier",
             "long","androidx.compose.ui.\u0aa0","com.xuncorp.voxzen.ui.player.mini.\u05ef");
+    public static final String SCREEN="androidx.compose.ui.\u0451";
+    public static final List<String> SCREEN_PARAMETERS=List.of("kotlin.jvm.functions.Function0","boolean","androidx.compose.ui.\u091a","androidx.compose.ui.Modifier");
+    public static final String CAPTION="com.moriafly.salt.ui.platform.windows.\u0560";
+    public static final List<String> CAPTION_PARAMETERS=List.of("androidx.compose.ui.\u012e","androidx.compose.foundation.layout.BoxScope",
+            "androidx.compose.ui.window.WindowState","boolean","androidx.compose.ui.window.FrameWindowScope",
+            "androidx.compose.runtime.MutableState","androidx.compose.runtime.MutableState","androidx.compose.runtime.MutableState",
+            "androidx.compose.runtime.Composer","int");
+    public static final String FULLSCREEN="androidx.compose.ui.\u0118";
+    public static final List<String> FULLSCREEN_PARAMETERS=List.of("kotlin.jvm.functions.Function0","boolean","androidx.compose.ui.Modifier","boolean");
+    public static final String COVER="com.xuncorp.voxzen.ui.player.mini.\u052d";
+    public static final List<String> COVER_PARAMETERS=List.of("com.xuncorp.pisces.PiscesMediaItem","androidx.compose.runtime.Composer","int");
+    public static final String FLOAT_COVER="androidx.compose.ui.\u06a0";
+    public static final List<String> FLOAT_COVER_PARAMETERS=List.of("boolean","boolean");
     public record View(String id,boolean available,boolean requested,boolean loading,String message,Object player) { }
     private final MutableState<View> view=SnapshotStateKt.mutableStateOf(
             new View("",false,false,false,"",null),SnapshotStateKt.structuralEqualityPolicy());
@@ -47,19 +60,25 @@ public final class SaltVideoBindings implements AutoCloseable {
     private final Method itemId,itemPath,progressPosition;
     private final Constructor<?> playerConstructor;
     private final Method handleGetter,command,property,number,integer,bool,captionButton,localCaption;
-    private final Method getPlaybackSpeed;
+    private final Method getPlaybackSpeed,playOrPause;
     private final Field playbackController;
     private final Method captionWidth;
-    private final Method titleBar,transportControls;
+    private final Method titleBar,transportControls,playerScreen,fullscreenButton;
+    private final Method captionGroup,coverContent,floatCover;
+    private final ThreadLocal<Set<String>> nativeInvocation=ThreadLocal.withInitial(HashSet::new);
     private final Constructor<?> transportState;
     private final Method transportActive;
-    private final ProvidedValue<?> transportGeometry;
+    private final MutableState<Boolean> controlsVisible=SnapshotStateKt.mutableStateOf(true,SnapshotStateKt.structuralEqualityPolicy());
+    private final MutableState<Long> activity=SnapshotStateKt.mutableStateOf(0L,SnapshotStateKt.structuralEqualityPolicy());
+    private final MutableState<java.awt.Window> controlsWindow=SnapshotStateKt.mutableStateOf(null,SnapshotStateKt.structuralEqualityPolicy());
+    private java.awt.event.MouseAdapter windowObserver;
     private final LoopbackRangeServer transport;
     interface VideoRequests {
         MusicVideoClient.Source discover(MusicVideoClient.Source selected,AccountCredentials credentials,RequestScope request) throws Exception;
         MediaLease resolve(MusicVideoClient.Source selected,AccountCredentials credentials,String scope,RequestScope request) throws Exception;
     }
     private final VideoRequests requests;
+    private final Runnable playbackAction;
     private volatile RequestScope pending;
     private volatile boolean closed;
     private volatile long generation;
@@ -93,8 +112,14 @@ public final class SaltVideoBindings implements AutoCloseable {
     SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
             BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
             Consumer<String> toast,VideoRequests requests,LoopbackRangeServer transport) throws Exception {
+        this(host,registrar,active,tracks,accounts,toast,requests,transport,null);
+    }
+    SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
+            BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
+            Consumer<String> toast,VideoRequests requests,LoopbackRangeServer transport,Runnable playbackAction) throws Exception {
         this.host=host;this.active=active;this.tracks=tracks;this.accounts=accounts;this.toast=toast;
         this.requests=requests;
+        this.playbackAction=playbackAction;
         Class<?> monitor=type("com.xuncorp.pisces.\u0786");
         current=(StateFlow<?>)monitor.getMethod("\u0528").invoke(null);
         progress=(StateFlow<?>)monitor.getMethod("\u052a").invoke(null);
@@ -122,27 +147,112 @@ public final class SaltVideoBindings implements AutoCloseable {
                 Composer.class,int.class,int.class);
         transportState=type("com.xuncorp.voxzen.ui.player.mini.\u05ef").getConstructor();
         transportActive=transportState.getDeclaringClass().getMethod("\u037f",boolean.class);
-        @SuppressWarnings("unchecked")
-        var geometryLocal=(ProvidableCompositionLocal<Object>)type("com.xuncorp.voxzen.ui.player.mini.\u0588").getMethod("\u037f").invoke(null);
-        transportGeometry=geometryLocal.provides(type("com.xuncorp.voxzen.ui.player.mini.\u0529")
-                .getConstructor(float.class,boolean.class,float.class,byte.class).newInstance(1f,true,0f,(byte)0));
+        playerScreen=type(SCREEN).getMethod("\u037f",Function0.class,boolean.class,type("androidx.compose.ui.\u091a"),Modifier.class,Composer.class,int.class,int.class);
+        fullscreenButton=type(FULLSCREEN).getMethod("\u037f",Function0.class,boolean.class,Modifier.class,boolean.class,Composer.class,int.class,int.class);
+        captionGroup=type(CAPTION).getDeclaredMethod("\u037f",type(CAPTION_PARAMETERS.get(0)),
+                androidx.compose.foundation.layout.BoxScope.class,androidx.compose.ui.window.WindowState.class,boolean.class,
+                androidx.compose.ui.window.FrameWindowScope.class,MutableState.class,MutableState.class,MutableState.class,Composer.class,int.class);
+        captionGroup.setAccessible(true);
+        coverContent=type(COVER).getDeclaredMethod("\u037f",type("com.xuncorp.pisces.PiscesMediaItem"),Composer.class,int.class);
+        coverContent.setAccessible(true);
+        floatCover=type(FLOAT_COVER).getMethod("\u037f",boolean.class,boolean.class,Composer.class,int.class,int.class);
         Class<?> controller=type("com.xuncorp.voxzen.service.PlaybackController");
         getPlaybackSpeed=controller.getMethod("getPlaybackSpeed");
+        playOrPause=controller.getMethod("playOrPause");
         playbackController=controller.getField("INSTANCE");
         this.transport=transport==null?LoopbackRangeServer.video(()->!closed && active.getAsBoolean()):transport;
         try {
             Class<?> content=Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltVideoContent",true,getClass().getClassLoader());
             hooks.add(registrar.replaceComposable(TITLE,"\u037f",WINDOW,TITLE_PARAMETERS,50,
                     (ComposableHook)content.getConstructor(SaltVideoBindings.class).newInstance(this)));
-            hooks.add(registrar.replaceComposable(TRANSPORT,"\u037f",TRANSPORT_CALLER,TRANSPORT_PARAMETERS,50,
-                    (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltVideoTransportContent",true,getClass().getClassLoader())
-                            .getConstructor(SaltVideoBindings.class).newInstance(this)));
+            interceptComposable(registrar,TRANSPORT,TRANSPORT_PARAMETERS,5,"SaltVideoTransportContent");
+            interceptComposable(registrar,SCREEN,SCREEN_PARAMETERS,4,"SaltVideoScreenContent");
+            interceptComposable(registrar,FULLSCREEN,FULLSCREEN_PARAMETERS,4,"SaltVideoCaptionContent");
+            interceptComposable(registrar,CAPTION,CAPTION_PARAMETERS.subList(0,8),8,"SaltVideoWindowCaptionContent");
+            interceptComposable(registrar,COVER,COVER_PARAMETERS.subList(0,1),1,"SaltVideoCoverContent");
+            interceptComposable(registrar,FLOAT_COVER,FLOAT_COVER_PARAMETERS,2,"SaltVideoFloatCoverContent");
         } catch(Exception | LinkageError error) {close();throw error;}
         worker.scheduleWithFixedDelay(this::tick,0,100,TimeUnit.MILLISECONDS);
     }
+    private void interceptComposable(HookRegistrar registrar,String owner,List<String> parameters,int composerIndex,
+            String content) throws Exception {
+        var hook=(ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui."+content,true,getClass().getClassLoader())
+                .getConstructor(SaltVideoBindings.class).newInstance(this);
+        interceptComposable(registrar,owner,parameters,composerIndex,hook);
+    }
+    private void interceptComposable(HookRegistrar registrar,String owner,List<String> parameters,int composerIndex,
+            ComposableHook content) throws Exception {
+        var signature=new ArrayList<>(parameters);signature.add(Composer.class.getName());signature.add("int");
+        if(!owner.equals(CAPTION) && !owner.equals(COVER))signature.add("int");
+        Method draw=content.getClass().getMethod("Content",UiHookCall.class,Composer.class,int.class);
+        hooks.add(registrar.hookMethod(owner,"\u037f",signature,new MethodHook() {
+            @Override public void before(MethodHookParam param) {
+                if(closed || nativeInvocation.get().contains(owner))return;
+                Object[] args=param.getArgs();
+                // A nested original composable can restart itself without its wrapper.
+                // Keep that restart group intact; visibility belongs to the outer Content.
+                if(!owner.equals(CAPTION) && (((Number)args[composerIndex+1]).intValue()&1)!=0)return;
+                nativeInvocation.get().add(owner);
+                try {
+                    var call=new UiHookCall() {
+                        public Object getThisObject(){return param.getThisObject();}
+                        public List<Object> getArguments(){return Arrays.asList(Arrays.copyOf(args,composerIndex));}
+                        public Object getArgument(String name){return name.equals("defaultMask") && args.length>composerIndex+2?args[composerIndex+2]:null;}
+                    };
+                    draw.invoke(content,call,args[composerIndex],0);
+                    param.setResult(owner.equals(CAPTION)?kotlin.Unit.INSTANCE:null);
+                } catch(InvocationTargetException failure) {
+                    if(failure.getCause() instanceof Error error)throw error;
+                    if(failure.getCause() instanceof RuntimeException error)throw error;
+                    throw new IllegalStateException("Native video content failed",failure.getCause());
+                } catch(ReflectiveOperationException failure) {throw new IllegalStateException("Native video content unavailable",failure);}
+                finally {nativeInvocation.get().remove(owner);}
+            }
+        }));
+    }
     private Class<?> type(String name) throws ClassNotFoundException {return Class.forName(name,false,host);}
     public View view() {return view.getValue();}
-    public ProvidedValue<?> transportGeometry() {return transportGeometry;}
+    public boolean controlsVisible() {return controlsVisible.getValue();}
+    public long activity() {return activity.getValue();}
+    public void showControls() {controlsVisible.setValue(true);}
+    public void hideControls() {controlsVisible.setValue(false);}
+    public void pointerActivity() {
+        if(closed || !expanded || !view().requested())return;
+        showControls();activity.setValue(activity.getValue()+1);
+    }
+    public boolean windowControlsVisible(java.awt.Window window) {
+        boolean visible=controlsVisible();var state=view();var owner=controlsWindow.getValue();
+        return closed || window!=owner || !expanded || !state.requested() || visible;
+    }
+    public AutoCloseable observeWindow(java.awt.Window window) {
+        detachWindowObserver();
+        controlsWindow.setValue(window);
+        var observer=new java.awt.event.MouseAdapter() {
+            @Override public void mouseMoved(java.awt.event.MouseEvent event) {pointerActivity();}
+            @Override public void mouseDragged(java.awt.event.MouseEvent event) {pointerActivity();}
+            @Override public void mouseEntered(java.awt.event.MouseEvent event) {pointerActivity();}
+            @Override public void mousePressed(java.awt.event.MouseEvent event) {pointerActivity();}
+            @Override public void mouseWheelMoved(java.awt.event.MouseWheelEvent event) {pointerActivity();}
+        };
+        windowObserver=observer;
+        if(window!=null) {window.addMouseMotionListener(observer);window.addMouseListener(observer);window.addMouseWheelListener(observer);}
+        return ()->{
+            if(windowObserver==observer) {detachWindowObserver();showControls();}
+        };
+    }
+    private void detachWindowObserver() {
+        var window=controlsWindow.getValue();
+        if(window!=null && windowObserver!=null) {
+            window.removeMouseMotionListener(windowObserver);window.removeMouseListener(windowObserver);window.removeMouseWheelListener(windowObserver);
+        }
+        controlsWindow.setValue(null);windowObserver=null;
+    }
+    public void togglePlayback() {
+        if(closed || !active.getAsBoolean() || !view().requested())return;
+        if(playbackAction!=null) {playbackAction.run();return;}
+        try {playOrPause.invoke(playbackController.get(null));}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Salt playback toggle unavailable",failure);}
+    }
     public Object createTransportState() {
         try {Object state=transportState.newInstance();activateTransport(state);return state;}
         catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video transport state unavailable",failure);}
@@ -191,15 +301,63 @@ public final class SaltVideoBindings implements AutoCloseable {
         Modifier modifier=call.getArgument(3) instanceof Modifier supplied?supplied:Modifier.Companion;
         titleBar(call,modifier,composer);
     }
-    public void transportControls(Modifier modifier,Object state,Composer composer) {
-        try {transportControls.invoke(null,(Function0<kotlin.Unit>)()->{toggle();return kotlin.Unit.INSTANCE;},
-                modifier,0L,null,state,composer,0,12);}
+    public void transportControls(UiHookCall call,Modifier modifier,Object state,Composer composer) {
+        try {invokeNative(transportControls,call.getArgument(0),modifier,call.getArgument(2),call.getArgument(3),state,composer,0,defaults(call,0)&~18);}
         catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video transport unavailable",failure);}
     }
+    public void originalScreen(UiHookCall call,Composer composer) {
+        try {invokeNative(playerScreen,call.getArgument(0),call.getArgument(1),call.getArgument(2),
+                call.getArgument(3),composer,0,defaults(call,call.getArgument(3)==null?8:0));}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Native player screen unavailable",failure);}
+    }
+    public void originalWindowControls(UiHookCall call,Composer composer) {
+        try {
+            invokeNative(fullscreenButton,call.getArgument(0),call.getArgument(1),call.getArgument(2),call.getArgument(3),composer,0,defaults(call,call.getArgument(2)==null?12:0));
+        } catch(ReflectiveOperationException failure) {throw new IllegalStateException("Native window caption unavailable",failure);}
+    }
+    @SuppressWarnings("unchecked")
+    public ProvidedValue<?>[] darkThemeValues(Composer composer) {
+        try {
+            var local=(ProvidableCompositionLocal<Object>)type("androidx.compose.ui.\u02b6").getMethod("\u037f").invoke(null);
+            Object dark=type("androidx.compose.ui.\u02e4").getMethod("\u037f",type("androidx.compose.ui.\u02e4"),boolean.class)
+                    .invoke(null,composer.consume(local),true);
+            return new ProvidedValue<?>[]{local.provides(dark)};
+        }catch(ReflectiveOperationException failure){throw new IllegalStateException("Native video theme unavailable",failure);}
+    }
+    public void originalCaptionGroup(UiHookCall call,Composer composer) {
+        Object[] args=Arrays.copyOf(call.getArguments().toArray(),10);args[8]=composer;args[9]=0;
+        boolean invoking=nativeInvocation.get().contains(CAPTION);nativeInvocation.get().add(CAPTION);
+        try{captionGroup.invoke(null,args);}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException("Native video caption unavailable",failure);}
+        finally{if(!invoking)nativeInvocation.get().remove(CAPTION);}
+    }
+    public void originalCover(UiHookCall call,Composer composer) {
+        try{invokeNative(coverContent,call.getArgument(0),composer,0);}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException("Native player cover unavailable",failure);}
+    }
+    public void originalFloatCover(UiHookCall call,Composer composer) {
+        try{invokeNative(floatCover,call.getArgument(0),call.getArgument(1),composer,0,defaults(call,0));}
+        catch(ReflectiveOperationException failure){throw new IllegalStateException("Native floating cover unavailable",failure);}
+    }
+    @SuppressWarnings("unchecked")
+    public void clearCaptionHitRegions(Object[] args) {
+        // These are the native minimize, maximize and close regions captured by Windows.
+        for(int index=5;index<=7;index++)
+            ((MutableState<Object>)args[index]).setValue(androidx.compose.ui.geometry.Rect.Companion.getZero());
+    }
     public void originalTransport(UiHookCall call,Composer composer) {
-        try {transportControls.invoke(null,call.getArgument(0),call.getArgument(1),call.getArgument(2),call.getArgument(3),
-                call.getArgument(4),composer,0,call.getArgument(4)==null?16:0);}
+        try {invokeNative(transportControls,call.getArgument(0),call.getArgument(1),call.getArgument(2),call.getArgument(3),
+                call.getArgument(4),composer,0,defaults(call,call.getArgument(4)==null?16:0));}
         catch(ReflectiveOperationException failure) {throw new IllegalStateException("Native transport unavailable",failure);}
+    }
+    private Object invokeNative(Method method,Object... args) throws ReflectiveOperationException {
+        String owner=method.getDeclaringClass().getName();
+        boolean invoking=nativeInvocation.get().contains(owner);nativeInvocation.get().add(owner);
+        try{return method.invoke(null,args);}
+        finally{if(!invoking)nativeInvocation.get().remove(owner);}
+    }
+    private int defaults(UiHookCall call,int fallback) {
+        return call.getArgument("defaultMask") instanceof Number mask?mask.intValue():fallback;
     }
     public synchronized SaltVideoSurface surface(Object renderer,java.awt.Window window,Runnable redraw) {
         if(closed || player!=renderer)return null;
@@ -423,6 +581,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     }
     @Override public synchronized void close() {
         if(closed)return;closed=true;generation++;cancelRequest();releasePlayer();
+        detachWindowObserver();
         hooks.forEach(HookHandle::close);hooks.clear();worker.shutdownNow();resolver.shutdownNow();transport.close();
     }
 }

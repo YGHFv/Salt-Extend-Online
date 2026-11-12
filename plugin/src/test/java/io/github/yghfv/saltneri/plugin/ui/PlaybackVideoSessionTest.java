@@ -27,7 +27,7 @@ public final class PlaybackVideoSessionTest {
         public HookHandle afterComposable(String owner,String name,String caller,List<String> types,int priority,ComposableHook content) {
             return new HookHandle(){public void close(){}public void unhook(){}};
         }
-        public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){throw new AssertionError();}
+        public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){return new HookHandle(){public void close(){}public void unhook(){}};}
         public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){
             return new HookHandle(){public void close(){}public void unhook(){}};
         }

@@ -26,7 +26,7 @@ public final class PlaybackVideoPacingTest {
         public HookHandle afterComposable(String c,String m,String i,List<String> p,int n,ComposableHook h) {
             return new HookHandle(){public void unhook(){}public void close(){}};
         }
-        public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){throw new AssertionError();}
+        public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){return new HookHandle(){public void close(){}public void unhook(){}};}
         public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){
             return new HookHandle(){public void unhook(){}public void close(){}};
         }
