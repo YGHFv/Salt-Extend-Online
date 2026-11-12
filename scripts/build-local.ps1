@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$SaltHome,
     [Parameter(Mandatory = $true)][string]$JdkHome,
     [switch]$Experimental,
-    [ValidateRange(1, 3600)][int]$ContractTimeoutSeconds = 180,
+    [ValidateRange(1, 3600)][int]$ContractTimeoutSeconds = 300,
     [string]$BilibiliProbe = '',
     [string]$NeteaseProbe = '',
     [string]$LoginProbe = ''

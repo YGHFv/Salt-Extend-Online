@@ -3,7 +3,7 @@
 ## Workflow
 
 `.github/workflows/build.yml` runs host-free checks on GitHub's Windows runner. Only successful trusted main pushes or manual main runs can schedule the repository-scoped `salt-extend-windows` runner with `self-hosted`, `Windows`, `X64` and `salt-1.19.3` labels.
-New runs cancel older runs on the same branch, including jobs waiting for an offline runner. Each local contract has a 180-second limit, concurrent stdout/stderr draining, and an isolated temporary host profile. A timed-out contract stops its own process tree and retains its log instead of blocking the package job.
+New runs cancel older runs on the same branch, including jobs waiting for an offline runner. Each local contract has a 300-second limit, concurrent stdout/stderr draining, and an isolated temporary host profile. The limit leaves room for the full playlist layout/DPI render regression, which normally takes about three minutes. A timed-out contract stops its own process tree and retains its log instead of blocking the package job.
 
 The `salt-build` environment restricts deployment branches to main. `SALT_PACKAGE_ENABLED=true` enables packaging. Environment variables provide `SALT_HOME`, `SALT_JDK_HOME` and a persistent `SALT_KOTLIN_HOME`. The build reads the existing Salt installation, without installing a mod, restarting Salt or reading saved accounts.
 
