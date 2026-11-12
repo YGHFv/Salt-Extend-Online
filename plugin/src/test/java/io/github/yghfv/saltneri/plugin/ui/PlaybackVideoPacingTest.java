@@ -114,23 +114,30 @@ public final class PlaybackVideoPacingTest {
                 set.invoke(handle,"pause","yes");Thread.sleep(150);
                 long paused=surface.get().publishedFrames();Thread.sleep(220);
                 check(surface.get().publishedFrames()-paused<=1,"Paused video repeatedly copies unchanged pixels");
-                // Account for Windows display scaling: these sizes cross below the 720p readback cap.
-                for(int width:new int[]{600,680,520}) {
-                    long resizeStart=surface.get().publishedFrames();
+                var originalDimensions=new AtomicReference<String>();
+                SwingUtilities.invokeAndWait(()->{
+                    var frame=surface.get().frame(1280,720);
+                    check(frame!=null && frame.getWidth()<=1280 && frame.getHeight()<=720,"Readback exceeds the bounded native ring");
+                    originalDimensions.set(frame.getWidth()+"x"+frame.getHeight());
+                });
+                // Window resizing must redraw the paused raster without rebuilding native buffer rings.
+                for(int width:new int[]{600,680,520,1100,600,580}) {
+                    long resizeStart=surface.get().drawnFrames();
                     SwingUtilities.invokeAndWait(()->actual.setSize(width,420));
-                    await(()->surface.get().publishedFrames()>resizeStart);
+                    await(()->surface.get().drawnFrames()>resizeStart);
                     var dimensions=new AtomicReference<String>();
                     SwingUtilities.invokeAndWait(()->{
                         var transform=actual.getGraphicsConfiguration().getDefaultTransform();
                         var frame=surface.get().frame((int)(actual.getContentPane().getWidth()*transform.getScaleX()),
                                 (int)(actual.getContentPane().getHeight()*transform.getScaleY()));
-                        check(frame!=null && frame.getWidth()<1280 && frame.getHeight()<720
+                        check(frame!=null && (frame.getWidth()+"x"+frame.getHeight()).equals(originalDimensions.get())
                                 && Math.abs((double)frame.getWidth()/frame.getHeight()-16d/9)<0.015,
-                                "Resized frame dimensions/aspect ratio were stale");
+                                "Window resize rebuilt the native ring or changed the source aspect ratio");
                         dimensions.set(frame==null?"null":frame.getWidth()+"x"+frame.getHeight());
                     });
                     System.out.println("Resize "+width+": "+dimensions.get());
                 }
+                check(surface.get().publishedFrames()-paused<=1,"Window resize recaptured unchanged paused video");
                 check(failure.get()==null,"Uncaught error during resize");
             } finally {SwingUtilities.invokeAndWait(()->window.get().dispose());}
         }
