@@ -23,16 +23,7 @@ public final class PlaybackVideoSessionTest {
         while(!condition.getAsBoolean() && System.nanoTime()<end){SwingUtilities.invokeAndWait(()->{});Thread.sleep(20);}
         check(condition.getAsBoolean());
     }
-    private static final class Hooks extends HookRegistrar {
-        public HookHandle afterComposable(String owner,String name,String caller,List<String> types,int priority,ComposableHook content) {
-            return new HookHandle(){public void close(){}public void unhook(){}};
-        }
-        public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){return new HookHandle(){public void close(){}public void unhook(){}};}
-        public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){
-            return new HookHandle(){public void close(){}public void unhook(){}};
-        }
-        public <S> HookHandle appendContent(String c,String m,String i,String a,Class<S> s,List<String> p,int n,ContentHook<S> h){throw new AssertionError();}
-    }
+    private static final class Hooks extends PlaybackVideoHostFixture.RegistrationOnlyHooks { }
     public static void main(String[] args) throws Exception {
         var failure=new AtomicReference<Throwable>();Thread.setDefaultUncaughtExceptionHandler((t,e)->failure.set(e));
         Class<?> monitor=Class.forName("com.xuncorp.pisces.\u0786"),media=Class.forName("com.xuncorp.pisces.PiscesMediaItem");

@@ -37,15 +37,13 @@ import kotlinx.coroutines.delay
 class SaltVideoTransportContent(private val video: SaltVideoBindings) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
-        if (!video.isExpanded(currentComposer) || !video.view().requested())
-            video.originalTransport(call, currentComposer)
+        if (!video.isExpanded(currentComposer) || !video.view().requested()) {
+            SideEffect { video.restoreNativeTransport() }
+            video.originalConditional(call, currentComposer)
+        }
         else if (video.controlsVisible()) {
-            val state = remember(video) { video.createTransportState() }
-            SideEffect { video.activateTransport(state) }
-            val supplied = call.getArgument(1) as? Modifier ?: Modifier
             CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
-                video.transportControls(call, supplied.videoActivity(video, state)
-                    .testTag("SaltPlaybackVideoControls"), state, currentComposer)
+                video.originalConditional(call, currentComposer)
             }
         }
     }
@@ -56,13 +54,10 @@ class SaltVideoScreenContent(private val video: SaltVideoBindings) : ComposableH
     @Composable
     override fun Content(call: UiHookCall) {
         val state = video.view()
-        if (!state.requested()) video.originalScreen(call, currentComposer)
+        if (!state.requested()) video.originalConditional(call, currentComposer)
         else {
-            val supplied = call.getArgument(3) as? Modifier ?: Modifier
             val expanded = video.isExpanded(currentComposer)
-            @Suppress("UNCHECKED_CAST")
-            val opacity = call.getArgument(0) as () -> Float
-            Box(supplied.fillMaxSize().graphicsLayer { alpha = opacity() }.background(Color.Black)
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = video.screenOpacity() }.background(Color.Black)
                 .then(if (expanded) Modifier.videoActivity(video).pointerInput(video) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
@@ -92,13 +87,12 @@ class SaltVideoScreenContent(private val video: SaltVideoBindings) : ComposableH
     }
 }
 
-class SaltVideoCoverContent(private val video: SaltVideoBindings) : ComposableHook() {
+class SaltVideoScreenStateContent(private val video: SaltVideoBindings) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
-        val hide = video.isExpanded(currentComposer) && video.view().requested()
-        Box(if (hide) Modifier.graphicsLayer(alpha = 0f) else Modifier) {
-            video.originalCover(call, currentComposer)
-        }
+        @Suppress("UNCHECKED_CAST")
+        val opacity = call.getArgument(0) as () -> Float
+        SideEffect { video.screenOpacity(opacity) }
     }
 }
 
@@ -113,26 +107,25 @@ class SaltVideoFloatCoverContent(private val video: SaltVideoBindings) : Composa
 }
 
 /** Window caption buttons live outside MainTitleBar and share the video's timer. */
-class SaltVideoCaptionContent(private val video: SaltVideoBindings) : ComposableHook() {
+class SaltVideoWindowFrameContent(private val video: SaltVideoBindings) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
-        val window = LocalWindow.current
-        if (video.windowControlsVisible(window))
-            if (video.windowVideoActive(window)) CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
-                video.originalWindowControls(call, currentComposer)
-            } else video.originalWindowControls(call, currentComposer)
+        val properties = call.getArgument(2)
+        SideEffect { video.captionProperties(properties) }
+        // Keep the entire sheet and its video surface at one composition call site.
+        // Caption and transport supply their own theme without rebuilding the window.
+        video.originalWindowFrame(call, currentComposer)
     }
 }
 
 class SaltVideoWindowCaptionContent(private val video: SaltVideoBindings) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
-        val window = (call.getArgument(4) as androidx.compose.ui.window.FrameWindowScope).window
+        val window = LocalWindow.current
         if (video.windowControlsVisible(window)) {
-            if (video.windowVideoActive(window)) CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
-                video.originalCaptionGroup(call, currentComposer)
-            } else video.originalCaptionGroup(call, currentComposer)
-        } else SideEffect { video.clearCaptionHitRegions(call.arguments.toTypedArray()) }
+            if (video.windowVideoActive(window)) video.originalConditional(call, true, currentComposer)
+            else video.originalConditional(call, currentComposer)
+        }
     }
 }
 
@@ -175,15 +168,13 @@ class SaltVideoContent(private val video: SaltVideoBindings) : ComposableHook() 
     }
 }
 
-private fun Modifier.videoActivity(video: SaltVideoBindings, transport: Any? = null): Modifier = pointerInput(video, transport) {
+private fun Modifier.videoActivity(video: SaltVideoBindings): Modifier = pointerInput(video) {
     awaitPointerEventScope {
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
-            if (event.type == PointerEventType.Enter || event.type == PointerEventType.Move ||
-                event.type == PointerEventType.Press || event.type == PointerEventType.Scroll) {
+            if (event.type == PointerEventType.Enter || event.type == PointerEventType.Move) video.pointerMoved()
+            else if (event.type == PointerEventType.Press || event.type == PointerEventType.Scroll) {
                 video.pointerActivity()
-                awaitPointerEvent(PointerEventPass.Final)
-                if (transport != null) video.activateTransport(transport)
             }
         }
     }

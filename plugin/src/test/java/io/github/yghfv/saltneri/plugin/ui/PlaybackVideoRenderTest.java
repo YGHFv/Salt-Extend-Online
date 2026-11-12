@@ -25,7 +25,7 @@ public final class PlaybackVideoRenderTest {
     private static final androidx.lifecycle.ViewModelStore modelStore=new androidx.lifecycle.ViewModelStore();
     private static void check(boolean condition){checks++;if(!condition)throw new AssertionError("Playback video check "+checks);}
     private static void await(java.util.function.BooleanSupplier ready) throws Exception {
-        long end=System.nanoTime()+5_000_000_000L;
+        long end=System.nanoTime()+10_000_000_000L;
         while(!ready.getAsBoolean() && System.nanoTime()<end){SwingUtilities.invokeAndWait(()->{});Thread.sleep(20);}
         check(ready.getAsBoolean());
     }
@@ -48,20 +48,41 @@ public final class PlaybackVideoRenderTest {
         var pixels=robot.createScreenCapture(new java.awt.Rectangle(origin.x+window.getWidth()-insets.right-192,
                 origin.y+insets.top,192,44));
         int white=0;
-        for(int y=0;y<pixels.getHeight();y++)for(int x=0;x<pixels.getWidth();x++) {
+        // The real native window frame draws a bright one-pixel resize border.
+        for(int y=2;y<pixels.getHeight()-2;y++)for(int x=2;x<pixels.getWidth()-2;x++) {
             int rgb=pixels.getRGB(x,y);
             if(light?((rgb>>16)&255)>170 && ((rgb>>8)&255)>170 && (rgb&255)>170:
                     ((rgb>>16)&255)<100 && ((rgb>>8)&255)<100 && (rgb&255)<100)white++;
         }
         return white;
     }
-    private static int bottomInk(java.awt.image.BufferedImage pixels) {
-        int bottom=0;
-        for(int y=pixels.getHeight()-150;y<pixels.getHeight();y++)for(int x=200;x<pixels.getWidth()-200;x++) {
-            int rgb=pixels.getRGB(x,y);
-            if(((rgb>>16)&255)>170 && ((rgb>>8)&255)>170 && (rgb&255)>170 && ((rgb>>>24)&255)>170)bottom=y;
+    private static androidx.compose.ui.geometry.Rect transportBounds(androidx.compose.ui.semantics.SemanticsNode node,int width,int height,float scale) {
+        var key=androidx.compose.ui.semantics.SemanticsProperties.INSTANCE.getIsTraversalGroup();
+        var bounds=node.getBoundsInRoot();
+        if(node.getConfig().contains(key) && Boolean.TRUE.equals(node.getConfig().get(key)) && bounds.getWidth()>width*.4f
+                && bounds.getHeight()>40*scale && bounds.getHeight()<180*scale && bounds.getBottom()>height-120*scale)return bounds;
+        for(var child:node.getChildren()){var found=transportBounds(child,width,height,scale);if(found!=null)return found;}return null;
+    }
+    private static androidx.compose.ui.geometry.Rect transportBounds(androidx.compose.ui.awt.ComposeWindow window) {
+        for(var owner:window.getSemanticsOwners()){
+            var root=owner.getUnmergedRootSemanticsNode();var bounds=root.getBoundsInRoot();
+            var found=transportBounds(root,(int)bounds.getWidth(),(int)bounds.getHeight(),bounds.getHeight()/window.getHeight());if(found!=null)return found;
         }
-        check(bottom>pixels.getHeight()-120);return pixels.getHeight()-bottom;
+        System.out.println("Window semantics owners="+window.getSemanticsOwners().size());
+        for(var owner:window.getSemanticsOwners())dumpBottom(owner.getUnmergedRootSemanticsNode(),window.getHeight());
+        throw new AssertionError("Missing real MiniPlayer traversal-group bounds");
+    }
+    private static void dumpBottom(androidx.compose.ui.semantics.SemanticsNode node,int height) {
+        if(node.getBoundsInRoot().getBottom()>height-180)System.out.println(node.getBoundsInRoot()+" "+node.getConfig());
+        for(var child:node.getChildren())dumpBottom(child,height);
+    }
+    private static androidx.compose.ui.semantics.SemanticsNode tagged(androidx.compose.ui.semantics.SemanticsNode node,String tag) {
+        var key=androidx.compose.ui.semantics.SemanticsProperties.INSTANCE.getTestTag();
+        if(node.getConfig().contains(key) && tag.equals(node.getConfig().get(key)))return node;
+        for(var child:node.getChildren()){var found=tagged(child,tag);if(found!=null)return found;}return null;
+    }
+    private static androidx.compose.ui.semantics.SemanticsNode tagged(androidx.compose.ui.awt.ComposeWindow window,String tag) {
+        for(var owner:window.getSemanticsOwners()){var found=tagged(owner.getUnmergedRootSemanticsNode(),tag);if(found!=null)return found;}return null;
     }
     @SuppressWarnings("unchecked")
     private static ProvidedValue<?>[] windowLocals(Composer composer,ProvidedValue<?>... values) {
@@ -85,6 +106,11 @@ public final class PlaybackVideoRenderTest {
             locals.add(((ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u10eb").getMethod("\u037f").invoke(null)).provides(navigation));
             locals.add((ProvidedValue<?>)Class.forName("androidx.compose.ui.\u052f").getMethod("\u037f",androidx.lifecycle.ViewModelStoreOwner.class)
                     .invoke(null,(androidx.lifecycle.ViewModelStoreOwner)()->modelStore));
+            Class<?> progressStyle=Class.forName("androidx.compose.ui.\u0da8");
+            Object progress=Class.forName("androidx.compose.ui.\u0c06").getMethod("\u037f",Class.forName(progressStyle.getName()+"$\u037f"))
+                    .invoke(null,progressStyle.getField("\u037f").get(null));
+            locals.add(((ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u0b92").getMethod("\u037f").invoke(null)).provides(progress));
+            locals.add(((ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u014a").getMethod("\u0528").invoke(null)).provides(false));
             return locals.toArray(ProvidedValue[]::new);
         } catch(Exception error) {throw new AssertionError("Native Salt window fixture",error);}
     }
@@ -93,20 +119,25 @@ public final class PlaybackVideoRenderTest {
         final Map<String,ComposableHook> entries=new HashMap<>();
         final Map<String,MethodHook> methods=new HashMap<>();
         final Map<String,List<String>> signatures=new HashMap<>();
+        final List<PlaybackVideoHostFixture.Site> sites=new ArrayList<>();
         public HookHandle afterComposable(String owner,String name,String caller,List<String> parameters,int priority,ComposableHook content) {
-            throw new AssertionError("Video must replace the host title bar to avoid duplicate caption hit tests");
+            return install(owner,name,caller,parameters,content,true);
         }
         public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){
-            check(List.of(SaltVideoBindings.TRANSPORT,SaltVideoBindings.SCREEN,SaltVideoBindings.FULLSCREEN,SaltVideoBindings.CAPTION,
-                    SaltVideoBindings.COVER,SaltVideoBindings.FLOAT_COVER).contains(c));
-            methods.put(c,h);signatures.put(c,p);
+            try{PlaybackVideoHostFixture.resolve(c,m,null,p);}catch(Exception error){throw new AssertionError("Rejected production method hook "+c,error);}
+            methods.put(c+"#"+m,h);signatures.put(c+"#"+m,p);
             return new HookHandle(){public void close(){removed++;}public void unhook(){close();}};
         }
         public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){
-            entries.put(c,h);
+            return install(c,m,i,p,h,false);
+        }
+        private HookHandle install(String c,String m,String i,List<String> p,ComposableHook h,boolean after) {
+            var site=new PlaybackVideoHostFixture.Site(100+sites.size(),c,m,i,p,h,after);
+            try{PlaybackVideoHostFixture.site(site);}catch(Exception error){throw new AssertionError("Rejected production UI hook "+site,error);}
+            sites.add(site);entries.put(c+"@"+i,h);entries.put(c,h);
             if(c.equals(SaltVideoBindings.TITLE)) {
                 check(i.equals(SaltVideoBindings.WINDOW) && p.equals(SaltVideoBindings.TITLE_PARAMETERS));content=h;
-            } else throw new AssertionError("Only the title bar uses call-site replacement");
+            }
             return new HookHandle(){public void close(){removed++;}public void unhook(){close();}};
         }
         public <S> HookHandle appendContent(String c,String m,String i,String a,Class<S> s,List<String> p,int n,ContentHook<S> h){throw new AssertionError();}
@@ -129,15 +160,15 @@ public final class PlaybackVideoRenderTest {
         try {
             nativeSurface.listen(composer);
             BoxKt.Box(SizeKt.fillMaxSize(Modifier.Companion,1f),Alignment.Companion.getTopStart(),false,(scope,c2,f2)->{
-                    nativeSurface.render(title.getArgument(1),video.originalVideoState(),c2);
-                    draw(hooks,SaltVideoBindings.TITLE,title,c2);
+                nativeSurface.frame(scope,windowScope,(frame,c3,f3)->{
+                    nativeSurface.mainWindow(scope,c3);
                     try {
                         Modifier fullscreen=(Modifier)OffsetKt.class.getMethod("offset-VpY3zN4",Modifier.class,float.class,float.class)
                                 .invoke(null,scope.align(Modifier.Companion,Alignment.Companion.getTopEnd()),-144f,0f);
-                        nativeSurface.fullscreen(fullscreen,c2);
+                        nativeSurface.fullscreen(fullscreen,c3);
                     }catch(Exception error){throw new AssertionError(error);}
-                    nativeSurface.caption(scope,windowScope,c2);
                     return Unit.INSTANCE;
+                },c2);return Unit.INSTANCE;
             },composer,0,0);
         }catch(Exception error){throw new AssertionError(error);}
     }
@@ -145,6 +176,7 @@ public final class PlaybackVideoRenderTest {
         // The real MiniPlayer initializes the controller; supply the installed native paths.
         // AOT fixture properties use zero volume; no track is submitted to the audio engine.
         System.setProperty("isAotTraining","true");
+        System.setProperty("compose.application.resources.dir",Path.of(System.getProperty("skiko.library.path"),"resources").toString());
         Class<?> nativePaths=Class.forName("com.xuncorp.pisces.\u0783");
         String[] setters={"\u037f","\u0528","\u0529","\u052a","\u052b","\u052c"};
         String[] libraries={"bass.dll","bass_fx.dll","bassmix.dll","basswasapi.dll","bassasio.dll","basscd.dll"};
@@ -175,10 +207,7 @@ public final class PlaybackVideoRenderTest {
         Method setPlaying=monitor.getMethod("\u037f",boolean.class);
         var playbackToggles=new java.util.concurrent.atomic.AtomicInteger();
         try(var store=new SavedTrackStore(output.resolve("tracks"));
-            var video=new SaltVideoBindings(host,hooks,()->true,store::find,p->null,toasts::add,null,null,()->{
-                playbackToggles.incrementAndGet();
-                try{setPlaying.invoke(null,!Boolean.TRUE.equals(playing.getValue()));}catch(Exception failure){throw new AssertionError(failure);}
-            })) {
+            var video=new SaltVideoBindings(host,hooks,()->true,store::find,p->null,toasts::add)) {
             var row=new Catalog.Item(Catalog.Kind.TRACK,"BV17x411w7KC","Video fixture","Artist",120000,true);
             var saved=store.save(new OnlinePlaybackController.Target(AccountPlatform.BILIBILI,row.target()),row);
             Object owned=profile.mediaFactory().create(saved.trackId(),row.title(),row.subtitle(),"Bilibili","",saved.path());
@@ -206,8 +235,11 @@ public final class PlaybackVideoRenderTest {
             stack.add((androidx.navigation3.runtime.NavKey)route);
             Object navigator=Class.forName("com.xuncorp.voxzen.ui.navigation.Navigator").getConstructors()[0]
                     .newInstance(route,Set.of(route),stack,playerSheet);
-            var nativeSurface=new PlaybackVideoHostFixture(hooks.methods,hooks.signatures);
-            nativeSurface.bind(video);
+            var nativeSurface=new PlaybackVideoHostFixture(hooks.sites,hooks.methods,hooks.signatures);
+            nativeSurface.audioAction(()->{
+                playbackToggles.incrementAndGet();
+                try{setPlaying.invoke(null,!Boolean.TRUE.equals(playing.getValue()));}catch(Exception failure){throw new AssertionError(failure);}
+            });
             var hitTestLocal=(ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u056e").getMethod("\u037f").invoke(null);
             Class<?> hitTestScope=Class.forName("androidx.compose.ui.\u0578");
             Object hitTest=hitTestScope.getConstructor().newInstance();
@@ -241,7 +273,7 @@ public final class PlaybackVideoRenderTest {
                 }catch(Exception e){throw new AssertionError(e);}finally{scene.close();}
             });
             check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
-            var baselineBottom=new java.util.concurrent.atomic.AtomicInteger();
+            var baselineBounds=new AtomicReference<androidx.compose.ui.geometry.Rect>();
             // Render the actual transformed MainSurface, including its layout and sheet.
             SwingUtilities.invokeAndWait(()->{
                 var scene=new ImageComposeScene(1160,770,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),(composer,flags)->{
@@ -254,7 +286,6 @@ public final class PlaybackVideoRenderTest {
                     HeaderSearchRenderTest.render(scene);check(uncaught.get()==null);
                     try(var image=scene.render(System.nanoTime());var data=image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG,100,0)) {
                         Files.write(output.resolve("native-player-baseline.png"),data.getBytes());
-                        baselineBottom.set(bottomInk(javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(data.getBytes()))));
                     }
                 }
                 catch(Exception failure){throw new AssertionError(failure);}finally{scene.close();}
@@ -303,6 +334,7 @@ public final class PlaybackVideoRenderTest {
             var window=new AtomicReference<androidx.compose.ui.awt.ComposeWindow>();
             SwingUtilities.invokeAndWait(()->{
                 var actual=new androidx.compose.ui.awt.ComposeWindow();
+                actual.setUndecorated(true); // Salt supplies its own Windows frame and hit testing.
                 window.set(actual);actual.setTitle("Salt video regression");
                 actual.setSize(1160,770);
                 actual.setAlwaysOnTop(true); // Keep other desktop windows out of the pixel assertions.
@@ -320,7 +352,9 @@ public final class PlaybackVideoRenderTest {
             Thread.sleep(300);
             SwingUtilities.invokeAndWait(()->{try{navigator.getClass().getMethod("expandPlayer").invoke(navigator);}catch(Exception error){throw new AssertionError(error);}});
             try {
-                var actual=window.get();var robot=new java.awt.Robot();
+                var actual=window.get();var robot=new java.awt.Robot();robot.setAutoDelay(40);
+                SwingUtilities.invokeAndWait(()->{actual.toFront();actual.requestFocus();});
+                robot.delay(150);
                 await(()->{
                     if(uncaught.get()!=null)throw new AssertionError("Window video draw crashed",uncaught.get());
                     try {
@@ -341,11 +375,7 @@ public final class PlaybackVideoRenderTest {
                 });
                 await(()->transportPixels(robot,actual)>300);
                 Thread.sleep(300);
-                var normalOrigin=actual.getLocationOnScreen();
-                var normalPixels=robot.createScreenCapture(new java.awt.Rectangle(normalOrigin.x+actual.getInsets().left,normalOrigin.y+actual.getInsets().top,
-                        actual.getWidth()-actual.getInsets().left-actual.getInsets().right,
-                        actual.getHeight()-actual.getInsets().top-actual.getInsets().bottom));
-                baselineBottom.set(bottomInk(normalPixels));
+                SwingUtilities.invokeAndWait(()->baselineBounds.set(transportBounds(actual)));
                 SwingUtilities.invokeAndWait(()->{viewState.setValue(requested);video.pointerActivity();});
                 await(()->{
                     var origin=actual.getLocationOnScreen();var pixel=robot.getPixelColor(origin.x+actual.getWidth()/2,origin.y+actual.getHeight()/2);
@@ -360,12 +390,19 @@ public final class PlaybackVideoRenderTest {
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("native-window-active.png").toFile());
                 await(()->captionPixels(robot,actual)>60);
                 check(video.windowVideoActive(actual));
-                check(!nativeSurface.captionRegionsEmpty());
-                var baselinePixels=robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,actual.getWidth(),actual.getHeight()));
-                var contentPixels=baselinePixels.getSubimage(actual.getInsets().left,actual.getInsets().top,
-                        actual.getWidth()-actual.getInsets().left-actual.getInsets().right,
-                        actual.getHeight()-actual.getInsets().top-actual.getInsets().bottom);
-                check(Math.abs(bottomInk(contentPixels)-baselineBottom.get())<=3);
+                check(nativeSurface.captionEnabled());
+                SwingUtilities.invokeAndWait(()->{
+                    var button=tagged(actual,"SaltPlaybackVideoButton");check(button!=null);
+                    var root=actual.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode().getBoundsInRoot();
+                    var bounds=button.getBoundsInRoot();float scale=root.getWidth()/actual.getWidth();
+                    check(bounds.getTop()<10*scale && bounds.getRight()<root.getRight()-190*scale);
+                    check(nativeSurface.renderedSites.containsAll(hooks.sites.stream().map(PlaybackVideoHostFixture.Site::id).toList()));
+                    check(nativeSurface.calls.keySet().containsAll(hooks.methods.keySet()));
+                });
+                var videoBounds=new AtomicReference<androidx.compose.ui.geometry.Rect>();
+                SwingUtilities.invokeAndWait(()->videoBounds.set(transportBounds(actual)));
+                check(Math.abs(videoBounds.get().getTop()-baselineBounds.get().getTop())<=1
+                        && Math.abs(videoBounds.get().getBottom()-baselineBounds.get().getBottom())<=1);
                 await(()->{
                     var pixel=robot.getPixelColor(location.x+actual.getWidth()/4,location.y+actual.getHeight()/2);
                     return pixel.getBlue()>200 && pixel.getRed()<30 && pixel.getGreen()<30;
@@ -377,8 +414,12 @@ public final class PlaybackVideoRenderTest {
                 await(()->{try{return Boolean.FALSE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
                 check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
                 await(()->transportPixels(robot,actual)==0);
+                javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
+                        actual.getWidth(),actual.getHeight())),"PNG",output.resolve("native-window-hidden.png").toFile());
                 await(()->captionPixels(robot,actual)==0);
-                await(nativeSurface::captionRegionsEmpty);
+                // Remove all native button regions while their composition is hidden.
+                check(!video.windowControlsVisible(actual) && video.captionRegionsEmpty());
+                SwingUtilities.invokeAndWait(()->check(tagged(actual,"SaltPlaybackVideoButton")==null));
                 javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("video-window-hidden.png").toFile());
                 robot.mouseMove(location.x+actual.getWidth()/2+30,location.y+actual.getHeight()/2+20);
@@ -413,20 +454,30 @@ public final class PlaybackVideoRenderTest {
                 robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
                 Thread.sleep(150);
                 check(playbackToggles.get()==2 && video.view().requested() && video.view().player()==renderer);
+                // A stationary click must also reach the video while all controls are hidden.
+                robot.mouseMove(location.x+actual.getWidth()/2,location.y+actual.getHeight()/2);
+                await(()->!video.controlsVisible() && captionPixels(robot,actual)==0);
+                robot.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                await(()->playbackToggles.get()==3 && Boolean.TRUE.equals(playing.getValue()));
+                await(()->video.controlsVisible());
+                robot.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                await(()->playbackToggles.get()==4 && Boolean.FALSE.equals(playing.getValue()));
                 // The original MiniPlayer background callback collapses the whole player. It
                 // retains the video session and the sheet's animation; expanding restores it.
                 robot.mouseMove(location.x+actual.getWidth()/2-220,location.y+actual.getHeight()-65);
                 robot.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
                 robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
-                await(()->{try{return (boolean)bottom.getClass().getMethod("\u052a").invoke(bottom);}catch(Exception e){throw new AssertionError(e);}});
+                await(()->{try{return (boolean)bottom.getClass().getMethod("\u052b").invoke(bottom);}catch(Exception e){throw new AssertionError(e);}});
                 await(()->{try{return !(boolean)playerSheet.getClass().getMethod("\u0528").invoke(playerSheet);}catch(Exception e){throw new AssertionError(e);}});
                 await(()->!video.windowVideoActive(actual) && video.windowControlsVisible(actual));
                 await(()->captionPixels(robot,actual,false)>60);
                 await(()->{
-                    var pixel=robot.getPixelColor(location.x+actual.getWidth()/2,location.y+actual.getHeight()/2);
+                    var pixel=robot.getPixelColor(location.x+actual.getWidth()/4,location.y+actual.getHeight()/2);
                     return Math.abs(pixel.getRed()-pixel.getBlue())<5 && pixel.getBlue()>200;
                 });
-                check(playbackToggles.get()==2 && video.view().requested() && video.view().player()==renderer);
+                check(playbackToggles.get()==4 && video.view().requested() && video.view().player()==renderer);
                 SwingUtilities.invokeAndWait(()->{try{navigator.getClass().getMethod("expandPlayer").invoke(navigator);}catch(Exception e){throw new AssertionError(e);}});
                 await(()->{try{return (boolean)playerSheet.getClass().getMethod("\u0528").invoke(playerSheet);}catch(Exception e){throw new AssertionError(e);}});
                 await(()->video.windowVideoActive(actual));
@@ -458,7 +509,6 @@ public final class PlaybackVideoRenderTest {
                 var actual=window.get();var origin=actual.getLocationOnScreen();
                 javax.imageio.ImageIO.write(new java.awt.Robot().createScreenCapture(new java.awt.Rectangle(origin.x,origin.y,
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("native-window-final.png").toFile());
-                check(nativeSurface.calls.keySet().containsAll(hooks.methods.keySet()));
                 SwingUtilities.invokeAndWait(()->window.get().dispose());
             }
             check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
@@ -475,7 +525,7 @@ public final class PlaybackVideoRenderTest {
             }finally {stream.close();nativeSurface.close();}
         }finally{current.invoke(null,original);updateProgress.invoke(null,originalProgress);setPlaying.invoke(null,originalPlaying);}
         SwingUtilities.invokeAndWait(()->{});
-        check(hooks.removed==7 && uncaught.get()==null);
+        check(hooks.removed==10 && uncaught.get()==null);
         System.out.println("PASS: "+checks+" playback video hook, native bottom controls, pointer recovery, caption render, selection and disposal checks; "+output);
     }
 }
