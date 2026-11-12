@@ -29,7 +29,7 @@ public final class NavigationUiRenderTest {
         public boolean reload() {return true;}
         public Path getConfigPath() {return Path.of("fixture-only.json");}
     }
-    private static Object navigator() throws Exception {
+    static Object navigator() throws Exception {
         Constructor<?> wrapper=Class.forName("com.xuncorp.voxzen.ui.component.PlayerSheetState").getConstructors()[0];
         Constructor<?> state=wrapper.getParameterTypes()[0].getConstructors()[0];
         Object sheet=wrapper.newInstance(state.newInstance(state.getParameterTypes()[0].getEnumConstants()[0],DensityKt.Density(1f,1f),
@@ -53,18 +53,56 @@ public final class NavigationUiRenderTest {
         }
     }
     static void choiceClick(ImageComposeScene scene,String label) throws Exception {
+        var selected=choiceNode(scene,label);
+        check(selected!=null);check(Boolean.TRUE.equals(selected.getConfig().get(SemanticsActions.INSTANCE.getOnClick()).getAction().invoke()));render(scene);
+    }
+    private static SemanticsNode choiceNode(ImageComposeScene scene,String label) {
         var text=SemanticsProperties.INSTANCE.getText();var click=SemanticsActions.INSTANCE.getOnClick();
         SemanticsNode selected=null;
         for(var owner:scene.getSemanticsOwners()) {
             var queue=new ArrayDeque<SemanticsNode>();queue.add(owner.getRootSemanticsNode());
             while(!queue.isEmpty()) {
                 var node=queue.removeFirst();var config=node.getConfig();
-                if(config.contains(text) && config.get(text).stream().anyMatch(t->t.getText().equals(label)) && config.contains(click)){selected=node;break;}
+                boolean popup=false;
+                for(var ancestor=node;ancestor!=null;ancestor=ancestor.getParent())
+                    if(ancestor.getConfig().contains(SemanticsProperties.INSTANCE.getIsPopup())){popup=true;break;}
+                if(popup && config.contains(text) && config.get(text).stream().anyMatch(t->t.getText().equals(label)) && config.contains(click)){selected=node;break;}
                 queue.addAll(node.getChildren());
             }
             if(selected!=null)break;
         }
-        check(selected!=null);check(Boolean.TRUE.equals(selected.getConfig().get(click).getAction().invoke()));render(scene);
+        return selected;
+    }
+    private static void anchoredChoice(ImageComposeScene scene,String title) throws Exception {
+        var row=find(scene,title,SemanticsActions.INSTANCE.getOnClick()).getBoundsInWindow();
+        click(scene,title);
+        var option=choiceNode(scene,"直连（绕过代理）");
+        check(option!=null);
+        var menu=option.getBoundsInWindow();
+        if(Math.abs(menu.getRight()-row.getRight())>20 || menu.getTop()<row.getBottom()-2
+                || menu.getTop()>row.getBottom()+20)
+            throw new AssertionError("Choice menu does not follow "+title+": row="+row+", popup="+menu);
+        checks++;
+        pixels(scene,"proxy-menu-"+title);
+    }
+    private static void popupPlacement() throws Exception {
+        Object provider=Class.forName("io.github.yghfv.saltneri.plugin.ui.SettingPopupPositionProvider").getConstructor().newInstance();
+        Method position=Arrays.stream(provider.getClass().getMethods()).filter(m->m.getName().startsWith("calculatePosition-")).findFirst().orElseThrow();
+        // Normal row, bottom row, narrow window, offscreen anchor and oversized menu.
+        int[][] fixtures={{16,104,884,165,900,1100,200,80,684,165},
+                {16,940,884,1001,900,1100,200,180,684,760},
+                {16,104,204,165,220,500,200,80,4,165},
+                {-100,-80,120,-20,300,400,200,80,0,0},
+                {16,100,200,160,220,200,400,300,0,0}};
+        for(float density:new float[]{1f,1.5f,2f})for(var sample:fixtures) {
+            int[] p=Arrays.stream(sample).map(v->Math.round(v*density)).toArray();
+            Object bounds=new IntRect(p[0],p[1],p[2],p[3]);
+            long window=IntSizeKt.IntSize(p[4],p[5]),menu=IntSizeKt.IntSize(p[6],p[7]);
+            check(position.invoke(provider,bounds,window,LayoutDirection.Ltr,menu)
+                    .equals(IntOffsetKt.IntOffset(p[8],p[9])));
+        }
+        check(position.invoke(provider,new IntRect(16,104,884,165),IntSizeKt.IntSize(900,1100),
+                LayoutDirection.Rtl,IntSizeKt.IntSize(200,80)).equals(IntOffsetKt.IntOffset(16,165)));
     }
     @SuppressWarnings("unchecked")
     private static void secondaryPages(SaltNativeUi ui,Object nav,List<Object> stack,Function3<Object,Composer,Integer,Object> cached,
@@ -76,7 +114,7 @@ public final class NavigationUiRenderTest {
                 ((ProvidableCompositionLocal<Object>)blur.getMethod("\u037f").invoke(null)).provides(haze),
                 ((ProvidableCompositionLocal<Object>)blur.getMethod("\u0528").invoke(null)).provides(haze)};
         var changes=new AtomicInteger();ui.settingsChanged(c->changes.incrementAndGet());
-        for(var page:List.of(SettingsCatalog.Page.AUTO_SOURCE,SettingsCatalog.Page.QUALITY,SettingsCatalog.Page.HOME)) {
+        for(var page:List.of(SettingsCatalog.Page.AUTO_SOURCE,SettingsCatalog.Page.QUALITY,SettingsCatalog.Page.HOME,SettingsCatalog.Page.PROXY)) {
             ui.openConfiguration(page);SwingUtilities.invokeAndWait(()->{});
             check(ui.settingsPageKind(stack.getLast())==page);
             SwingUtilities.invokeAndWait(()->{
@@ -94,6 +132,20 @@ public final class NavigationUiRenderTest {
                         check(!config.values.containsKey("bili.autoSourceSwitch"));
                         var setting=ui.settingsItems(page).getFirst();config.fail=true;int changed=changes.get();
                         click(scene,setting.title());check(config.get(setting.key(),false) && changes.get()==changed);config.fail=false;
+                    } else if(page==SettingsCatalog.Page.PROXY) {
+                        var sources=ui.settingsItems(page).stream().filter(s->s.type().equals("list")).toList();
+                        check(sources.size()==5);
+                        for(var setting:sources) {
+                            check(ui.settingValue(setting).equals("direct"));
+                            check(find(scene,setting.title(),SemanticsActions.INSTANCE.getOnClick())!=null);
+                        }
+                        for(var setting:sources) {
+                            anchoredChoice(scene,setting.title());choiceClick(scene,"使用系统代理");
+                            check(config.get(setting.key(),"").equals("system"));
+                            for(var other:sources)if(other!=setting)check(ui.settingValue(other).equals("direct"));
+                            anchoredChoice(scene,setting.title());choiceClick(scene,"直连（绕过代理）");
+                            check(config.get(setting.key(),"").equals("direct"));
+                        }
                     } else {
                         var setting=ui.settingsItems(page).getFirst();click(scene,setting.title());
                         var label=page==SettingsCatalog.Page.QUALITY?"Hi-Res":"酷狗音乐";
@@ -110,7 +162,7 @@ public final class NavigationUiRenderTest {
                 finally {scene.close();}
             });
         }
-        check(changes.get()==6);
+        check(changes.get()==16);
         ui.homePlaylistChoices(List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("91","Fixture local playlist",new Object())));
         var home=ui.settingsItems(SettingsCatalog.Page.HOME).getFirst();
         check(home.entries().contains("歌单 · Fixture local playlist") && home.values().contains("playlist:91"));
@@ -202,6 +254,7 @@ public final class NavigationUiRenderTest {
     }
     @SuppressWarnings("unchecked")
     public static void main(String[] args) throws Exception {
+        popupPlacement();
         var config=new Config();var preferences=new NavigationPreferences(config);
         var manager=(ConfigManager)Proxy.newProxyInstance(ConfigManager.class.getClassLoader(),new Class<?>[]{ConfigManager.class},(p,m,a)->{
             if(m.getName().equals("getConfig"))return config;

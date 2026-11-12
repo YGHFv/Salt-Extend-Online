@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**0.9.4 · 开发预览** · Windows / Steam Salt 1.19.3
+**0.9.6 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -50,11 +50,12 @@
 | QQ 个性化推荐 | 发现页增加每日推荐和猜你喜欢，登录后读取账号专属歌曲 |
 | Apple Music 播放 | MusicKit 浏览器解码并将 PCM 交给 Salt 原生播放器，支持队列、音量、跳转和歌单；需要有效订阅 |
 | 原生播放与歌单 | 双击播放、整单播放、插播、添加到 Salt 歌单，在线队列与歌单支持重启恢复 |
-| 播放页视频 | B站曲目及带 MV 的网易云／QQ 歌曲，在播放页右上角全屏按钮左侧显示视频按钮，点击在页内播放，再次点击返回封面和歌词 |
+| 播放页视频 | B站曲目及带 MV 的网易云／QQ 歌曲支持整页视频；原生控件叠加在画面上，指针静止 3 秒隐藏，移动恢复；下一首有视频时自动续播 |
 | 逐字歌词 | 网易云 YRC、QQ 音乐 QRC、酷狗音乐 KRC，兼容普通 LRC 与翻译，显示在 Salt 原生歌词页 |
 | 列表与封面 | 卡片／单列／双列切换，合集搜索、排序、分页，列表及播放封面加载 |
 | 音质与缓存 | B站 6 档、网易云 8 档、QQ 音乐 10 档、酷狗音乐 3 档音质偏好，按实际队列预缓存后三首 |
-| 界面设置 | 侧栏管理、自动换源、音质、默认栏目分别进入二级页面，跟随 Salt 主题 |
+| 界面设置 | 侧栏管理、自动换源、音质、代理设置、默认栏目分别进入二级页面，跟随 Salt 主题 |
+| 逐源代理 | 五个平台默认直连（绕过代理），可分别切换为使用系统 HTTP／SOCKS 代理；新请求生效 |
 | 平台收藏与订阅 | 歌曲右键收藏到当前平台歌单，已有歌曲置灰；歌单右键订阅或播放全部 |
 | 自动换源 | 网易云、QQ 音乐、酷狗音乐、Apple Music 可独立启用 Bilibili 备用音源，保留原歌曲信息和歌词 |
 | 连续播放缓冲 | 播放读取按分段协调，慢速预加载不再锁住整首歌曲；Apple Music 连续内存缓冲并预热原生解码探测后的分段 |
@@ -76,7 +77,7 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 
 ## 版本与兼容
 
-当前版本 **0.9.4** 修复视频取帧的额外等待、重复读取和音频同步的频繁精确跳转，详见 [视频流畅度修复](docs/VIDEO_PACING_0.9.4.md)。0.9.3 的 Direct3D 崩溃修复与播放图标见 [视频渲染修复](docs/VIDEO_RENDER_0.9.3.md)。0.9.2 播放页内 B站视频和网易云／QQ MV 见 [播放页视频](docs/PLAYBACK_VIDEO_0.9.2.md)。0.9.1 配置、收藏与订阅操作见 [配置与歌单更新](docs/SETTINGS_PLAYLISTS_0.9.1.md)。0.9.0 修复酷狗音乐音频 CDN 的 TLS 失败并验证实际原生解码，详见 [酷狗音乐播放修复](docs/KUGOU_PLAYBACK_0.9.0.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。历史修复见 [更新记录](docs/HISTORY.md)。
+当前版本 **0.9.6** 修复设置选择菜单偏离点击行、视频模式重复注册标题栏导致的崩溃，以及底部播放控件隐藏后无法被鼠标唤出，详见 [菜单定位与视频崩溃修复](docs/MENU_VIDEO_FIX_0.9.6.md)。逐源代理、整页视频、控件自动隐藏和切歌续播见 [0.9.5 功能说明](docs/PROXY_VIDEO_0.9.5.md)。视频流畅度见 [0.9.4 修复记录](docs/VIDEO_PACING_0.9.4.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。其他历史修复见 [更新记录](docs/HISTORY.md)。
 
 实际回归基线为 **Windows / Steam Salt 1.19.3**。模组使用官方插件接口及部分原生 UI／播放内部绑定，按所需接口结构检查兼容性；未来宿主更新可能影响部分功能。
 

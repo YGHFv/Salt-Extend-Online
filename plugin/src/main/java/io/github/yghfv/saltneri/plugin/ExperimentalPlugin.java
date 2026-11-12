@@ -54,6 +54,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
     private io.github.yghfv.saltneri.plugin.ui.NavigationPreferences navigationPreferences;
     private void applySettings(ConfigHelper config) {
+        io.github.yghfv.saltneri.plugin.net.SourceProxySettings.configure(key->config.get(key,"direct"));
         PlaybackSettings previous=settings;
         var parsed=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
         settings=new PlaybackSettings(parsed.bili(),parsed.netease(),parsed.cacheBytes(),parsed.coverMode(),config.get("netease.autoSourceSwitch",false),
@@ -263,6 +264,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
     public static void openAutoSourceSettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.AUTO_SOURCE);}
     public static void openQualitySettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.QUALITY);}
+    public static void openProxySettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.PROXY);}
     public static void openHomeSettings() {openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page.HOME);}
     private static void openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page page) {
         ExperimentalPlugin plugin=active;
@@ -351,6 +353,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        io.github.yghfv.saltneri.plugin.net.SourceProxySettings.reset();
         if(playbackVideo!=null){playbackVideo.close();playbackVideo=null;}
         if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
         if(savedRestore!=null) {savedRestore.shutdownNow();savedRestore=null;}

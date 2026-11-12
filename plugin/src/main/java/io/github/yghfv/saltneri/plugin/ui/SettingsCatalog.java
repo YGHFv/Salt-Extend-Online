@@ -8,7 +8,7 @@ import java.util.*;
 public final class SettingsCatalog {
     public enum Page {
         SIDEBAR("sidebar","侧栏管理"), AUTO_SOURCE("auto-source","自动换源"),
-        QUALITY("quality","音质"), HOME("home","默认栏目");
+        QUALITY("quality","音质"), HOME("home","默认栏目"), PROXY("proxy","代理设置");
         private final String id,title;
         Page(String id,String title){this.id=id;this.title=title;}
         public String id(){return id;} public String title(){return title;}

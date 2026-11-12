@@ -54,6 +54,11 @@ val contractMatrix = groovy.json.JsonSlurper().parse(rootProject.file("scripts/c
         mainClass.set(testClass)
         val tempFiles = layout.buildDirectory.dir("contract-tmp/$taskName")
         doFirst { tempFiles.get().asFile.mkdirs() }
+        val hostProfile = tempFiles.get().asFile.resolve("host-profile")
+        doFirst { hostProfile.mkdirs() }
+        environment("APPDATA", hostProfile.absolutePath)
+        environment("LOCALAPPDATA", hostProfile.absolutePath)
+        jvmArgs("-Duser.home=" + hostProfile.absolutePath)
         jvmArgs("-Dfile.encoding=UTF-8", "-Djava.io.tmpdir=" + tempFiles.get().asFile.absolutePath)
         if (entry["baseOnly"] == true) jvmArgs("--limit-modules=java.base")
         else {

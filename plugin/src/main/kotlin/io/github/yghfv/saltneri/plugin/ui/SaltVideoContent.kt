@@ -1,4 +1,5 @@
 @file:OptIn(androidx.compose.runtime.InternalComposeApi::class,
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
     com.xuncorp.spw.workshop.api.UnstableSpwWorkshopApi::class)
 
 package io.github.yghfv.saltneri.plugin.ui
@@ -16,32 +17,86 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.skiaCanvas
 import androidx.compose.ui.window.LocalWindow
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.xuncorp.spw.workshop.api.hook.ComposableHook
 import com.xuncorp.spw.workshop.api.hook.UiHookCall
+import kotlinx.coroutines.delay
 
-/** App-level overlay leaves the title bar and Salt transport controls reachable. */
+/** Keep exactly one native transport active when the video overlay owns its position. */
+class SaltVideoTransportContent(private val video: SaltVideoBindings) : ComposableHook() {
+    @Composable
+    override fun Content(call: UiHookCall) {
+        if (!video.isExpanded(currentComposer) || !video.view().requested())
+            video.originalTransport(call, currentComposer)
+    }
+}
+
+/** Full-page video, with Salt's native title bar and transport overlaid while the pointer is active. */
 class SaltVideoContent(private val video: SaltVideoBindings) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
         val expanded = video.isExpanded(currentComposer)
         val state = video.view()
+        // This replaces MainWindow's title-bar call. Render the host caption once per window.
+        // Standalone fixtures may omit the native title-bar arguments.
+        if ((!expanded || !state.requested()) && call.getArgument(0) != null)
+            video.originalTitleBar(call, currentComposer)
         if (expanded) {
-            Box(Modifier.fillMaxSize()) {
+            val transportState = remember(video) { video.createTransportState() }
+            var activity by remember(video) { mutableLongStateOf(0) }
+            var controlsVisible by remember(video) { mutableStateOf(true) }
+            LaunchedEffect(state.requested(), state.loading(), activity) {
+                controlsVisible = true
+                if (state.requested() && !state.loading()) {
+                    delay(3000)
+                    controlsVisible = false
+                }
+            }
+            val pointer = if (state.requested()) Modifier.pointerInput(video) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Enter || event.type == PointerEventType.Move ||
+                            event.type == PointerEventType.Press || event.type == PointerEventType.Scroll) {
+                            controlsVisible = true
+                            activity++
+                            // Native MiniPlayer's Exit handler may hide its buttons during this event.
+                            // Restore them after children run so the video timer owns visibility.
+                            awaitPointerEvent(PointerEventPass.Final)
+                            video.activateTransport(transportState)
+                        }
+                    }
+                }
+            } else Modifier
+            Box(Modifier.fillMaxSize().then(pointer)) {
                 if (state.requested()) {
                     Box(
-                        Modifier.fillMaxSize().padding(top = 44.dp, bottom = 112.dp)
-                            .background(Color.Black).testTag("SaltPlaybackVideo"),
+                        Modifier.fillMaxSize().background(Color.Black).testTag("SaltPlaybackVideo"),
                         contentAlignment = Alignment.Center
                     ) {
                         state.player()?.let { VideoSurface(video, it) }
                         if (state.loading()) BasicText("正在加载视频", style = androidx.compose.ui.text.TextStyle(color = Color.White))
                     }
+                    if (controlsVisible) {
+                        SideEffect { video.activateTransport(transportState) }
+                        if (call.getArgument(0) != null)
+                            video.titleBar(call, Modifier.align(Alignment.TopStart), currentComposer)
+                        val controls = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)
+                            .testTag("SaltPlaybackVideoControls")
+                        // The title-bar hook has no MiniPlayer geometry or ViewModelStoreOwner.
+                        // Provide the overlay's own native state instead of waiting for another hook.
+                        CompositionLocalProvider(video.transportGeometry()) {
+                            video.transportControls(controls, transportState, currentComposer)
+                        }
+                    }
                 }
-                if (state.available() || video.hasNativeVideo(call.getArgument(2))) {
+                if (controlsVisible && (state.available() || state.requested() || video.hasNativeVideo(call.getArgument(2)))) {
                     val captionWidth = video.captionWidth(currentComposer)
                     Box(
                         Modifier.align(Alignment.TopEnd)

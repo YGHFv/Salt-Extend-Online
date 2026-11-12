@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$SaltHome,
     [Parameter(Mandatory = $true)][string]$JdkHome,
     [switch]$Experimental,
+    [ValidateRange(1, 3600)][int]$ContractTimeoutSeconds = 180,
     [string]$BilibiliProbe = '',
     [string]$NeteaseProbe = '',
     [string]$LoginProbe = ''
@@ -64,15 +65,41 @@ $testSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'plugin/src/test/ja
 if ($LASTEXITCODE -ne 0) { throw 'Host smoke test compilation failed.' }
 $temporaryFiles = Join-Path $build 'tmp'
 New-Item -ItemType Directory -Path $temporaryFiles -Force | Out-Null
+$hostProfile = Join-Path $temporaryFiles 'host-profile'
+New-Item -ItemType Directory -Path $hostProfile -Force | Out-Null
 function Invoke-Contract([string]$Test, [switch]$BaseOnly) {
     $runtime = if ($BaseOnly) { 'base' } else { 'host' }
     $log = Join-Path $build "$Test.$runtime.log"
     $arguments = @('-Dfile.encoding=UTF-8', "-Djava.io.tmpdir=$temporaryFiles")
     if ($BaseOnly) { $arguments += @('--limit-modules=java.base', '-classpath', "$tests;$classes") }
     else { $arguments += @('--enable-native-access=ALL-UNNAMED', "-Dskiko.library.path=$(Join-Path $salt 'app')", '-classpath', "$tests;$classes;$hostPackage") }
-    & $java @arguments $Test 2>&1 | Tee-Object -FilePath $log
+    $start = [Diagnostics.ProcessStartInfo]::new($java)
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $start.StandardErrorEncoding = [Text.Encoding]::UTF8
+    foreach ($argument in @($arguments) + @("-Duser.home=$hostProfile", $Test)) { $start.ArgumentList.Add($argument) }
+    $start.Environment['APPDATA'] = $hostProfile
+    $start.Environment['LOCALAPPDATA'] = $hostProfile
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    try {
+        if (-not $process.Start()) { throw "Could not start contract: $Test" }
+        # Drain both streams asynchronously so a noisy native failure cannot deadlock the test.
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $completed = $process.WaitForExit($ContractTimeoutSeconds * 1000)
+        if (-not $completed) { $process.Kill($true); $process.WaitForExit() }
+        $output = $stdout.GetAwaiter().GetResult() + $stderr.GetAwaiter().GetResult()
+        [IO.File]::WriteAllText($log, $output, [Text.Encoding]::UTF8)
+        Write-Output $output
+        if (-not $completed) { throw "Plugin contract timed out after $ContractTimeoutSeconds seconds: $Test; see $log" }
+        $exitCode = $process.ExitCode
+    } finally { $process.Dispose() }
     # Background coroutine/thread failures can otherwise leave a successful process exit code.
-    if ($LASTEXITCODE -ne 0 -or (Select-String -LiteralPath $log -Pattern 'ComposeRuntimeError|AssertionError|Exception in thread|Traceback|^FAIL' -Quiet)) {
+    if ($exitCode -ne 0 -or (Select-String -LiteralPath $log -Pattern 'ComposeRuntimeError|AssertionError|Exception in thread|Traceback|^FAIL' -Quiet)) {
         throw "Plugin contract failed ($runtime): $Test; see $log"
     }
 }

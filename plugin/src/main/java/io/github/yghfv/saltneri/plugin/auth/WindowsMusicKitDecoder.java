@@ -16,7 +16,7 @@ public final class WindowsMusicKitDecoder implements AppleMusicPcmSource.Decoder
     public WindowsMusicKitDecoder(AccountCredentials account,String developerToken,String target,long duration) throws IOException {
         lifetime=RequestScope.playback(()->!closed && account.isActive());
         try {
-            browser=WindowsEdgeProcess.open(lifetime,true,null);
+            browser=WindowsEdgeProcess.open(lifetime,true,"https://music.apple.com/");
             var page=WindowsEdgeWebLogin.pages(browser).stream().filter(p->"about:blank".equals(p.get("url"))).findFirst()
                 .orElseThrow(()->AppleMusicHttp.failure("BROWSER_PAGE"));
             session=BoundedJson.string(browser.call("Target.attachToTarget",Map.of("targetId",page.get("targetId"),"flatten",true)).get("sessionId"));

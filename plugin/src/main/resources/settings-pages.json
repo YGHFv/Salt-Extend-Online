@@ -1,4 +1,12 @@
 {
+  "proxy": [
+    {"type":"caption","title":"连接方式","summary":"默认全部直连（绕过代理）。代理使用系统已配置的 HTTP 或 SOCKS 代理，新请求生效。"},
+    {"key":"bili.proxy","type":"list","title":"Bilibili","summary":"接口、封面、音频和视频的连接方式。","entries":["直连（绕过代理）","使用系统代理"],"entry_values":["direct","system"],"default_value":"direct"},
+    {"key":"netease.proxy","type":"list","title":"网易云音乐","summary":"接口、封面、音频和 MV 的连接方式。","entries":["直连（绕过代理）","使用系统代理"],"entry_values":["direct","system"],"default_value":"direct"},
+    {"key":"qqmusic.proxy","type":"list","title":"QQ 音乐","summary":"接口、封面、音频和 MV 的连接方式。","entries":["直连（绕过代理）","使用系统代理"],"entry_values":["direct","system"],"default_value":"direct"},
+    {"key":"kugou.proxy","type":"list","title":"酷狗音乐","summary":"接口、封面和音频的连接方式。","entries":["直连（绕过代理）","使用系统代理"],"entry_values":["direct","system"],"default_value":"direct"},
+    {"key":"applemusic.proxy","type":"list","title":"Apple Music","summary":"接口、封面和 MusicKit 播放的连接方式。","entries":["直连（绕过代理）","使用系统代理"],"entry_values":["direct","system"],"default_value":"direct"}
+  ],
   "sidebar": [
     {
       "key": "ui.sidebarOptimization",

@@ -173,6 +173,8 @@ final class WindowsEdgeProcess implements AutoCloseable {
                     Long.toUnsignedString(Pointer.nativeValue(childInput.getPointer()))+","+
                     Long.toUnsignedString(Pointer.nativeValue(childOutput.getPointer())):"")+
                 " --no-first-run --no-default-browser-check --disable-sync --disable-extensions --disable-background-mode"+
+                (io.github.yghfv.saltneri.plugin.net.SourceProxySettings.usesSystemProxy(
+                        java.net.URI.create(url==null?"https://music.163.com/":url))?"":" --no-proxy-server")+
                 " --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding "+
                 (headless?"--headless=new about:blank":"--app="+url);
             if(command.length()>30000) throw failure(AuthFailure.Reason.BROWSER_LAUNCH);

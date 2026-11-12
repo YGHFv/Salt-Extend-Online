@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: salt-build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   offline:
@@ -36,6 +36,9 @@ jobs:
         run: git show --format= --check HEAD
       - name: Test release validation
         run: python scripts/test-ci-release.py
+      - name: Verify contract timeout and process isolation
+        shell: pwsh
+        run: ./scripts/test-contract-runner.ps1 -JdkHome $env:JAVA_HOME
 
   package:
     name: Salt 1.19.3 Package

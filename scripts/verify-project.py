@@ -39,7 +39,7 @@ def verify():
     for name in ("preference_config.json", "preference_config_experimental.json"):
         json.loads((ROOT / "plugin/src/main/resources" / name).read_text(encoding="utf-8"))
     pages = json.loads((ROOT / "plugin/src/main/resources/settings-pages.json").read_text(encoding="utf-8"))
-    assert set(pages) == {"sidebar", "auto-source", "quality", "home"}
+    assert set(pages) == {"sidebar", "auto-source", "quality", "home", "proxy"}
     for items in pages.values():
         for item in items:
             if item["type"] == "list":

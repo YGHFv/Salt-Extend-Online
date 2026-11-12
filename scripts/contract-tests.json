@@ -8,6 +8,7 @@
     "transport/RangeDiskCache.java",
     "net/RequestScope.java",
     "net/PinnedHttpsConnection.java",
+    "net/SourceProxySettings.java",
     "net/BoundedJson.java",
     "net/JsonResponse.java",
     "auth/AccountCredentials.java",
@@ -47,6 +48,8 @@
     "transport/DecodedAudioSource.java"
   ],
   "tests": [
+    {"class":"io.github.yghfv.saltneri.plugin.ui.PlaybackVideoSessionTest","baseOnly":false,"offline":false},
+    {"class":"io.github.yghfv.saltneri.plugin.net.SourceProxyContractTest","baseOnly":true,"offline":true},
     {
       "class": "io.github.yghfv.saltneri.plugin.ui.PlaybackVideoPacingTest",
       "baseOnly": false,

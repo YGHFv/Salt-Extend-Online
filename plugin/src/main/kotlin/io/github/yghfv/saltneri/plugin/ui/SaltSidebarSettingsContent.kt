@@ -20,9 +20,14 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.rememberCursorPositionProvider
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.PopupPositionProvider
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -87,6 +92,19 @@ class SaltSidebarSettingsContent(private val binding: SaltSidebarSettingsBinding
     }
 }
 
+/** Follow the selected row, including keyboard clicks, scrolling and window resizing. */
+internal class SettingPopupPositionProvider : PopupPositionProvider {
+    override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize,
+        layoutDirection: LayoutDirection, popupContentSize: IntSize): IntOffset {
+        val x = if (layoutDirection == LayoutDirection.Ltr)
+            anchorBounds.right - popupContentSize.width else anchorBounds.left
+        val y = if (anchorBounds.bottom + popupContentSize.height <= windowSize.height)
+            anchorBounds.bottom else anchorBounds.top - popupContentSize.height
+        return IntOffset(x.coerceIn(0, maxOf(0, windowSize.width - popupContentSize.width)),
+            y.coerceIn(0, maxOf(0, windowSize.height - popupContentSize.height)))
+    }
+}
+
 @Composable
 fun SettingsConfigurationPage(ui: SaltNativeUi,page: SettingsCatalog.Page) {
     val revision=ui.settingsRevision()
@@ -111,11 +129,13 @@ fun SettingsConfigurationPage(ui: SaltNativeUi,page: SettingsCatalog.Page) {
                                 "caption" -> ui.sidebarConfigurationCaption(setting.title()+" · "+setting.summary(),currentComposer)
                                 else -> {
                                     var show by remember {mutableStateOf(false)}
-                                    val position=rememberCursorPositionProvider()
-                                    ui.settingAction(setting,{
-                                        if(setting.type()=="list")show=true else ui.repairSidebarSetting()
-                                    },currentComposer)
-                                    if(show)ui.settingChoices(position,{show=false},setting,currentComposer)
+                                    val position=remember { SettingPopupPositionProvider() }
+                                    Box(Modifier.fillMaxWidth()) {
+                                        ui.settingAction(setting,{
+                                            if(setting.type()=="list")show=true else ui.repairSidebarSetting()
+                                        },currentComposer)
+                                        if(show)ui.settingChoices(position,{show=false},setting,currentComposer)
+                                    }
                                 }
                             }
                         }

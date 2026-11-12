@@ -27,6 +27,13 @@
         },
         {
           "type": "button",
+          "title": "代理设置",
+          "summary": "各源默认直连，可分别选择使用系统代理。",
+          "arrow_type": "arrow",
+          "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.openProxySettings"
+        },
+        {
+          "type": "button",
           "title": "默认栏目",
           "summary": "设置 Salt 启动首页和各平台默认栏目。",
           "arrow_type": "arrow",

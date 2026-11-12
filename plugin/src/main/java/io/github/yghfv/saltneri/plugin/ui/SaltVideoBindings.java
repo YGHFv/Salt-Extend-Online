@@ -24,6 +24,9 @@ public final class SaltVideoBindings implements AutoCloseable {
     public static final String TITLE="androidx.compose.ui.\u0b61",WINDOW="androidx.compose.ui.\u0537";
     public static final List<String> TITLE_PARAMETERS=List.of("androidx.compose.ui.\u04d7","androidx.compose.ui.\u0aa0",
             "androidx.compose.ui.\u091a","androidx.compose.ui.Modifier");
+    public static final String TRANSPORT="com.xuncorp.voxzen.ui.player.mini.\u052b",TRANSPORT_CALLER="androidx.compose.ui.\u0525";
+    public static final List<String> TRANSPORT_PARAMETERS=List.of("kotlin.jvm.functions.Function0","androidx.compose.ui.Modifier",
+            "long","androidx.compose.ui.\u0aa0","com.xuncorp.voxzen.ui.player.mini.\u05ef");
     public record View(String id,boolean available,boolean requested,boolean loading,String message,Object player) { }
     private final MutableState<View> view=SnapshotStateKt.mutableStateOf(
             new View("",false,false,false,"",null),SnapshotStateKt.structuralEqualityPolicy());
@@ -47,7 +50,16 @@ public final class SaltVideoBindings implements AutoCloseable {
     private final Method getPlaybackSpeed;
     private final Field playbackController;
     private final Method captionWidth;
+    private final Method titleBar,transportControls;
+    private final Constructor<?> transportState;
+    private final Method transportActive;
+    private final ProvidedValue<?> transportGeometry;
     private final LoopbackRangeServer transport;
+    interface VideoRequests {
+        MusicVideoClient.Source discover(MusicVideoClient.Source selected,AccountCredentials credentials,RequestScope request) throws Exception;
+        MediaLease resolve(MusicVideoClient.Source selected,AccountCredentials credentials,String scope,RequestScope request) throws Exception;
+    }
+    private final VideoRequests requests;
     private volatile RequestScope pending;
     private volatile boolean closed;
     private volatile long generation;
@@ -64,11 +76,25 @@ public final class SaltVideoBindings implements AutoCloseable {
     private long loadDeadline,lastSeek,driftSince;
     private boolean loaded,nativeAvailable;
     private volatile boolean expanded;
+    private boolean videoMode;
 
     public SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
             BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
             Consumer<String> toast) throws Exception {
+        this(host,registrar,active,tracks,accounts,toast,new VideoRequests() {
+            public MusicVideoClient.Source discover(MusicVideoClient.Source selected,AccountCredentials credentials,RequestScope request) throws Exception {
+                return new MusicVideoClient(credentials).discover(selected.track(),request);
+            }
+            public MediaLease resolve(MusicVideoClient.Source selected,AccountCredentials credentials,String scope,RequestScope request) throws Exception {
+                return new MusicVideoClient(credentials).resolve(selected,scope,request);
+            }
+        },null);
+    }
+    SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
+            BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
+            Consumer<String> toast,VideoRequests requests,LoopbackRangeServer transport) throws Exception {
         this.host=host;this.active=active;this.tracks=tracks;this.accounts=accounts;this.toast=toast;
+        this.requests=requests;
         Class<?> monitor=type("com.xuncorp.pisces.\u0786");
         current=(StateFlow<?>)monitor.getMethod("\u0528").invoke(null);
         progress=(StateFlow<?>)monitor.getMethod("\u052a").invoke(null);
@@ -89,19 +115,42 @@ public final class SaltVideoBindings implements AutoCloseable {
                 Function0.class,String.class,Modifier.class,boolean.class,String.class,Function3.class,Composer.class,int.class,int.class);
         localCaption=type("androidx.compose.ui.\u0f40").getMethod("\u037f");
         captionWidth=type("androidx.compose.ui.\u0f65").getMethod("\u0529");
+        titleBar=type(TITLE).getMethod("\u037f",type(TITLE_PARAMETERS.get(0)),type(TITLE_PARAMETERS.get(1)),
+                type(TITLE_PARAMETERS.get(2)),Modifier.class,Composer.class,int.class,int.class);
+        transportControls=type(TRANSPORT).getMethod("\u037f",Function0.class,
+                Modifier.class,long.class,type("androidx.compose.ui.\u0aa0"),type("com.xuncorp.voxzen.ui.player.mini.\u05ef"),
+                Composer.class,int.class,int.class);
+        transportState=type("com.xuncorp.voxzen.ui.player.mini.\u05ef").getConstructor();
+        transportActive=transportState.getDeclaringClass().getMethod("\u037f",boolean.class);
+        @SuppressWarnings("unchecked")
+        var geometryLocal=(ProvidableCompositionLocal<Object>)type("com.xuncorp.voxzen.ui.player.mini.\u0588").getMethod("\u037f").invoke(null);
+        transportGeometry=geometryLocal.provides(type("com.xuncorp.voxzen.ui.player.mini.\u0529")
+                .getConstructor(float.class,boolean.class,float.class,byte.class).newInstance(1f,true,0f,(byte)0));
         Class<?> controller=type("com.xuncorp.voxzen.service.PlaybackController");
         getPlaybackSpeed=controller.getMethod("getPlaybackSpeed");
         playbackController=controller.getField("INSTANCE");
-        transport=LoopbackRangeServer.video(()->!closed && active.getAsBoolean());
+        this.transport=transport==null?LoopbackRangeServer.video(()->!closed && active.getAsBoolean()):transport;
         try {
             Class<?> content=Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltVideoContent",true,getClass().getClassLoader());
-            hooks.add(registrar.afterComposable(TITLE,"\u037f",WINDOW,TITLE_PARAMETERS,50,
+            hooks.add(registrar.replaceComposable(TITLE,"\u037f",WINDOW,TITLE_PARAMETERS,50,
                     (ComposableHook)content.getConstructor(SaltVideoBindings.class).newInstance(this)));
+            hooks.add(registrar.replaceComposable(TRANSPORT,"\u037f",TRANSPORT_CALLER,TRANSPORT_PARAMETERS,50,
+                    (ComposableHook)Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltVideoTransportContent",true,getClass().getClassLoader())
+                            .getConstructor(SaltVideoBindings.class).newInstance(this)));
         } catch(Exception | LinkageError error) {close();throw error;}
         worker.scheduleWithFixedDelay(this::tick,0,100,TimeUnit.MILLISECONDS);
     }
     private Class<?> type(String name) throws ClassNotFoundException {return Class.forName(name,false,host);}
     public View view() {return view.getValue();}
+    public ProvidedValue<?> transportGeometry() {return transportGeometry;}
+    public Object createTransportState() {
+        try {Object state=transportState.newInstance();activateTransport(state);return state;}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video transport state unavailable",failure);}
+    }
+    public void activateTransport(Object state) {
+        try {transportActive.invoke(state,true);}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video transport visibility unavailable",failure);}
+    }
     public Object originalVideoState() {return videoState.getValue();}
     public boolean hasNativeVideo(Object state) {
         try {
@@ -133,6 +182,25 @@ public final class SaltVideoBindings implements AutoCloseable {
         }
         catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video caption unavailable",failure);}
     }
+    public void titleBar(UiHookCall call,Modifier modifier,Composer composer) {
+        // Invoke the original function directly; the hook is scoped to its MainWindow call site.
+        try {titleBar.invoke(null,call.getArgument(0),call.getArgument(1),call.getArgument(2),modifier,composer,0,0);}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video title bar unavailable",failure);}
+    }
+    public void originalTitleBar(UiHookCall call,Composer composer) {
+        Modifier modifier=call.getArgument(3) instanceof Modifier supplied?supplied:Modifier.Companion;
+        titleBar(call,modifier,composer);
+    }
+    public void transportControls(Modifier modifier,Object state,Composer composer) {
+        try {transportControls.invoke(null,(Function0<kotlin.Unit>)()->{toggle();return kotlin.Unit.INSTANCE;},
+                modifier,0L,null,state,composer,0,12);}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Video transport unavailable",failure);}
+    }
+    public void originalTransport(UiHookCall call,Composer composer) {
+        try {transportControls.invoke(null,call.getArgument(0),call.getArgument(1),call.getArgument(2),call.getArgument(3),
+                call.getArgument(4),composer,0,call.getArgument(4)==null?16:0);}
+        catch(ReflectiveOperationException failure) {throw new IllegalStateException("Native transport unavailable",failure);}
+    }
     public synchronized SaltVideoSurface surface(Object renderer,java.awt.Window window,Runnable redraw) {
         if(closed || player!=renderer)return null;
         long ticket=generation;
@@ -153,26 +221,32 @@ public final class SaltVideoBindings implements AutoCloseable {
     public void toggle() {
         if(closed || !active.getAsBoolean())return;
         synchronized(this) {
-            if(view().requested()) {generation++;cancelRequest();releasePlayer();publish(false,false,"");return;}
+            if(videoMode) {videoMode=false;generation++;cancelRequest();releasePlayer();publish(false,false,"");return;}
+            videoMode=true;
             if(source==null) {
                 if(hasNativeVideo(videoState.getValue()))toggleNativeVideo();
+                else videoMode=false;
                 return;
             }
-            long ticket=++generation;cancelRequest();publish(true,true,"正在加载视频");
-            var selected=source;var credentials=account;
-            pending=new RequestScope(()->valid(ticket,credentials),30000);
-            var request=pending;
-            resolver.execute(()->{
-                try {
-                    String scope=credentials==null?"anonymous-video":credentials.accountScope();
-                    var lease=new MusicVideoClient(credentials).resolve(selected,scope,request);
-                    lease=lease.bindTo(scope,()->valid(ticket,credentials));
-                    URI local=transport.register(lease);
-                    SaltPageContentBinding.onUiThread(()->startPlayer(ticket,credentials,local));
-                } catch(Exception | LinkageError failed) {failed(ticket);}
-                finally {request.close();}
-            });
+            requestVideo();
         }
+    }
+    private synchronized void requestVideo() {
+        if(!videoMode || source==null || closed)return;
+        long ticket=++generation;cancelRequest();publish(true,true,"正在加载视频");
+        var selected=source;var credentials=account;
+        pending=new RequestScope(()->valid(ticket,credentials),30000);
+        var request=pending;
+        resolver.execute(()->{
+            try {
+                String scope=credentials==null?"anonymous-video":credentials.accountScope();
+                var lease=requests.resolve(selected,credentials,scope,request);
+                lease=lease.bindTo(scope,()->valid(ticket,credentials));
+                URI local=transport.register(lease);
+                SaltPageContentBinding.onUiThread(()->startPlayer(ticket,credentials,local));
+            } catch(Exception | LinkageError failed) {failed(ticket);}
+            finally {request.close();}
+        });
     }
     private void toggleNativeVideo() {
         // Native local MV selection remains owned by Salt; the same muted surface handles its path.
@@ -187,12 +261,12 @@ public final class SaltVideoBindings implements AutoCloseable {
                 if(location.matches("^[A-Za-z]:[\\\\/].*"))uri=java.nio.file.Path.of(location).toUri();
                 else uri=URI.create(location);
                 if(!"file".equals(uri.getScheme()) || !java.nio.file.Files.isRegularFile(java.nio.file.Path.of(uri))) {
-                    toast.accept("此 MV 的来源暂不支持视频播放");return;
+                    videoMode=false;toast.accept("此 MV 的来源暂不支持视频播放");return;
                 }
                 long ticket=++generation;publish(true,true,"正在加载视频");
                 var credentials=account;
                 SaltPageContentBinding.onUiThread(()->startPlayer(ticket,credentials,uri));
-            } catch(Exception failed) {toast.accept("MV 来源无法读取");}
+            } catch(Exception failed) {videoMode=false;toast.accept("MV 来源无法读取");}
         }
     }
     private boolean valid(long ticket,AccountCredentials credentials) {
@@ -230,6 +304,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     }
     private synchronized void failed(long ticket) {
         if(generation!=ticket || closed)return;
+        videoMode=false;
         releasePlayer();publish(false,false,"");
         SaltPageContentBinding.onUiThread(()->{if(!closed)toast.accept("视频加载失败，请稍后重试");});
     }
@@ -244,6 +319,7 @@ public final class SaltVideoBindings implements AutoCloseable {
             Object item=current.getValue();String id=item==null?"":(String)itemId.invoke(item);
             boolean changedAccount=entry!=null && accounts.apply(entry.target().platform())!=account;
             if(!id.equals(selection) || changedAccount) {
+                if(changedAccount || id.isEmpty())videoMode=false;
                 generation++;cancelRequest();releasePlayer();selection=id;entry=null;source=null;account=null;
                 if(item!=null)entry=tracks.apply(id,(String)itemPath.invoke(item));
                 publish(false,false,"");
@@ -251,24 +327,36 @@ public final class SaltVideoBindings implements AutoCloseable {
                     var target=entry.target();account=accounts.apply(target.platform());var credentials=account;
                     long ticket=generation;
                     if(credentials!=null && !credentials.isActive())return;
-                    if(target.platform()==AccountPlatform.BILIBILI) {source=new MusicVideoClient.Source(target,target.id());publish(false,false,"");}
+                    if(target.platform()==AccountPlatform.BILIBILI) {
+                        source=new MusicVideoClient.Source(target,target.id());
+                        if(videoMode)requestVideo();else publish(false,false,"");
+                    }
                     else if(target.platform()==AccountPlatform.NETEASE || target.platform()==AccountPlatform.QQMUSIC) {
+                        if(videoMode)publish(true,true,"正在查找视频");
                         pending=new RequestScope(()->valid(ticket,credentials));var request=pending;
                         resolver.execute(()->{
                             try {
-                                var result=new MusicVideoClient(credentials).discover(target,request);
-                                synchronized(SaltVideoBindings.this) {if(valid(ticket,credentials)){source=result;publish(false,false,"");}}
-                            } catch(Exception ignored) {}
+                                var result=requests.discover(new MusicVideoClient.Source(target,""),credentials,request);
+                                synchronized(SaltVideoBindings.this) {
+                                    if(valid(ticket,credentials)) {
+                                        source=result;
+                                        if(videoMode && result!=null)requestVideo();else publish(false,false,"");
+                                    }
+                                }
+                            } catch(Exception ignored) {
+                                synchronized(SaltVideoBindings.this) {if(valid(ticket,credentials))publish(false,false,"");}
+                            }
                             finally {request.close();}
                         });
                     }
                 }
             }
             if(account!=null && (!account.isActive() || accounts.apply(account.platform())!=account)) {
-                generation++;cancelRequest();releasePlayer();source=null;publish(false,false,"");return;
+                videoMode=false;generation++;cancelRequest();releasePlayer();source=null;publish(false,false,"");return;
             }
             boolean available=hasNativeVideo(videoState.getValue());
             if(available!=nativeAvailable) {nativeAvailable=available;var state=view();publish(state.requested(),state.loading(),state.message());}
+            if(videoMode && entry==null && available && player==null && !view().loading())toggleNativeVideo();
             if(player!=null) {
                 long now=System.nanoTime();
                 if(!loaded) {

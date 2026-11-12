@@ -43,6 +43,7 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
     private String statusLine;
     private byte[] formBody;
     private final int targetPort;
+    private final Proxy proxy;
 
     /** Keep API TLS strict; only the explicit Kugou media policy can open an original HTTP audio URL. */
     public static PinnedHttpsConnection kugouMedia(URI target) throws IOException {
@@ -50,7 +51,7 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
         try { io.github.yghfv.saltneri.plugin.transport.MediaLease.requireTarget(
                 io.github.yghfv.saltneri.plugin.transport.MediaLease.Platform.KUGOU, target); }
         catch (IllegalArgumentException | NullPointerException rejected) { throw new IOException("Invalid Kugou media target"); }
-        return new PinnedHttpsConnection(target, InetAddress::getAllByName, plainSockets(), true);
+        return new PinnedHttpsConnection(target, InetAddress::getAllByName, plainSockets(), true, SourceProxySettings.proxy(target));
     }
 
     /** POST is deliberately unavailable to media pull requests or arbitrary targets. */
@@ -147,13 +148,16 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
     }
 
     public PinnedHttpsConnection(URI target) throws IOException {
-        this(target, InetAddress::getAllByName, tlsSockets());
+        this(target, InetAddress::getAllByName, tlsSockets(), false, SourceProxySettings.proxy(target));
     }
 
     PinnedHttpsConnection(URI target, Resolver resolver, Sockets sockets) throws IOException {
         this(target, resolver, sockets, false);
     }
     PinnedHttpsConnection(URI target, Resolver resolver, Sockets sockets, boolean plainKugou) throws IOException {
+        this(target,resolver,sockets,plainKugou,Proxy.NO_PROXY);
+    }
+    PinnedHttpsConnection(URI target, Resolver resolver, Sockets sockets, boolean plainKugou, Proxy proxy) throws IOException {
         super(target.toURL());
         if (plainKugou) try { io.github.yghfv.saltneri.plugin.transport.MediaLease.requireTarget(
                 io.github.yghfv.saltneri.plugin.transport.MediaLease.Platform.KUGOU, target); }
@@ -165,7 +169,7 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
                 || target.getRawUserInfo() != null || target.getRawFragment() != null) {
             throw new IOException("Invalid HTTPS target");
         }
-        this.target = target; this.resolver = resolver; this.sockets = sockets;
+        this.target = target; this.resolver = resolver; this.sockets = sockets; this.proxy = proxy;
         setConnectTimeout(8000); setReadTimeout(8000);
     }
 
@@ -200,7 +204,11 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
                 requireOpen();
                 candidate.setSoTimeout(getReadTimeout());
                 // Pass the already-validated InetAddress, never the hostname, to the actual TCP connect.
-                candidate.connect(new InetSocketAddress(addresses[index], targetPort), getConnectTimeout());
+                if(proxy.type()==Proxy.Type.DIRECT)candidate.connect(new InetSocketAddress(addresses[index], targetPort), getConnectTimeout());
+                else {
+                    candidate.connect(proxy.address(), getConnectTimeout());
+                    tunnel(candidate,addresses[index]);
+                }
                 candidate = sockets.secure(candidate, target.getHost());
                 socket = candidate;
                 requireOpen();
@@ -274,7 +282,28 @@ public final class PinnedHttpsConnection extends HttpURLConnection {
         Socket current = socket;
         if (current != null) try { current.close(); } catch (IOException ignored) { }
     }
-    @Override public boolean usingProxy() { return false; }
+    @Override public boolean usingProxy() { return proxy.type()!=Proxy.Type.DIRECT; }
+    private void tunnel(Socket socket,InetAddress address) throws IOException {
+        InputStream input=socket.getInputStream();var output=socket.getOutputStream();
+        if(proxy.type()==Proxy.Type.HTTP) {
+            String ip=address.getHostAddress();if(address.getAddress().length==16)ip="["+ip+"]";
+            String authority=ip+":"+targetPort;
+            output.write(("CONNECT "+authority+" HTTP/1.1\r\nHost: "+authority+"\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
+            output.flush();int[] budget={0};String status=line(input,budget);
+            if(!status.matches("HTTP/1\\.[01] 200( .*)?"))throw new IOException("HTTP proxy tunnel rejected");
+            var headers=new LinkedHashMap<String,String>();readHeaders(input,budget,headers);
+            if(headers.containsKey("transfer-encoding") || headers.containsKey("content-length") && !"0".equals(headers.get("content-length")))
+                throw new IOException("Invalid proxy tunnel framing");
+        } else if(proxy.type()==Proxy.Type.SOCKS) {
+            output.write(new byte[]{5,1,0});output.flush();
+            if(input.read()!=5 || input.read()!=0)throw new IOException("SOCKS proxy requires unsupported authentication");
+            byte[] ip=address.getAddress();output.write(new byte[]{5,1,0,(byte)(ip.length==4?1:4)});output.write(ip);
+            output.write(new byte[]{(byte)(targetPort>>>8),(byte)targetPort});output.flush();
+            if(input.read()!=5 || input.read()!=0 || input.read()!=0)throw new IOException("SOCKS proxy tunnel rejected");
+            int kind=input.read();int size=switch(kind){case 1->4;case 4->16;case 3->input.read();default->-1;};
+            if(size<0 || input.readNBytes(size+2).length!=size+2)throw new IOException("Truncated SOCKS proxy response");
+        } else throw new IOException("Unsupported proxy type");
+    }
     private void requireOpen() throws IOException { if (cancelled.get()) throw new IOException("HTTPS request cancelled"); }
 
     public static boolean isPublic(InetAddress address) {

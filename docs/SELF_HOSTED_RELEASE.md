@@ -3,6 +3,7 @@
 ## Workflow
 
 `.github/workflows/build.yml` runs host-free checks on GitHub's Windows runner. Only successful trusted main pushes or manual main runs can schedule the repository-scoped `salt-extend-windows` runner with `self-hosted`, `Windows`, `X64` and `salt-1.19.3` labels.
+New runs cancel older runs on the same branch, including jobs waiting for an offline runner. Each local contract has a 180-second limit, concurrent stdout/stderr draining, and an isolated temporary host profile. A timed-out contract stops its own process tree and retains its log instead of blocking the package job.
 
 The `salt-build` environment restricts deployment branches to main. `SALT_PACKAGE_ENABLED=true` enables packaging. Environment variables provide `SALT_HOME`, `SALT_JDK_HOME` and a persistent `SALT_KOTLIN_HOME`. The build reads the existing Salt installation, without installing a mod, restarting Salt or reading saved accounts.
 
@@ -20,10 +21,10 @@ Published prereleases are not marked as the latest stable release. Actions artif
 
 ## Local Runtime
 
-Runner files reside outside the checkout at `E:/MTool/Actions/salt-extend-runner`. This machine uses a current-user logon entry named `SaltExtendActionsRunner` to launch `start-runner.ps1` with a hidden window. It is not an administrator-level Windows service and does not require a Windows password. A named mutex prevents duplicate listeners; the official runner helper retains automatic updates.
+Runner files reside outside the checkout at `E:/MTool/Actions/salt-extend-runner`. Run `scripts/setup-actions-runner.ps1 -RunnerRoot <registered-runner-directory>` to copy the versioned supervisor into that directory and register the current-user scheduled task `SaltExtendActionsRunner`. The task launches `start-runner.ps1` with a hidden window at logon and every minute when it is not already running. It retries unexpected exits and replaces the older logon registry entry. It uses the existing interactive login and does not require an administrator service or a Windows password. A named mutex prevents duplicate supervisors; the official runner helper retains automatic updates and reconnects after temporary proxy outages. Supervisor exceptions are logged and retried after 15 seconds.
 
 The runner needs this user logged in, the computer awake, the configured local network proxy available, and the existing JDK/Salt paths intact. Logging out or shutting down takes it offline; eligible jobs wait for it to return.
 
 The persistent Kotlin compiler cache is outside the disposable checkout. A final workflow step removes only checked, absolute paths beneath this job's workspace: `plugin/build`, `core/build`, `scripts/__pycache__` and `.tools`. It never deletes the existing Salt/JDK installation or unrelated development builds.
 
-Disabling `SALT_PACKAGE_ENABLED` stops new local packaging schedules. To stop autostart, remove only the named current-user logon value, then stop only this runner's owned supervisor/listener processes. Remove the repository runner registration separately when retiring the machine.
+Disabling `SALT_PACKAGE_ENABLED` stops new local packaging schedules. To stop autostart, disable or unregister only the `SaltExtendActionsRunner` scheduled task, then stop only this runner's owned supervisor/listener processes. Remove any legacy logon entry with the same name and the repository runner registration separately when retiring the machine.

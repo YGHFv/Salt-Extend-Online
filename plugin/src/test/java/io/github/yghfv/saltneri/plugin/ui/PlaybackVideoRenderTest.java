@@ -25,25 +25,70 @@ public final class PlaybackVideoRenderTest {
         while(!ready.getAsBoolean() && System.nanoTime()<end){SwingUtilities.invokeAndWait(()->{});Thread.sleep(20);}
         check(ready.getAsBoolean());
     }
+    private static int transportPixels(java.awt.Robot robot,java.awt.Window window) {
+        var origin=window.getLocationOnScreen();
+        var pixels=robot.createScreenCapture(new java.awt.Rectangle(origin.x+100,origin.y+window.getHeight()-145,
+                window.getWidth()-200,95));
+        int visible=0;
+        for(int y=0;y<pixels.getHeight();y++)for(int x=0;x<pixels.getWidth();x++) {
+            int rgb=pixels.getRGB(x,y);
+            if(((rgb>>16)&255)>170 && ((rgb>>8)&255)>170 && (rgb&255)>170)visible++;
+        }
+        return visible;
+    }
+    @SuppressWarnings("unchecked")
+    private static ProvidedValue<?>[] windowLocals(Composer composer,ProvidedValue<?>... values) {
+        try {
+            Class<?> defaults=Class.forName("androidx.compose.ui.\u012e$\u037f");
+            Method factory=Arrays.stream(defaults.getMethods()).filter(m->m.getName().equals("\u037f")).findFirst().orElseThrow();
+            Object properties=factory.invoke(null,0L,null,null,0f,false,0f,false,null,false,0f,0f,false,false,false,composer,0,16383);
+            var propertiesLocal=(ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u0689").getMethod("\u0528").invoke(null);
+            var stateLocal=(ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u0372").getMethod("\u037f").invoke(null);
+            Method rememberState=Arrays.stream(Class.forName("androidx.compose.ui.window.WindowState_desktopKt").getMethods())
+                    .filter(m->m.getName().startsWith("rememberWindowState-") && m.getParameterCount()==7).findFirst().orElseThrow();
+            Object windowState=rememberState.invoke(null,null,false,null,0L,composer,0,15);
+            var locals=new ArrayList<ProvidedValue<?>>(Arrays.asList(values));
+            locals.add(propertiesLocal.provides(properties));locals.add(stateLocal.provides(windowState));
+            Class<?> blur=Class.forName("com.xuncorp.voxzen.ui.component.\u052c");
+            Object haze=Class.forName("dev.chrisbanes.haze.HazeState").getConstructor().newInstance();
+            locals.add(((ProvidableCompositionLocal<Object>)blur.getMethod("\u037f").invoke(null)).provides(haze));
+            locals.add(((ProvidableCompositionLocal<Object>)blur.getMethod("\u0528").invoke(null)).provides(haze));
+            return locals.toArray(ProvidedValue[]::new);
+        } catch(Exception error) {throw new AssertionError("Native Salt window fixture",error);}
+    }
     private static final class Hooks extends HookRegistrar {
         ComposableHook content;int removed;
         public HookHandle afterComposable(String owner,String name,String caller,List<String> parameters,int priority,ComposableHook content) {
-            check(owner.equals(SaltVideoBindings.TITLE) && caller.equals(SaltVideoBindings.WINDOW)
-                    && parameters.equals(SaltVideoBindings.TITLE_PARAMETERS));this.content=content;
-            return new HookHandle(){public void unhook(){removed++;}public void close(){unhook();}};
+            throw new AssertionError("Video must replace the host title bar to avoid duplicate caption hit tests");
         }
         public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){throw new AssertionError();}
-        public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){throw new AssertionError();}
+        public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){
+            if(c.equals(SaltVideoBindings.TITLE)) {
+                check(i.equals(SaltVideoBindings.WINDOW) && p.equals(SaltVideoBindings.TITLE_PARAMETERS));content=h;
+            } else check(c.equals(SaltVideoBindings.TRANSPORT) && i.equals(SaltVideoBindings.TRANSPORT_CALLER) && p.equals(SaltVideoBindings.TRANSPORT_PARAMETERS));
+            return new HookHandle(){public void close(){removed++;}public void unhook(){close();}};
+        }
         public <S> HookHandle appendContent(String c,String m,String i,String a,Class<S> s,List<String> p,int n,ContentHook<S> h){throw new AssertionError();}
     }
     public static void main(String[] args) throws Exception {
+        // The real MiniPlayer initializes the controller; supply the installed native paths.
+        // AOT fixture properties use zero volume; no track is submitted to the audio engine.
+        System.setProperty("isAotTraining","true");
+        Class<?> nativePaths=Class.forName("com.xuncorp.pisces.\u0783");
+        String[] setters={"\u037f","\u0528","\u0529","\u052a","\u052b","\u052c"};
+        String[] libraries={"bass.dll","bass_fx.dll","bassmix.dll","basswasapi.dll","bassasio.dll","basscd.dll"};
+        for(int i=0;i<setters.length;i++)nativePaths.getMethod(setters[i],String.class).invoke(null,
+                Path.of(System.getProperty("skiko.library.path"),"resources",libraries[i]).toString());
         var uncaught=new AtomicReference<Throwable>();
-        Thread.setDefaultUncaughtExceptionHandler((t,e)->{uncaught.set(e);e.printStackTrace();});
+        Thread.setDefaultUncaughtExceptionHandler((t,e)->{uncaught.set(e);e.printStackTrace();if(t.getName().equals("main"))System.exit(1);});
         ClassLoader host=PlaybackVideoRenderTest.class.getClassLoader();
         Class<?> targetResolver=Class.forName("com.xuncorp.voxzen.workshop.hooks.\u052a");
         Object target=targetResolver.getMethod("\u037f",String.class,String.class,String.class,List.class).invoke(
                 targetResolver.getField("\u037f").get(null),SaltVideoBindings.TITLE,"\u037f",SaltVideoBindings.WINDOW,SaltVideoBindings.TITLE_PARAMETERS);
         check(target!=null);
+        check(targetResolver.getMethod("\u037f",String.class,String.class,String.class,List.class).invoke(
+                targetResolver.getField("\u037f").get(null),SaltVideoBindings.TRANSPORT,"\u037f",SaltVideoBindings.TRANSPORT_CALLER,
+                SaltVideoBindings.TRANSPORT_PARAMETERS)!=null);
         Path output=Path.of(System.getProperty("java.io.tmpdir")).resolve("playback-video");Files.createDirectories(output);
         var profile=Salt1193Probe.inspect(host,"1.19.3","STEAM");check(profile.matched());
         Class<?> monitor=Class.forName("com.xuncorp.pisces.\u0786"),item=Class.forName("com.xuncorp.pisces.PiscesMediaItem");
@@ -77,15 +122,23 @@ public final class PlaybackVideoRenderTest {
             Object caption=windowInfo.getConstructor(float.class,alignment,float.class,byte.class)
                     .newInstance(44f,alignment.getField("\u0528").get(null),144f,(byte)0);
             var captionLocal=(ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u0f40").getMethod("\u037f").invoke(null);
+            var navigatorLocal=(ProvidableCompositionLocal<Object>)Class.forName("com.xuncorp.voxzen.ui.navigation.AppNavigationKt").getMethod("getLocalNavigator").invoke(null);
+            Object navigator=NavigationUiRenderTest.navigator();
+            var hitTestLocal=(ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u056e").getMethod("\u037f").invoke(null);
+            Class<?> hitTestScope=Class.forName("androidx.compose.ui.\u0578");
+            Object hitTest=hitTestScope.getConstructor().newInstance();
+            Method captionActive=hitTestScope.getMethod("\u037f");
+            Object titleMode=Class.forName(SaltVideoBindings.TITLE_PARAMETERS.getFirst()).getField("\u0529").get(null);
+            Object titleState=Class.forName(SaltVideoBindings.TITLE_PARAMETERS.get(1)).getConstructor().newInstance();
             UiHookCall call=new UiHookCall(){
                 public Object getThisObject(){return null;}
-                public List<Object> getArguments(){return Arrays.asList(null,null,video.originalVideoState(),null);}
+                public List<Object> getArguments(){return Arrays.asList(titleMode,titleState,video.originalVideoState(),null);}
                 public Object getArgument(String name){return null;}
             };
             SwingUtilities.invokeAndWait(()->{
                 var scene=new ImageComposeScene(1160,770,DensityKt.Density(1f,1f),LayoutDirection.Ltr,Dispatchers.getUnconfined(),
                         (composer,flags)->{
-                            CompositionLocalKt.CompositionLocalProvider(new ProvidedValue[]{local.provides(playerSheet),captionLocal.provides(caption)},(c,f)->{
+                            CompositionLocalKt.CompositionLocalProvider(windowLocals(composer,local.provides(playerSheet),captionLocal.provides(caption),hitTestLocal.provides(hitTest),navigatorLocal.provides(navigator)),(c,f)->{
                                 try{draw.invoke(hooks.content,call,c,0);}catch(ReflectiveOperationException e){throw new AssertionError(e);}
                                 return Unit.INSTANCE;
                             },composer,0);
@@ -93,6 +146,7 @@ public final class PlaybackVideoRenderTest {
                         });
                 try {
                     HeaderSearchRenderTest.render(scene);
+                    check(Boolean.TRUE.equals(captionActive.invoke(hitTest)));
                     var button=HeaderSearchRenderTest.find(scene,"播放视频",androidx.compose.ui.semantics.SemanticsActions.INSTANCE.getOnClick());
                     check(button!=null);
                     var bounds=button.getBoundsInRoot();
@@ -102,6 +156,7 @@ public final class PlaybackVideoRenderTest {
                     }
                 }catch(Exception e){throw new AssertionError(e);}finally{scene.close();}
             });
+            check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
             current.invoke(null,profile.mediaFactory().create("local","Local fixture","Artist","","",output.resolve("local.mp3").toString()));
             end=System.nanoTime()+3_000_000_000L;
             while(video.view().available() && System.nanoTime()<end){SwingUtilities.invokeAndWait(()->{});Thread.sleep(20);}
@@ -150,7 +205,7 @@ public final class PlaybackVideoRenderTest {
                 actual.setSize(1160,770);
                 actual.setContent((scope,c,flags)->{
                     CompositionLocalKt.CompositionLocalProvider(
-                            new ProvidedValue[]{local.provides(playerSheet),captionLocal.provides(caption)},(composer,f)->{
+                            windowLocals(c,local.provides(playerSheet),captionLocal.provides(caption),hitTestLocal.provides(hitTest),navigatorLocal.provides(navigator)),(composer,f)->{
                                 try{draw.invoke(hooks.content,call,composer,0);}catch(Exception failure){throw new AssertionError(failure);}
                                 return Unit.INSTANCE;
                             },c,0);
@@ -169,9 +224,30 @@ public final class PlaybackVideoRenderTest {
                     } catch(java.awt.IllegalComponentStateException pending){return false;}
                 });
                 check(actual.getRenderApi()==org.jetbrains.skiko.GraphicsApi.DIRECT3D && toasts.isEmpty());
+                check(Boolean.TRUE.equals(captionActive.invoke(hitTest)));
                 var location=actual.getLocationOnScreen();
+                robot.mouseMove(location.x+actual.getWidth()/2,location.y+actual.getHeight()/2);
+                await(()->{try{return Boolean.TRUE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
+                await(()->transportPixels(robot,actual)>300);
                 javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("video-window.png").toFile());
+                // Native expanded-caption animations can retain colored pixels after disposal.
+                // The window-scoped registration directly tracks caption visibility.
+                await(()->{try{return Boolean.FALSE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
+                check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
+                await(()->transportPixels(robot,actual)==0);
+                javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
+                        actual.getWidth(),actual.getHeight())),"PNG",output.resolve("video-window-hidden.png").toFile());
+                robot.mouseMove(location.x+actual.getWidth()/2+30,location.y+actual.getHeight()/2+20);
+                await(()->{try{return Boolean.TRUE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
+                check(Boolean.TRUE.equals(captionActive.invoke(hitTest)));
+                await(()->transportPixels(robot,actual)>300);
+                // Leaving the native MiniPlayer must not let its independent Exit handler hide it.
+                robot.mouseMove(location.x+actual.getWidth()/2,location.y+actual.getHeight()-90);
+                Thread.sleep(150);
+                robot.mouseMove(location.x+actual.getWidth()/2+60,location.y+actual.getHeight()/2+40);
+                Thread.sleep(250);
+                check(transportPixels(robot,actual)>300);
                 updateProgress.invoke(null,progress.getConstructor(long.class,long.class).newInstance(4000L,6000L));
                 await(()->{
                     if(uncaught.get()!=null)throw new AssertionError("Seek draw crashed",uncaught.get());
@@ -191,9 +267,11 @@ public final class PlaybackVideoRenderTest {
                 check(surface.get()!=null);
                 SwingUtilities.invokeAndWait(()->surface.get().fail(new IllegalStateException("Synthetic draw failure")));
                 await(()->!video.view().requested() && video.view().player()==null);
+                await(()->{try{return Boolean.TRUE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
                 check(toasts.size()==1 && uncaught.get()==null);
                 SwingUtilities.invokeAndWait(()->video.disposeSurface(surface.get()));
             } finally {SwingUtilities.invokeAndWait(()->window.get().dispose());}
+            check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
             SwingUtilities.invokeAndWait(video::toggle);
             check(!video.view().requested() && video.view().player()==null);
             current.invoke(null,owned);await(()->video.view().available());
@@ -207,7 +285,7 @@ public final class PlaybackVideoRenderTest {
             }finally {stream.close();}
         }finally{current.invoke(null,original);updateProgress.invoke(null,originalProgress);}
         SwingUtilities.invokeAndWait(()->{});
-        check(hooks.removed==1 && uncaught.get()==null);
-        System.out.println("PASS: "+checks+" playback video hook, caption render, selection and disposal checks; "+output);
+        check(hooks.removed==2 && uncaught.get()==null);
+        System.out.println("PASS: "+checks+" playback video hook, native bottom controls, pointer recovery, caption render, selection and disposal checks; "+output);
     }
 }

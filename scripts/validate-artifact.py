@@ -49,12 +49,12 @@ def validate(path, experimental):
             raise ValueError("Passive artifact requests permissions")
         configs = json.loads(archive.read("classes/preference_config.json"))
         buttons = [pref["on_click"] for config in configs["configs"] for pref in config["preferences"] if pref["type"] == "button"]
-        expected = ["openSidebarSettings", "openAutoSourceSettings", "openQualitySettings", "openHomeSettings", "clearCache", "showStatus"] if experimental else ["showStatus"]
+        expected = ["openSidebarSettings", "openAutoSourceSettings", "openQualitySettings", "openProxySettings", "openHomeSettings", "clearCache", "showStatus"] if experimental else ["showStatus"]
         if buttons != ["io.github.yghfv.saltneri.plugin." + entry_class + "." + method for method in expected]:
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             main = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(main) != {"cache.limitMiB", "cover.mode", "catalog.pageLimit"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 9:
+            if set(main) != {"cache.limitMiB", "cover.mode", "catalog.pageLimit"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 10:
                 raise ValueError("Unexpected condensed settings menu")
             pages = json.loads(archive.read("classes/settings-pages.json"))
             expected_pages = {
@@ -62,6 +62,7 @@ def validate(path, experimental):
                 "auto-source": {"netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "kugou.autoSourceSwitch", "applemusic.autoSourceSwitch"},
                 "quality": {"bili.quality", "netease.quality", "qqmusic.quality", "kugou.quality"},
                 "home": {"ui.home", "bili.home", "netease.home", "qqmusic.home", "applemusic.home", "kugou.home"},
+                "proxy": {"bili.proxy", "netease.proxy", "qqmusic.proxy", "applemusic.proxy", "kugou.proxy"},
             }
             if set(pages) != set(expected_pages):
                 raise ValueError("Missing secondary settings pages")
@@ -70,6 +71,9 @@ def validate(path, experimental):
                     raise ValueError("Secondary settings keys mismatch: " + page)
             prefs = dict(main)
             prefs.update({p["key"]: p for items in pages.values() for p in items if "key" in p})
+            for key in expected_pages["proxy"]:
+                if prefs[key]["entry_values"] != ["direct", "system"] or prefs[key]["default_value"] != "direct":
+                    raise ValueError("Source proxy routing must default to direct")
             if any(prefs[key]["type"] != "switch" or prefs[key]["default_value"] is not False for key in ("netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "kugou.autoSourceSwitch", "applemusic.autoSourceSwitch", "ui.hideSidebarToggle", "ui.sidebarOptimization")):
                 raise ValueError("Automatic source switching and toggle hiding must be opt-in")
             if prefs["ui.hiddenSidebar"]["default_value"] is not False:

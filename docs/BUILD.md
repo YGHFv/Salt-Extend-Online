@@ -3,12 +3,13 @@
 ## 单一入口
 
 - `plugin.properties`：插件 ID、名称、提供者、实验版和被动检查版版本。PowerShell、Gradle、包验证器共用。
-- `scripts/contract-tests.json`：82 个自动插件回归入口，其中 13 个纳入公共无宿主回归。`baseOnly` 表示额外验证只需 `java.base`，`offline` 表示完全不需要 Salt 类。
+- `scripts/contract-tests.json`：90 个自动插件回归入口，其中 14 个纳入公共无宿主回归。`baseOnly` 表示额外验证只需 `java.base`，`offline` 表示完全不需要 Salt 类。
 - `scripts/verify-project.py`：检查版本格式、稳定 ID、设置 JSON、测试重复／漏项和离线源文件清单。
 
 本地完整构建先验证项目、第三方源码、class-file 检查器和核心策略，再编译 Java / Kotlin、校验实际宿主 ABI、运行插件测试，最后验证包隔离。
 
 每个插件测试的日志独立保存在本次 `plugin/build/local/<GUID>/` 下；除了非零退出码，后台线程／Compose 协程的未捕获异常也会阻止打包。
+每个测试默认最多运行 180 秒，可用 `-ContractTimeoutSeconds` 调整；超时终止该测试的进程树并保留日志。标准输出和错误输出同时读取，防止输出缓冲区塞满后互相等待。宿主相关测试的用户目录、`APPDATA` 和 `LOCALAPPDATA` 指向本次构建的临时目录。
 
 ## 无宿主回归
 
@@ -66,7 +67,15 @@ gradle :core:check :plugin:check -PsaltHostPackage='D:\path\to\Salt\app\host-arc
 5. 在仓库 Settings → Secrets and variables → Actions → Variables 设置 `SALT_PACKAGE_ENABLED=true`。此开关必须是仓库变量，不能仅放在 environment 中。
 6. 推送 main 或手动运行工作流；全部回归通过后，从该 run 的 Artifacts 下载 `Salt-Extend-Online-<version>`，其中包含 `.spmod` 和 `.sha256`，保留 14 天。
 
-未设置开关时打包作业明确跳过。设置开关但 runner 离线时会等待 runner，而不是退回不完整打包。工作流只读仓库，不创建 Release、不上传宿主文件。配置环境或启动常驻 runner 属于机器管理，不由插件构建脚本自动执行。
+未设置开关时打包作业明确跳过。设置开关但 runner 离线时会等待 runner；新提交取消同分支旧作业，避免旧的排队构建阻塞当前提交。打包作业只读仓库，独立的 GitHub Linux 发布作业在完整回归通过后发布 `.spmod` 和校验文件，不上传宿主文件。版本与 runner 维护见 [自动打包与发布](SELF_HOSTED_RELEASE.md)。
+
+已注册的本机 runner 可显式安装当前用户的守护计划任务：
+
+```powershell
+./scripts/setup-actions-runner.ps1 -RunnerRoot 'E:\MTool\Actions\salt-extend-runner'
+```
+
+任务在登录时启动，每分钟检查，异常退出后重试；运行窗口隐藏。同一时刻只允许一个守护进程，网络／代理暂时中断时保留官方 runner 的连接重试。此操作由维护者独立执行，构建脚本不安装任务。
 
 ## 手工验收
 

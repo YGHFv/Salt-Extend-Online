@@ -27,7 +27,9 @@ public final class PlaybackVideoPacingTest {
             return new HookHandle(){public void unhook(){}public void close(){}};
         }
         public HookHandle hookMethod(String c,String m,List<String> p,MethodHook h){throw new AssertionError();}
-        public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){throw new AssertionError();}
+        public HookHandle replaceComposable(String c,String m,String i,List<String> p,int n,ComposableHook h){
+            return new HookHandle(){public void unhook(){}public void close(){}};
+        }
         public <S> HookHandle appendContent(String c,String m,String i,String a,Class<S> s,List<String> p,int n,ContentHook<S> h){throw new AssertionError();}
     }
     public static void main(String[] args) throws Exception {
