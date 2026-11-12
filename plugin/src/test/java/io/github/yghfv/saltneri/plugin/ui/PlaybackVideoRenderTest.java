@@ -41,13 +41,17 @@ public final class PlaybackVideoRenderTest {
         return visible;
     }
     private static int captionPixels(java.awt.Robot robot,java.awt.Window window) {
+        return captionPixels(robot,window,true);
+    }
+    private static int captionPixels(java.awt.Robot robot,java.awt.Window window,boolean light) {
         var origin=window.getLocationOnScreen();var insets=window.getInsets();
         var pixels=robot.createScreenCapture(new java.awt.Rectangle(origin.x+window.getWidth()-insets.right-192,
                 origin.y+insets.top,192,44));
         int white=0;
         for(int y=0;y<pixels.getHeight();y++)for(int x=0;x<pixels.getWidth();x++) {
             int rgb=pixels.getRGB(x,y);
-            if(((rgb>>16)&255)>170 && ((rgb>>8)&255)>170 && (rgb&255)>170)white++;
+            if(light?((rgb>>16)&255)>170 && ((rgb>>8)&255)>170 && (rgb&255)>170:
+                    ((rgb>>16)&255)<100 && ((rgb>>8)&255)<100 && (rgb&255)<100)white++;
         }
         return white;
     }
@@ -355,6 +359,7 @@ public final class PlaybackVideoRenderTest {
                 javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("native-window-active.png").toFile());
                 await(()->captionPixels(robot,actual)>60);
+                check(video.windowVideoActive(actual));
                 check(!nativeSurface.captionRegionsEmpty());
                 var baselinePixels=robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,actual.getWidth(),actual.getHeight()));
                 var contentPixels=baselinePixels.getSubimage(actual.getInsets().left,actual.getInsets().top,
@@ -415,9 +420,17 @@ public final class PlaybackVideoRenderTest {
                 robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
                 await(()->{try{return (boolean)bottom.getClass().getMethod("\u052a").invoke(bottom);}catch(Exception e){throw new AssertionError(e);}});
                 await(()->{try{return !(boolean)playerSheet.getClass().getMethod("\u0528").invoke(playerSheet);}catch(Exception e){throw new AssertionError(e);}});
+                await(()->!video.windowVideoActive(actual) && video.windowControlsVisible(actual));
+                await(()->captionPixels(robot,actual,false)>60);
+                await(()->{
+                    var pixel=robot.getPixelColor(location.x+actual.getWidth()/2,location.y+actual.getHeight()/2);
+                    return Math.abs(pixel.getRed()-pixel.getBlue())<5 && pixel.getBlue()>200;
+                });
                 check(playbackToggles.get()==2 && video.view().requested() && video.view().player()==renderer);
                 SwingUtilities.invokeAndWait(()->{try{navigator.getClass().getMethod("expandPlayer").invoke(navigator);}catch(Exception e){throw new AssertionError(e);}});
                 await(()->{try{return (boolean)playerSheet.getClass().getMethod("\u0528").invoke(playerSheet);}catch(Exception e){throw new AssertionError(e);}});
+                await(()->video.windowVideoActive(actual));
+                await(()->captionPixels(robot,actual)>60);
                 check(video.view().requested() && video.view().player()==renderer);
                 updateProgress.invoke(null,progress.getConstructor(long.class,long.class).newInstance(4000L,6000L));
                 await(()->{

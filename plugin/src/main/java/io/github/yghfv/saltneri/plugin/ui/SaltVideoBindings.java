@@ -94,7 +94,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     private VideoAudioClock clock=new VideoAudioClock();
     private long loadDeadline,lastSeek,driftSince;
     private boolean loaded,nativeAvailable;
-    private volatile boolean expanded;
+    private final MutableState<Boolean> expanded=SnapshotStateKt.mutableStateOf(false,SnapshotStateKt.structuralEqualityPolicy());
     private boolean videoMode;
 
     public SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
@@ -217,12 +217,16 @@ public final class SaltVideoBindings implements AutoCloseable {
     public void showControls() {controlsVisible.setValue(true);}
     public void hideControls() {controlsVisible.setValue(false);}
     public void pointerActivity() {
-        if(closed || !expanded || !view().requested())return;
+        if(closed || !expanded.getValue() || !view().requested())return;
         showControls();activity.setValue(activity.getValue()+1);
     }
     public boolean windowControlsVisible(java.awt.Window window) {
-        boolean visible=controlsVisible();var state=view();var owner=controlsWindow.getValue();
-        return closed || window!=owner || !expanded || !state.requested() || visible;
+        boolean visible=controlsVisible();boolean video=windowVideoActive(window);
+        return !video || visible;
+    }
+    public boolean windowVideoActive(java.awt.Window window) {
+        var state=view();var owner=controlsWindow.getValue();boolean open=expanded.getValue();
+        return !closed && window==owner && open && state.requested();
     }
     public AutoCloseable observeWindow(java.awt.Window window) {
         detachWindowObserver();
@@ -248,7 +252,7 @@ public final class SaltVideoBindings implements AutoCloseable {
         controlsWindow.setValue(null);windowObserver=null;
     }
     public void togglePlayback() {
-        if(closed || !active.getAsBoolean() || !view().requested())return;
+        if(closed || !active.getAsBoolean() || !expanded.getValue() || !view().requested())return;
         if(playbackAction!=null) {playbackAction.run();return;}
         try {playOrPause.invoke(playbackController.get(null));}
         catch(ReflectiveOperationException failure) {throw new IllegalStateException("Salt playback toggle unavailable",failure);}
@@ -274,8 +278,9 @@ public final class SaltVideoBindings implements AutoCloseable {
         try {
             var local=(CompositionLocal<?>)type("androidx.compose.ui.\u041a").getMethod("\u037f").invoke(null);
             Object state=composer.consume(local);
-            return expanded=(boolean)state.getClass().getMethod("\u0528").invoke(state);
-        } catch(ReflectiveOperationException failure) {return expanded=false;}
+            boolean open=(boolean)state.getClass().getMethod("\u0528").invoke(state);
+            expanded.setValue(open);return open;
+        } catch(ReflectiveOperationException failure) {expanded.setValue(false);return false;}
     }
     public float captionWidth(Composer composer) {
         try {return (float)captionWidth.invoke(composer.consume((CompositionLocal<?>)localCaption.invoke(null)));}
@@ -531,7 +536,7 @@ public final class SaltVideoBindings implements AutoCloseable {
                     double currentSpeed=((Number)getPlaybackSpeed.invoke(playbackController.get(null))).doubleValue();
                     if(Double.isFinite(currentSpeed) && currentSpeed>0)speed=currentSpeed;
                 }
-                boolean pause=!expanded || !playing;
+                boolean pause=!expanded.getValue() || !playing;
                 if(paused==null || paused!=pause){property.invoke(handle,"pause",pause?"yes":"no");paused=pause;}
                 double seconds=((Number)number.invoke(handle,"time-pos")).doubleValue();
                 var sample=clock.sample(position(),playing,speed,now);

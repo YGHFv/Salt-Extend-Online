@@ -59,8 +59,11 @@ class SaltVideoScreenContent(private val video: SaltVideoBindings) : ComposableH
         if (!state.requested()) video.originalScreen(call, currentComposer)
         else {
             val supplied = call.getArgument(3) as? Modifier ?: Modifier
-            Box(supplied.fillMaxSize().background(Color.Black).videoActivity(video)
-                .pointerInput(video) {
+            val expanded = video.isExpanded(currentComposer)
+            @Suppress("UNCHECKED_CAST")
+            val opacity = call.getArgument(0) as () -> Float
+            Box(supplied.fillMaxSize().graphicsLayer { alpha = opacity() }.background(Color.Black)
+                .then(if (expanded) Modifier.videoActivity(video).pointerInput(video) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
                         if (currentEvent.buttons.isPrimaryPressed) {
@@ -80,7 +83,7 @@ class SaltVideoScreenContent(private val video: SaltVideoBindings) : ComposableH
                             }
                         }
                     }
-                }.testTag("SaltPlaybackVideo"), contentAlignment = Alignment.Center) {
+                } else Modifier).testTag("SaltPlaybackVideo"), contentAlignment = Alignment.Center) {
                 state.player()?.let { VideoSurface(video, it) }
                 if (state.loading()) BasicText("正在加载视频",
                     style = androidx.compose.ui.text.TextStyle(color = Color.White))
@@ -113,8 +116,9 @@ class SaltVideoFloatCoverContent(private val video: SaltVideoBindings) : Composa
 class SaltVideoCaptionContent(private val video: SaltVideoBindings) : ComposableHook() {
     @Composable
     override fun Content(call: UiHookCall) {
-        if (video.windowControlsVisible(LocalWindow.current))
-            if (video.view().requested()) CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
+        val window = LocalWindow.current
+        if (video.windowControlsVisible(window))
+            if (video.windowVideoActive(window)) CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
                 video.originalWindowControls(call, currentComposer)
             } else video.originalWindowControls(call, currentComposer)
     }
@@ -125,7 +129,7 @@ class SaltVideoWindowCaptionContent(private val video: SaltVideoBindings) : Comp
     override fun Content(call: UiHookCall) {
         val window = (call.getArgument(4) as androidx.compose.ui.window.FrameWindowScope).window
         if (video.windowControlsVisible(window)) {
-            if (video.view().requested()) CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
+            if (video.windowVideoActive(window)) CompositionLocalProvider(*video.darkThemeValues(currentComposer)) {
                 video.originalCaptionGroup(call, currentComposer)
             } else video.originalCaptionGroup(call, currentComposer)
         } else SideEffect { video.clearCaptionHitRegions(call.arguments.toTypedArray()) }
