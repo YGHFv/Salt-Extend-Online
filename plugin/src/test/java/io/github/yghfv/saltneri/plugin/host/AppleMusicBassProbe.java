@@ -28,19 +28,20 @@ public final class AppleMusicBassProbe {
             if(handle==0)throw new AssertionError("Native WAV stream creation failed");
             try {
                 long next=System.nanoTime(),worstMillis=0;
+                long blockDuration=65536L*1000000000L/192000; // 48 kHz stereo PCM16 consumption budget.
                 for(int block=0;block<34;block++) {
                     long start=System.nanoTime();
                     int count=bass.BASS_ChannelGetData(handle,pcm,65536);
-                    long millis=(System.nanoTime()-start)/1000000;
+                    long elapsed=System.nanoTime()-start,millis=elapsed/1000000;
                     if(count!=65536)throw new AssertionError("Continuous native PCM read incomplete");
                     worstMillis=Math.max(worstMillis,millis);
-                    if(block>0 && millis>250)throw new AssertionError("Continuous PCM block "+block+" stalled for "+millis+"ms");
+                    if(block>0 && elapsed>blockDuration)throw new AssertionError("Continuous PCM block "+block+" took "+millis+"ms; exceeds "+blockDuration/1000000+"ms of audio");
                     if(block==0) {next=System.nanoTime();worstMillis=0;}
-                    next+=65536L*1000000000L/192000;
+                    next+=blockDuration;
                     long remaining=next-System.nanoTime();
                     if(remaining>0)java.util.concurrent.TimeUnit.NANOSECONDS.sleep(remaining);
                 }
-                System.out.println("PASS: paced native PCM playback for 11s; worst read="+worstMillis+"ms");
+                System.out.println("PASS: paced native PCM playback for 11s; worst read="+worstMillis+"ms, block budget="+blockDuration/1000000+"ms");
                 for(long position:new long[]{0,7L*48000*4,48000*4}) {
                     if(!bass.BASS_ChannelSetPosition(handle,position,0))throw new AssertionError("BASS seek failed");
                     int count=bass.BASS_ChannelGetData(handle,pcm,65536);

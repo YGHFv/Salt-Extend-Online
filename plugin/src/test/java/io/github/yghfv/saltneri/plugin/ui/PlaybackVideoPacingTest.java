@@ -61,6 +61,7 @@ public final class PlaybackVideoPacingTest {
             SwingUtilities.invokeAndWait(()->{
                 var actual=new ComposeWindow();window.set(actual);
                 actual.setTitle("Salt video continuous frame regression");actual.setSize(1280,780);
+                actual.setAlwaysOnTop(true); // Screen sampling must observe this fixture on the interactive runner.
                 actual.setContent((scope,composer,flags)->{
                     try{content.invoke(null,video,player,composer,0);}catch(Exception error){throw new AssertionError(error);}
                     return Unit.INSTANCE;
@@ -79,11 +80,12 @@ public final class PlaybackVideoPacingTest {
                     return surface.get()!=null && surface.get().publishedFrames()>0;
                 });
                 check(actual.getRenderApi()==org.jetbrains.skiko.GraphicsApi.DIRECT3D,"Default Direct3D renderer required");
-                set.invoke(handle,"pause","no");Thread.sleep(700);
+                // Let native decoding, JIT and the newly foregrounded window settle before measurement.
+                set.invoke(handle,"pause","no");Thread.sleep(1500);
                 long before=surface.get().publishedFrames(),draws=surface.get().drawnFrames(),start=System.nanoTime(),lastChange=start;
                 double nativeStart=(double)number.invoke(handle,"time-pos");
                 var gaps=new ArrayList<Double>();int previous=-1,changes=0;
-                while(System.nanoTime()-start<TimeUnit.MILLISECONDS.toNanos(2500)) {
+                while(System.nanoTime()-start<TimeUnit.MILLISECONDS.toNanos(3500)) {
                     if(failure.get()!=null)throw new AssertionError("Continuous draw failed",failure.get());
                     var origin=actual.getLocationOnScreen();
                     int gray=robot.getPixelColor(origin.x+actual.getWidth()/2,origin.y+actual.getHeight()/2).getRed();
@@ -102,8 +104,10 @@ public final class PlaybackVideoPacingTest {
                 double p95=gaps.get(Math.min(gaps.size()-1,(int)(gaps.size()*0.95)));
                 System.out.printf(Locale.ROOT,"Motion: publish=%.1f fps, Compose draw=%.1f fps, screen changes=%.1f fps, screen p95=%.1f ms, mpv elapsed=%.2f/%.2f s%n",
                         publishFps,drawFps,screenFps,p95,nativeElapsed,seconds);
-                check(publishFps>=40 && drawFps>=35,"Frame delivery became a slideshow");
-                check(screenFps>=30 && p95<90,"Real window did not display continuous moving frames");
+                // A finite observation window can omit one frame at its start/end boundary.
+                double edgeFrame=1/seconds;
+                check(publishFps+edgeFrame>=40 && drawFps+edgeFrame>=35,"Frame delivery became a slideshow");
+                check(screenFps+edgeFrame>=30 && p95<90,"Real window did not display continuous moving frames");
                 check(Math.abs(nativeElapsed-seconds)<0.3,"Native video clock stalled");
                 // A busy UI must retain the newest frame instead of accumulating stale frame callbacks.
                 SwingUtilities.invokeAndWait(()->{

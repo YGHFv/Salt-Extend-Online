@@ -203,6 +203,7 @@ public final class PlaybackVideoRenderTest {
                 var actual=new androidx.compose.ui.awt.ComposeWindow();
                 window.set(actual);actual.setTitle("Salt video regression");
                 actual.setSize(1160,770);
+                actual.setAlwaysOnTop(true); // Keep other desktop windows out of the pixel assertions.
                 actual.setContent((scope,c,flags)->{
                     CompositionLocalKt.CompositionLocalProvider(
                             windowLocals(c,local.provides(playerSheet),captionLocal.provides(caption),hitTestLocal.provides(hitTest),navigatorLocal.provides(navigator)),(composer,f)->{
