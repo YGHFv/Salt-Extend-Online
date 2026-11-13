@@ -10,6 +10,10 @@ import javax.imageio.ImageIO;
 public final class PlaybackCoverContractTest {
     private static int checks;
     private static void check(boolean value) { checks++; if (!value) throw new AssertionError("Playback cover check " + checks); }
+    private static void await(java.util.function.BooleanSupplier done) throws Exception {
+        long end=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+        while(!done.getAsBoolean() && System.nanoTime()<end)Thread.sleep(5);check(done.getAsBoolean());
+    }
     public static byte[] png() throws IOException {
         return png(96);
     }
@@ -26,12 +30,13 @@ public final class PlaybackCoverContractTest {
             check(PlaybackCoverFile.isPath(reserved) && !Files.exists(future.getParent()));
             cover.clear(); check(!Files.exists(future.getParent()));
             cover.replace(png); check(Files.isRegularFile(future) && cover.path().equals(reserved));
-            cover.clear(); check(Files.size(future)==42);
+            cover.clear();await(()->{try{return Files.size(future)==42;}catch(IOException e){return false;}});
             cover.replace(png); check(Files.size(future)>42);
         }
         check(!PlaybackCoverFile.isPath(reserved));
         try(PlaybackCoverFile cover=PlaybackCoverFile.reserve()) { reserved=cover.path(); }
-        check(!PlaybackCoverFile.isPath(reserved) && !Files.exists(Path.of(reserved).getParent()));
+        String retiredReservation=reserved;
+        await(()->!PlaybackCoverFile.isPath(retiredReservation) && !Files.exists(Path.of(retiredReservation).getParent()));
         try (PlaybackCoverFile cover = PlaybackCoverFile.create(png)) {
             path = Path.of(cover.path()); check(PlaybackCoverFile.isPath(cover.path()));
             byte[] flac = Files.readAllBytes(path); check(flac.length < 132000 && new String(flac,0,4,java.nio.charset.StandardCharsets.US_ASCII).equals("fLaC"));
@@ -49,7 +54,7 @@ public final class PlaybackCoverContractTest {
             finally { bitmap.close(); }
             try (PlaybackCoverFile second = PlaybackCoverFile.create(png)) { check(!second.path().equals(cover.path())); }
         }
-        check(!Files.exists(path) && !Files.exists(path.getParent()));
+        await(()->!Files.exists(path) && !Files.exists(path.getParent()));
         try (PlaybackCoverFile cover = PlaybackCoverFile.create(png(1024))) {
             Class<?> tags = Class.forName("com.xuncorp.voxzen.tag.TagParser"); Object parser = tags.getField("INSTANCE").get(null);
             Object image = tags.getMethod("readImage-0E7RQCE",String.class,int.class,int.class).invoke(parser,cover.path(),800,800);

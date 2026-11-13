@@ -134,13 +134,15 @@ public final class LazyPlaylistSession implements AutoCloseable {
                 if(!transport.now().isBefore(audio.expiresAt())) throw new IllegalStateException("Playlist audio already expired");
                 URI local=transport.register(audio.lease());
                 try {
+                    synchronized(cache) {
+                        check();Cached previous=cache.remove(entry);if(previous!=null)retire(previous);
+                    }
+                    if(entry.cover!=null && audio.metadata().coverPng()!=null)
+                        try {entry.cover.replace(audio.metadata().coverPng(),()->!closed && active.getAsBoolean() && valid.getAsBoolean());}
+                        catch(java.io.IOException ignored) { }
                     Object item;
                     synchronized(cache) {
                         check();
-                        Cached previous=cache.remove(entry);
-                        if(previous!=null) retire(previous);
-                        if(entry.cover!=null && audio.metadata().coverPng()!=null)
-                            try { entry.cover.replace(audio.metadata().coverPng()); } catch(java.io.IOException ignored) { }
                         // Salt's onLoaded callback can retain the original object, before async queue.update runs.
                         // Its path must already name this same file, now populated before the stream opens.
                         item=media.create(entry.id,audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),entry.path);

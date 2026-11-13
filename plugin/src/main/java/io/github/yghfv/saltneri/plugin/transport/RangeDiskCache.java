@@ -17,11 +17,12 @@ public final class RangeDiskCache implements AutoCloseable {
     private final LinkedHashMap<Key,FileEntry> files=new LinkedHashMap<>(16,0.75f,true);
     private final Map<Object,NavigableMap<Long,Set<Key>>> ranges=new IdentityHashMap<>();
     private Path directory;
-    private long limit=DEFAULT_LIMIT,used,revision;
+    private volatile long limit=DEFAULT_LIMIT,used,revision;
     private boolean closed;
-    public synchronized long usedBytes() { return used; }
-    public synchronized long limitBytes() { return limit; }
-    synchronized long revision() { return revision; }
+    // Metadata reads must not inherit a disk read/write/delete's monitor wait.
+    public long usedBytes() { return used; }
+    public long limitBytes() { return limit; }
+    long revision() { return revision; }
     public synchronized void limit(long bytes) {
         if(bytes<0 || bytes>8L*1024*1024*1024) throw new IllegalArgumentException("Invalid cache budget");
         if(limit==bytes) return;

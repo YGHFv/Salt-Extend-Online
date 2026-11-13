@@ -110,6 +110,8 @@ public final class LazyPlaylistCoverContractTest {
                         }
                     }
                     check(resolutions.get()==12 && pendingUpdates.size()==11);
+                    long cleared=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+                    while(Files.size(Path.of(paths.getFirst()))!=42 && System.nanoTime()<cleared)Thread.sleep(5);
                     check(Files.size(Path.of(paths.getFirst()))==42);
                     nativeItem.set(originals.getFirst()); expected.set(pictures.getFirst());
                     check(open(adapter,nativeItem.get()).equals(321) && resolutions.get()==13);
@@ -128,7 +130,11 @@ public final class LazyPlaylistCoverContractTest {
                     try { open(adapter,nativeItem.get()); throw new AssertionError("Retired account opened"); }
                     catch(IllegalStateException expectedFailure) { checks++; }
                 }
-                for(String path:paths) check(!PlaybackCoverFile.isPath(path) && !Files.exists(Path.of(path).getParent()));
+                for(String path:paths) {
+                    long deleted=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+                    while(Files.exists(Path.of(path).getParent()) && System.nanoTime()<deleted)Thread.sleep(5);
+                    check(!PlaybackCoverFile.isPath(path) && !Files.exists(Path.of(path).getParent()));
+                }
             }
         }
         System.out.println("PASS: "+checks+" lazy playlist original-item artwork, deferred queue updates, next/back/expiry/LRU, aspect ratio and revocation checks; real Salt tag reader, synthetic images, no audio/network");

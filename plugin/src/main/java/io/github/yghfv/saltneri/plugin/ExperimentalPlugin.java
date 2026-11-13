@@ -162,10 +162,15 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 public java.util.List<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice> choices() throws Exception {return gateway.choices();}
                 public void add(OnlinePlaybackController.Target target,Catalog.Item row,io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice choice,java.util.function.BooleanSupplier valid) throws Exception {
                     if(!valid.getAsBoolean()) throw new java.util.concurrent.CancellationException();
-                    io.github.yghfv.saltneri.plugin.host.SavedTrackStore.Entry entry;
+                    io.github.yghfv.saltneri.plugin.host.SavedTrackStore store;
                     synchronized(ExperimentalPlugin.this) {
                         if(generation!=started || !granted()) throw new java.util.concurrent.CancellationException();
-                        entry=savedTracks.save(target,row); arm();
+                        store=savedTracks;
+                    }
+                    var entry=store.save(target,row);
+                    synchronized(ExperimentalPlugin.this) {
+                        if(generation!=started || !granted() || savedTracks!=store)throw new java.util.concurrent.CancellationException();
+                        arm();
                     }
                     gateway.add(entry,choice,valid);
                 }

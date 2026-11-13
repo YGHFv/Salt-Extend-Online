@@ -142,26 +142,29 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
         }, 250, 250, TimeUnit.MILLISECONDS);
     }
 
-    public synchronized PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease)
+    public PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease)
             throws ReflectiveOperationException {
         return prepare(key,metadata,lease,null);
     }
-    public synchronized PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease, OnlineLyrics.Source lyricSource)
+    public PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease, OnlineLyrics.Source lyricSource)
             throws ReflectiveOperationException {
         return prepare(key,metadata,lease,lyricSource,null);
     }
-    public synchronized PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease, OnlineLyrics.Source lyricSource, Renewer renewer)
+    public PreparedTrack prepare(TrackKey key, Metadata metadata, MediaLease lease, OnlineLyrics.Source lyricSource, Renewer renewer)
             throws ReflectiveOperationException {
-        requireActive();
+        synchronized(this) {requireActive();}
         Objects.requireNonNull(key);
         Objects.requireNonNull(metadata);
         Objects.requireNonNull(lease);
         if (!lease.belongsTo(accountScope) || !lease.platform().name().equals(key.platform().name())) {
             throw new IllegalArgumentException("Media lease platform/account mismatch");
         }
-        retireExpired();
-        if (tracks.size() >= (renewer==null?64:10000)) throw new IllegalStateException("Queue item limit reached");
-        URI local = transport.register(lease);
+        URI local;
+        synchronized(this) {
+            requireActive();retireExpired();
+            if (tracks.size() >= (renewer==null?64:10000)) throw new IllegalStateException("Queue item limit reached");
+            local=transport.register(lease);
+        }
         // Each preparation keeps its logical identity; only its account-scoped expiring URL is renewed.
         String nonce = UUID.randomUUID().toString();
         PlaybackCoverFile cover = null;
@@ -181,13 +184,16 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
             Object item = media.create(id, metadata.title(), metadata.artist(), metadata.album(),
                     metadata.albumArtist(), path);
             if(lyricSource!=null) lyrics=OnlineLyrics.bind(id,path,()->!closed && permitted(),lyricSource);
+            synchronized(this) {
             requireActive();
+            if (tracks.size() >= (renewer==null?64:10000)) throw new IllegalStateException("Queue item limit reached");
             PreparedTrack track = new PreparedTrack(key, path, local, item, lease.expiresAt(), cover, lyrics, renewer);
             if(renewer==null) adapter.register(path,local);
             else adapter.registerDeferred(path,()->resolve(track));
             tracks.put(path, track);
             if(renewer!=null) { cached.put(track,Boolean.TRUE); trimCache(); }
             return track;
+            }
         } catch (ReflectiveOperationException | RuntimeException failure) {
             adapter.unregister(path);
             transport.revoke(local);
@@ -238,6 +244,9 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
                 track.request=request; request.check(); Audio audio=track.renewer.resolve(request); request.check();
                 if(!audio.key().equals(track.key) || !audio.lease().belongsTo(accountScope)
                         || !audio.lease().platform().name().equals(track.key.platform().name())) throw new SecurityException("Replay identity mismatch");
+                if(track.cover!=null && audio.metadata().coverPng()!=null)
+                    try {track.cover.replace(audio.metadata().coverPng(),()->!closed && !track.retired && permitted());}
+                    catch(IOException ignored) { }
                 synchronized(this) {
                     requireTrack(track); request.check();
                     if(!transport.now().isBefore(audio.expiresAt())) throw new IllegalStateException("Renewed audio already expired");
@@ -245,9 +254,6 @@ public final class Salt1193PlaybackSession implements AutoCloseable {
                     track.localUri=local;
                     track.qualityRevision=qualityRevision;
                     track.expiresAt=audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt();
-                    if(track.cover!=null && audio.metadata().coverPng()!=null) {
-                        try { track.cover.replace(audio.metadata().coverPng()); } catch(IOException ignored) { }
-                    }
                     cached.put(track,Boolean.TRUE); trimCache(); return local;
                 }
             } finally { track.request=null; }

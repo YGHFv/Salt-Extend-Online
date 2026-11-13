@@ -21,11 +21,15 @@ public final class AppleMusicPcmSource implements DecodedAudioSource {
     private final long frames;
     private final byte[] header;
     private final LinkedHashMap<Long,byte[]> blocks=new LinkedHashMap<>(32,0.75f,true);
-    private Decoder decoder;
+    private volatile Decoder decoder;
     private long cursor=-1;
     private byte[] pending=new byte[0];
     private volatile boolean closed;
     private final java.util.concurrent.atomic.AtomicBoolean closing=new java.util.concurrent.atomic.AtomicBoolean();
+    private static final java.util.concurrent.ExecutorService CLEANUP=java.util.concurrent.Executors.newCachedThreadPool(r->{
+        var thread=new Thread(r,"salt-apple-pcm-retirement");thread.setDaemon(true);return thread;
+    });
+    private final java.util.concurrent.CompletableFuture<Void> released=new java.util.concurrent.CompletableFuture<>();
     public AppleMusicPcmSource(long durationMillis,BooleanSupplier account,Factory factory) {
         if(durationMillis<1 || durationMillis>7200000)throw new IllegalArgumentException("Invalid Apple audio duration");
         frames=durationMillis*RATE/1000;this.account=account;this.factory=factory;
@@ -52,7 +56,11 @@ public final class AppleMusicPcmSource implements DecodedAudioSource {
         if(closed || !account.getAsBoolean() || !active.getAsBoolean() || Thread.currentThread().isInterrupted())
             throw AppleMusicHttp.failure("STREAM_REVOKED");
     }
-    @Override public synchronized byte[] read(ByteRange range,BooleanSupplier active) throws IOException {
+    @Override public byte[] read(ByteRange range,BooleanSupplier active) throws IOException {
+        check(active); // Retired callers must not wait for an older CDP read to release the monitor.
+        synchronized(this) {return readLocked(range,active);}
+    }
+    private byte[] readLocked(ByteRange range,BooleanSupplier active) throws IOException {
         check(active);
         if(range.last()>=length() || range.length()>512*1024)throw AppleMusicHttp.failure("RANGE_BOUNDS");
         byte[] cached=blocks.get(range.first());
@@ -86,7 +94,7 @@ public final class AppleMusicPcmSource implements DecodedAudioSource {
                 }
             } catch(IOException | RuntimeException failure) {
                 cursor=-1;pending=new byte[0];
-                try {decoder.pause();} catch(IOException pauseFailure) {failure.addSuppressed(pauseFailure);}
+                if(!closed)try {decoder.pause();} catch(IOException pauseFailure) {failure.addSuppressed(pauseFailure);}
                 throw failure;
             }
             // The browser keeps a bounded read-ahead queue and pauses itself when it fills.
@@ -104,10 +112,26 @@ public final class AppleMusicPcmSource implements DecodedAudioSource {
     @Override public void close() {
         if(!closing.compareAndSet(false,true))return;
         closed=true;
-        Decoder current=decoder;if(current!=null)current.close();
-        synchronized(this) {
-            if(decoder!=null && decoder!=current)decoder.close();
-            blocks.values().forEach(b->Arrays.fill(b,(byte)0));blocks.clear();Arrays.fill(pending,(byte)0);
-        }
+        CLEANUP.execute(()->{
+            try {
+                // CDP/browser close can wait for process exit and profile deletion. It must
+                // run outside the caller's UI/transport/session locks, ahead of PCM draining.
+                Decoder current=decoder;
+                try {if(current!=null)current.close();}
+                finally {
+                    Decoder late;
+                    synchronized(this) {
+                        // openDecoder can publish just after its closed check and after the
+                        // first snapshot. Cover that hand-off before signalling retirement.
+                        late=decoder;
+                        decoder=null;
+                        blocks.values().forEach(b->Arrays.fill(b,(byte)0));blocks.clear();Arrays.fill(pending,(byte)0);
+                    }
+                    if(late!=null && late!=current)late.close();
+                }
+                released.complete(null);
+            } catch(Throwable failure) {released.completeExceptionally(failure);}
+        });
     }
+    java.util.concurrent.CompletableFuture<Void> released() {return released;}
 }

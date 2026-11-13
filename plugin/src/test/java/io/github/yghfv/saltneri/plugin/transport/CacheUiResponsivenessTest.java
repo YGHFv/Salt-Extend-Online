@@ -9,14 +9,19 @@ import javax.swing.SwingUtilities;
 public final class CacheUiResponsivenessTest {
     public static void main(String[] args) throws Exception {
         var server = new LoopbackRangeServer();
+        var expired=server.registerDiagnosticTone();
         var field=LoopbackRangeServer.class.getDeclaredField("cache");field.setAccessible(true);
         Object cache=field.get(server);
         var locked=new CountDownLatch(1);var release=new CountDownLatch(1);
         var io=new Thread(()->{synchronized(cache){locked.countDown();uninterruptible(release);}},"slow-cache-fixture");
         io.start();check(locked.await(2,TimeUnit.SECONDS),"Cache fixture did not start");
+        var revoked=new CountDownLatch(1);
+        var background=new Thread(()->{try{server.revoke(expired);}finally{revoked.countDown();}},"cache-revoke-fixture");
+        background.start();
         var ui=new CountDownLatch(1);var failure=new AtomicReference<Throwable>();
         SwingUtilities.invokeLater(()->{
             try {
+                server.cacheBytes();server.cacheLimitBytes();server.cacheRevision();
                 server.cacheLimit(1024);server.cacheLimit(2048);
                 server.clearCache();
                 var track=server.registerDiagnosticTone();server.revoke(track);
@@ -26,10 +31,11 @@ public final class CacheUiResponsivenessTest {
         });
         try {
             check(ui.await(2,TimeUnit.SECONDS),"UI waited for disk cache monitor during maintenance/revoke/stop");
+            check(revoked.await(2,TimeUnit.SECONDS),"Background revoke held transport lock across disk cleanup");
             check(failure.get()==null,"Cache operations failed: "+failure.get());
             var sentinel=new CountDownLatch(1);SwingUtilities.invokeLater(sentinel::countDown);
             check(sentinel.await(2,TimeUnit.SECONDS),"Cache cleanup blocked AWT");
-        }finally{release.countDown();io.join(2000);server.close();}
+        }finally{release.countDown();io.join(2000);background.join(2000);server.close();}
         Field executor=LoopbackRangeServer.class.getDeclaredField("cacheIo");executor.setAccessible(true);
         check(((ExecutorService)executor.get(server)).awaitTermination(2,TimeUnit.SECONDS),"Maintenance did not drain and exit");
         check(server.cacheBytes()==0,"Stopped cache retained entries");

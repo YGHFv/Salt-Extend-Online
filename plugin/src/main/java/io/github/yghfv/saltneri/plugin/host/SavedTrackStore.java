@@ -30,7 +30,9 @@ public final class SavedTrackStore implements AutoCloseable {
     }
     private final Path root;
     private final Map<String, Entry> entries = new LinkedHashMap<>();
-    private boolean closed;
+    private final Object publication=new Object();
+    private volatile Map<String,Entry> published=Map.of();
+    private volatile boolean closed;
     private record Record(String id,Target target,String title,String artist,long duration) { }
     public SavedTrackStore(Path directory) throws IOException {
         Files.createDirectories(directory);
@@ -85,16 +87,21 @@ public final class SavedTrackStore implements AutoCloseable {
                 }
             }
         }
+        publish();
     }
-    public synchronized List<Entry> entries() { return List.copyOf(entries.values()); }
-    public synchronized Entry find(String trackId,String path) {
-        return owns(trackId,path) ? entries.get(trackId.substring("saltneri:saved:".length())) : null;
+    private void publish() throws IOException {
+        synchronized(publication) {
+            if(closed)throw new IOException("Saved tracks closed");
+            published=Collections.unmodifiableMap(new LinkedHashMap<>(entries));
+        }
     }
-    public synchronized boolean owns(String trackId,String path) {
-        if(closed || trackId==null || !trackId.startsWith("saltneri:saved:")) return false;
-        Entry entry=entries.get(trackId.substring("saltneri:saved:".length()));
-        return entry!=null && entry.path().equals(path);
+    public List<Entry> entries() { return List.copyOf(published.values()); }
+    public Entry find(String trackId,String path) {
+        if(closed || trackId==null || !trackId.startsWith("saltneri:saved:"))return null;
+        Entry entry=published.get(trackId.substring("saltneri:saved:".length()));
+        return entry!=null && entry.path().equals(path)?entry:null;
     }
+    public boolean owns(String trackId,String path) {return find(trackId,path)!=null;}
     public synchronized Entry save(Target input, Catalog.Item row) throws IOException {
         if(closed) throw new IOException("Saved tracks closed");
         if(row.kind()!=Catalog.Kind.TRACK || !row.enabled()) throw new IllegalArgumentException("Unplayable row");
@@ -116,8 +123,9 @@ public final class SavedTrackStore implements AutoCloseable {
                 out.writeUTF(title); out.writeUTF(artist); out.writeLong(duration);
             }
             Files.move(next,file,StandardCopyOption.ATOMIC_MOVE);
-            Entry entry=new Entry(id,target,title,artist,duration,cover); entries.put(id,entry); return entry;
-        } finally { Files.deleteIfExists(next); }
+            if(closed)throw new IOException("Saved tracks closed");
+            Entry entry=new Entry(id,target,title,artist,duration,cover); entries.put(id,entry); publish();return entry;
+        } finally {if(closed)cover.close();Files.deleteIfExists(next);}
     }
     /** Publish durable identities as one transaction, before a native queue can reference them. */
     public synchronized List<Entry> saveAll(AccountPlatform platform,List<Catalog.Item> rows,java.util.function.BooleanSupplier active) throws IOException {
@@ -155,9 +163,12 @@ public final class SavedTrackStore implements AutoCloseable {
                         if(!entries.containsKey(value.id())) added.put(value.id(),entry(value));
                     }
                 }
-                check(active);Files.move(next,file,StandardCopyOption.ATOMIC_MOVE);
+                check(active);if(closed)throw new IOException("Saved tracks closed");
+                Files.move(next,file,StandardCopyOption.ATOMIC_MOVE);
                 entries.putAll(added);
                 for(var value:pending.values()) if(entries.get(value.id()).artist().isBlank()) entries.get(value.id()).artist=value.artist();
+                if(closed)throw new IOException("Saved tracks closed");
+                publish();
                 committed=true;
             } finally {
                 if(!committed) added.values().forEach(e->e.cover().close());
@@ -192,5 +203,9 @@ public final class SavedTrackStore implements AutoCloseable {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest((target.platform().name()+":"+target.id()).getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
         catch(java.security.NoSuchAlgorithmException impossible) { throw new AssertionError(impossible); }
     }
-    @Override public synchronized void close() { closed=true; entries.values().forEach(e->e.cover().close()); entries.clear(); }
+    @Override public void close() {
+        Map<String,Entry> retired;
+        synchronized(publication) {closed=true;retired=published;published=Map.of();}
+        retired.values().forEach(e->e.cover().close());
+    }
 }

@@ -91,17 +91,20 @@ public final class SavedTrackSession implements AutoCloseable {
             Salt1193PlaybackSession.QueueSink sink;
             synchronized(this) {if(closed || !active.getAsBoolean() || queue==null)return;sink=queue;}
             var selection=sink.coverSelection();
+            Binding observed;
+            synchronized(this) {observed=selection==null?null:bindings.get(selection.path());}
+            boolean picture=observed!=null && observed.entry.cover().hasPicture();
             synchronized(this) {
                 if(closed || !active.getAsBoolean())return;
                 Binding binding=selection==null?null:bindings.get(selection.path());
-                if(binding==null || !binding.entry.trackId().equals(selection.id())) {notifiedCover=null;return;}
+                if(binding==null || binding!=observed || !binding.entry.trackId().equals(selection.id())) {notifiedCover=null;return;}
                 if(!selection.equals(selectedCover)) {
                     boolean revisit=selectedCover!=null;
                     selectedCover=selection;
                     if(revisit && !binding.coverPending) {binding.coverAttempts=0;binding.coverRetryAt=0;}
                 }
                 scheduleCover(binding);
-                Object key=List.of(selection,binding.generation,binding.entry.cover().hasPicture());
+                Object key=List.of(selection,binding.generation,picture);
                 if(!key.equals(notifiedCover)) {notifiedCover=key;notifyCover(binding);}
             }
         } catch(ReflectiveOperationException | RuntimeException | LinkageError ignored) { }
@@ -116,7 +119,7 @@ public final class SavedTrackSession implements AutoCloseable {
     }
     private void scheduleCover(Binding binding) {
         if(closed || binding.coverSource==null || binding.coverPending || coverPending>=10
-                || binding.coverAttempts>=3 || System.nanoTime()<binding.coverRetryAt || binding.entry.cover().hasPicture())return;
+                || binding.coverAttempts>=3 || System.nanoTime()<binding.coverRetryAt || binding.entry.cover().knownPicture())return;
         URI source=binding.coverSource;CoverMode mode=binding.coverMode;
         long generation=binding.generation,coverRevision=binding.coverRevision;
         Object revision=resolver.revision(binding.entry.target().platform());
@@ -126,9 +129,8 @@ public final class SavedTrackSession implements AutoCloseable {
                 synchronized(this) {request.check();binding.coverRequest=request;}
                 request.check();byte[] png=resolver.cover(source,mode,request);request.check();
                 if(png==null)return;
-                synchronized(this) {
-                    request.check();binding.entry.cover().replace(png);notifyCover(binding);
-                }
+                request.check();binding.entry.cover().replace(png,()->active.getAsBoolean() && validCover(binding,generation,revision,coverRevision));
+                synchronized(this) {request.check();notifyCover(binding);}
             } catch(Exception | LinkageError ignored) { /* Independent artwork failure never retries or revokes audio. */ }
             finally {
                 synchronized(this) {
@@ -161,12 +163,19 @@ public final class SavedTrackSession implements AutoCloseable {
         synchronized(this) {register(entry);binding=bindings.get(entry.path());}
         return resolve(binding,valid);
     }
-    public synchronized void prime(SavedTrackStore.Entry entry,Audio audio,Object revision) {
-        register(entry);validate(entry,audio);
-        Binding binding=bindings.get(entry.path());
+    public void prime(SavedTrackStore.Entry entry,Audio audio,Object revision) {
+        Binding binding;long generation;
+        synchronized(this) {
+        register(entry);validate(entry,audio);binding=bindings.get(entry.path());
         // Never revoke an already decoding copy merely because the user inserts it again.
         if(binding==opened && cache.containsKey(binding)) return;
-        retire(cache.remove(binding));publish(binding,audio,revision);
+        generation=binding.generation;
+        }
+        materializeCover(binding,audio,generation,revision);
+        synchronized(this) {
+            check();if(!valid(binding,generation,revision))throw new java.util.concurrent.CancellationException();
+            retire(cache.remove(binding));publish(binding,audio,revision);
+        }
     }
     private void validate(SavedTrackStore.Entry entry,Audio audio) {
         if(!audio.key().platform().name().equals(entry.target().platform().name())
@@ -181,14 +190,17 @@ public final class SavedTrackSession implements AutoCloseable {
             binding.coverAttempts=0;binding.coverRetryAt=0;
         }
         binding.coverSource=audio.coverSource();binding.coverMode=audio.coverMode();
-        try {
-            if(audio.metadata().coverPng()!=null) binding.entry.cover().replace(audio.metadata().coverPng());
-            else binding.entry.cover().ensureFile();
-        } catch(java.io.IOException ignored) { }
         notifyCover(binding);scheduleCover(binding);
         cache.put(binding,new Cached(uri,audio.expiresAt().isBefore(audio.lease().expiresAt())?audio.expiresAt():audio.lease().expiresAt(),revision));
         while(cache.size()>8) retire(cache.remove(cache.keySet().stream().filter(b->b!=opened).findFirst().orElseThrow()));
         return uri;
+    }
+    private void materializeCover(Binding binding,Audio audio,long generation,Object revision) {
+        try {
+            if(audio.metadata().coverPng()!=null)binding.entry.cover().replace(audio.metadata().coverPng(),
+                    ()->active.getAsBoolean() && valid(binding,generation,revision));
+            else binding.entry.cover().ensureFile();
+        } catch(java.io.IOException ignored) { }
     }
     private URI resolve(Binding binding,BooleanSupplier selectionValid) throws Exception {
         synchronized(binding) {
@@ -206,6 +218,7 @@ public final class SavedTrackSession implements AutoCloseable {
                 synchronized(this) { check(); binding.request=request; }
                 request.check(); Audio audio=resolver.resolve(binding.entry,request); request.check();
                 validate(binding.entry,audio);
+                materializeCover(binding,audio,generation,revision);
                 synchronized(this) {
                     check(); request.check();
                     return publish(binding,audio,revision);

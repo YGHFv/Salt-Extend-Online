@@ -41,15 +41,15 @@ public final class AppleMusicQueueContractTest {
                 MediaLease.appleMusic(pcm,s,expiry,()->true),expiry,t);
         })) {
             player.prepare(target);await(()->Boolean.TRUE.equals(player.snapshot().get("ready")));
-            player.invalidate("Cancelled");if(closed.get()!=1)throw new AssertionError("Cancelled browser leaked");
+            player.invalidate("Cancelled");await(()->closed.get()==1);
             player.playSelected(target,()->{});await(()->submitted.get()==1);
             player.invalidate("Page changed");if(closed.get()!=1)throw new AssertionError("Navigation closed native playback");
-            playing.get().release();if(closed.get()!=2)throw new AssertionError("Transferred source did not close");
+            playing.get().release();await(()->closed.get()==2);
             player.insertSelected(target,()->{},OnlinePlaybackController.QueueAction.AFTER_CURRENT);await(()->inserted.get()==1);
             player.invalidate("Navigation");if(closed.get()!=2)throw new AssertionError("Inserted native track revoked");
             playing.get().release();
         }
-        if(closed.get()!=3)throw new AssertionError("PCM ownership mismatch");
+        await(()->closed.get()==3);
         System.out.println("PASS: Apple native queue play/insert, cancelled preparation cleanup and playback survival across navigation");
     }
 }

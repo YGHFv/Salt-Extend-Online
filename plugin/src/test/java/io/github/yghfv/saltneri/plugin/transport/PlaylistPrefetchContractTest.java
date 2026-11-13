@@ -83,6 +83,7 @@ public final class PlaylistPrefetchContractTest {
                 active.set(false); check(cancelled.await(3,TimeUnit.SECONDS));
                 int before=resolutions.size(); Thread.sleep(500); check(resolutions.size()==before);
             }
+            await(()->server.cacheBytes()==0);
             check(bindings.pending.isEmpty() && server.cacheBytes()==0);
         }
         nativePrefix();
@@ -130,6 +131,7 @@ public final class PlaylistPrefetchContractTest {
                 check(calls.get(entries.get(1).id()).get()==2);
                 active.set(false);
             }
+            await(()->server.cacheBytes()==0);
             check(server.cacheBytes()==0 && bindings.pending.isEmpty());
         } finally {
             try(var files=java.nio.file.Files.walk(root)) {

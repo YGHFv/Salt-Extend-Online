@@ -524,6 +524,21 @@
       "offline": false
     },
     {
+      "class": "io.github.yghfv.saltneri.plugin.ui.VideoControlResponsivenessTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.applemusic.AppleMusicRetirementTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.SavedStorageResponsivenessTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.video.VideoPrecacheContractTest",
       "baseOnly": false,
       "offline": false

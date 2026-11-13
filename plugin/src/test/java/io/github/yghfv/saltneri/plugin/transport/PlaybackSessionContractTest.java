@@ -81,11 +81,14 @@ public final class PlaybackSessionContractTest {
             session.enqueue(covered, queue::add);
             require(unbox.invoke(create.invoke(adapter.interceptor(), null, covered.mediaItem(), 0L, 0L, 0, continuation())).equals(321), "Cover path did not resolve online audio");
             require(streams.get() == 2, "Cover file was played instead of remote audio");
-            covered.close(); require(!java.nio.file.Files.exists(coverPath), "Retired cover file retained");
+            covered.close();
             require(io.github.yghfv.saltneri.plugin.host.OnlineLyrics.load(lyricFields[0],lyricFields[5])==null,"Retired item retained lyric capability");
             Object retiredCover = unbox.invoke(create.invoke(adapter.interceptor(), null, covered.mediaItem(), 0L, 0L, 0, continuation()));
             try { ResultKt.throwOnFailure(retiredCover); throw new AssertionError("Retired cover path fell through to local audio"); }
             catch (IllegalStateException expected) { checks++; }
+            long deleted=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+            while(java.nio.file.Files.exists(coverPath) && System.nanoTime()<deleted)Thread.sleep(5);
+            require(!java.nio.file.Files.exists(coverPath), "Retired cover file retained");
             Salt1193PlaybackSession.PreparedTrack second = session.prepare(key, META,
                     TransportContractTest.lease("account-a", EXPIRY, 100));
             require(!second.path().equals(track.path()), "Preparations reused stale media path");

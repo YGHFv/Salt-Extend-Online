@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**1.0.3 · 开发预览** · Windows / Steam Salt 1.19.3
+**1.0.4 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -76,6 +76,8 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 音质以当前账号的官方权限为准，只播放可访问的完整音轨，不提供试听替代、会员或风控绕过。B站搜索需要登录，网易云部分匿名接口也可能要求登录。
 
 ## 版本与兼容
+
+**1.0.4** 第二轮检查进一步拆开视频原生命令、后台缓存撤销、Apple Music 浏览器／PCM 清理，以及保存歌曲和封面 I/O 与界面状态锁之间的等待。后台任务在发布前重新检查会话和取消状态；详见 [全量复查与等待链修复](docs/LOGIC_AUDIT_1.0.4.md)。
 
 **1.0.3** 根据本机现场定位并修复原生窗口回调被回收后点击失效的问题，同时将视频读取／画面释放／句柄销毁按顺序放到后台，避免关闭视频阻塞界面；缓存上限、清理、撤销和停止的磁盘维护也避开界面线程。原因、扩大检查范围与验证见 [本机卡死与生命周期修复](docs/DEVICE_FREEZE_FIX_1.0.3.md)。已失效的原生回调需要完整退出并重启 Salt 才能恢复。
 

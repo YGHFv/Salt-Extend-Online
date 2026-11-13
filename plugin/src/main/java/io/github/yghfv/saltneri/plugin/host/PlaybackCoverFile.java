@@ -10,7 +10,20 @@ public final class PlaybackCoverFile implements AutoCloseable {
     public static final int MAX_PNG_BYTES = 5 * 1024 * 1024;
     private static final ConcurrentHashMap<String,PlaybackCoverFile> reserved = new ConcurrentHashMap<>();
     private final Path directory, file;
-    private boolean closed, materialized;
+    private volatile boolean closed;
+    private volatile boolean picturePresent;
+    private volatile long pictureRevision;
+    private static final java.util.concurrent.ThreadPoolExecutor CLEANUP=cleanup();
+    private static java.util.concurrent.ThreadPoolExecutor cleanup() {
+        var pool=new java.util.concurrent.ThreadPoolExecutor(0,2,10,java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>(),r->{
+                    var thread=new Thread(r,"salt-artwork-retirement");thread.setDaemon(true);return thread;
+                });
+        pool.setCorePoolSize(2);pool.allowCoreThreadTimeOut(true);return pool;
+    }
+    private final java.util.concurrent.atomic.AtomicBoolean closing=new java.util.concurrent.atomic.AtomicBoolean();
+    private final java.util.concurrent.CompletableFuture<Void> released=new java.util.concurrent.CompletableFuture<>();
+    private boolean materialized;
     private boolean persistent;
     private PlaybackCoverFile(Path directory, Path file) { this.directory = directory; this.file = file; }
     public String path() { return file.toString(); }
@@ -55,6 +68,7 @@ public final class PlaybackCoverFile implements AutoCloseable {
         if(!Files.exists(file,LinkOption.NOFOLLOW_LINKS)) replace(null);
     }
     public synchronized boolean hasPicture() {
+        picturePresent=false;
         try {
             if(closed || !directory.toRealPath().equals(directory) || !Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)
                     || !file.toRealPath().equals(file) || Files.size(file)<=46 || Files.size(file)>MAX_PNG_BYTES+128) return false;
@@ -62,10 +76,12 @@ public final class PlaybackCoverFile implements AutoCloseable {
                 if(in.readInt()!=0x664c6143 || in.readInt()!=34)return false;
                 in.skipNBytes(34);
                 int block=in.readInt();
-                return ((block>>>24)&127)==6 && (block&0xffffff)>0;
+                picturePresent=((block>>>24)&127)==6 && (block&0xffffff)>0;
+                return picturePresent;
             }
         } catch(IOException | RuntimeException ignored) {return false;}
     }
+    boolean knownPicture() {return !closed && picturePresent;}
     private static byte[] picture(byte[] png) throws IOException {
         if (png == null || png.length < 24 || png.length > MAX_PNG_BYTES
                 || !java.util.Arrays.equals(java.util.Arrays.copyOf(png, 8), new byte[]{(byte)137,80,78,71,13,10,26,10})) {
@@ -89,6 +105,9 @@ public final class PlaybackCoverFile implements AutoCloseable {
     }
     /** Evict image bytes, not the native queue's path. Replace atomically so readers see a complete file. */
     public synchronized void replace(byte[] png) throws IOException {
+        replace(png,()->true);
+    }
+    synchronized void replace(byte[] png,java.util.function.BooleanSupplier valid) throws IOException {
         if(closed) throw new IOException("Artwork retired");
         byte[] picture=png==null?null:picture(png);
         if(!materialized) {
@@ -101,12 +120,19 @@ public final class PlaybackCoverFile implements AutoCloseable {
         Path next=directory.resolve(UUID.randomUUID()+".tmp");
         try {
             write(next,picture);
+            if(closed || !valid.getAsBoolean())throw new IOException("Artwork retired");
             Files.move(next,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);
+            picturePresent=png!=null;pictureRevision++;
         } finally { Files.deleteIfExists(next); }
     }
-    public synchronized void clear() {
-        if(persistent) return;
-        if(materialized && !closed) try { replace(null); } catch(IOException ignored) { /* A host file handle may defer image eviction. */ }
+    public void clear() {
+        if(persistent || closed) return;
+        long captured=pictureRevision;
+        CLEANUP.execute(()->{synchronized(this) {
+            // A delayed eviction must not erase artwork published by a later replay.
+            if(materialized && !closed && captured==pictureRevision)
+                try {replace(null);}catch(IOException ignored) { }
+        }});
     }
     static boolean isPath(String value) {
         PlaybackCoverFile reservation=reserved.get(value);
@@ -126,15 +152,21 @@ public final class PlaybackCoverFile implements AutoCloseable {
                     && Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && path.toRealPath().equals(path);
         } catch (IOException | RuntimeException failure) { return false; }
     }
-    @Override public synchronized void close() {
+    @Override public void close() {
+        if(!closing.compareAndSet(false,true))return;
         closed=true;
         reserved.remove(path(),this);
-        if(persistent) return;
+        if(persistent) {released.complete(null);return;}
+        CLEANUP.execute(()->{try {
+        synchronized(this) {
         if(!materialized) return;
         try {
             // Only these exact owned paths are removed; never recurse or follow a replaced directory.
             if (!directory.toRealPath().equals(directory)) return;
             Files.deleteIfExists(file); Files.deleteIfExists(directory);
         } catch (IOException ignored) { /* Host readers may hold a Windows handle; no broad cleanup. */ }
+        }
+        } finally {released.complete(null);}});
     }
+    java.util.concurrent.CompletableFuture<Void> released() {return released;}
 }

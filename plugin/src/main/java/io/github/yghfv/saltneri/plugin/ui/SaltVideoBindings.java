@@ -105,7 +105,10 @@ public final class SaltVideoBindings implements AutoCloseable {
     private volatile SavedTrackStore.Entry entry;
     private volatile MusicVideoClient.Source source;
     private AccountCredentials account;
-    private Object player,handle;
+    // Native commands/destruction share a worker-only lock. UI lifecycle methods never take it.
+    private final Object nativeControl=new Object();
+    private volatile Object player;
+    private Object handle;
     private URI stream;
     private Boolean paused;
     private double speed=1;
@@ -482,11 +485,18 @@ public final class SaltVideoBindings implements AutoCloseable {
         try {Object item=current.getValue();return item==null?"":(String)itemId.invoke(item);}
         catch(ReflectiveOperationException ignored) {return "";}
     }
-    private synchronized void startPlayer(long ticket,AccountCredentials credentials,URI local) {
-        if(!valid(ticket,credentials))return;
+    private void startPlayer(long ticket,AccountCredentials credentials,URI local) {
+        try {worker.execute(()->openPlayer(ticket,credentials,local));}
+        catch(RejectedExecutionException stopped) {transport.revoke(local);}
+    }
+    private void openPlayer(long ticket,AccountCredentials credentials,URI local) {
+        synchronized(nativeControl) {
+        synchronized(this) {
+            if(!valid(ticket,credentials))return;
+            releasePlayer();
+        }
         Object created=null;
         try {
-            releasePlayer();
             created=playerConstructor.newInstance(this,EmptyCoroutineContext.INSTANCE);
             Object port=handleGetter.invoke(created);
             // Salt's bundled player defaults to AV1 only; permit FFmpeg's AVC and local MV decoders.
@@ -500,18 +510,22 @@ public final class SaltVideoBindings implements AutoCloseable {
             double position=position()/1000d;
             if(!Boolean.TRUE.equals(command.invoke(port,(Object)new String[]{"loadfile",local.toString(),"replace","-1","start="+position})))
                 throw new IllegalStateException("Video stream rejected");
-            player=created;handle=port;stream=local;paused=null;speed=1;videoSpeed=1;loaded=false;lastSeek=0;driftSince=0;
-            clock=new VideoAudioClock();
-            loadDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
-            publish(true,true,"正在加载视频");
+            synchronized(this) {
+                if(!valid(ticket,credentials)) {retirePlayer(created,CompletableFuture.completedFuture(null));return;}
+                player=created;handle=port;stream=local;paused=null;speed=1;videoSpeed=1;loaded=false;lastSeek=0;driftSince=0;
+                clock=new VideoAudioClock();
+                loadDeadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(20);
+                publish(true,true,"正在加载视频");
+            }
         } catch(Exception | LinkageError failed) {
-            if(created instanceof AutoCloseable closeable)try{closeable.close();}catch(Exception ignored){}
+            retirePlayer(created,CompletableFuture.completedFuture(null));
             transport.revoke(local);failed(ticket);
+        }
         }
     }
     private synchronized void failed(long ticket) {
         if(generation!=ticket || closed)return;
-        videoMode=false;
+        videoMode=false;generation++;cancelRequest();
         releasePlayer();publish(false,false,"");
         SaltPageContentBinding.onUiThread(()->{if(!closed)toast.accept("视频加载失败，请稍后重试");});
     }
@@ -519,12 +533,24 @@ public final class SaltVideoBindings implements AutoCloseable {
         try {return ((Number)progressPosition.invoke(progress.getValue())).longValue();}
         catch(ReflectiveOperationException | NullPointerException failure) {return 0;}
     }
-    private synchronized void tick() {
+    private void tick() {
+        Object selectedPlayer,selectedHandle;long ticket;
         try {
+            pollPointer();
+            synchronized(this) {
+                updateSelection();
+                if(closed)return;
+                selectedPlayer=player;selectedHandle=handle;ticket=generation;
+            }
+            if(selectedPlayer!=null)controlPlayer(selectedPlayer,selectedHandle,ticket);
+        } catch(Exception | LinkageError failure) {
+            synchronized(this) {if(player!=null)failed(generation);}
+        }
+    }
+    private void updateSelection() throws ReflectiveOperationException {
             if(closed)return;
             if(!active.getAsBoolean()){close();return;}
             if(videoMode && source!=null && selectedResolution!=resolution.get())requestVideo();
-            pollPointer();
             Object item=current.getValue();String id=item==null?"":(String)itemId.invoke(item);
             boolean changedAccount=entry!=null && accounts.apply(entry.target().platform())!=account;
             if(!id.equals(selection) || changedAccount) {
@@ -566,17 +592,24 @@ public final class SaltVideoBindings implements AutoCloseable {
             boolean available=hasNativeVideo(videoState.getValue());
             if(available!=nativeAvailable) {nativeAvailable=available;var state=view();publish(state.requested(),state.loading(),state.message());}
             if(videoMode && entry==null && available && player==null && !view().loading())toggleNativeVideo();
-            if(player!=null) {
+    }
+    private void controlPlayer(Object selectedPlayer,Object handle,long ticket) {
+        synchronized(nativeControl) {
+            if(closed || player!=selectedPlayer)return;
+            try {
                 long now=System.nanoTime();
                 if(!loaded) {
                     if(((Number)integer.invoke(handle,"width")).intValue()>0) {
-                        loaded=true;publish(true,false,"");
+                        synchronized(this) {
+                            if(closed || player!=selectedPlayer || generation!=ticket)return;
+                            loaded=true;publish(true,false,"");
+                        }
                     } else {
-                        if(now>loadDeadline)failed(generation);
+                        if(now>loadDeadline)failed(ticket);
                         return;
                     }
                 }
-                if(Boolean.TRUE.equals(bool.invoke(handle,"idle-active"))) {failed(generation);return;}
+                if(Boolean.TRUE.equals(bool.invoke(handle,"idle-active"))) {failed(ticket);return;}
                 boolean playing=Boolean.TRUE.equals(isPlaying.getValue());
                 if(playing) {
                     double currentSpeed=((Number)getPlaybackSpeed.invoke(playbackController.get(null))).doubleValue();
@@ -610,8 +643,8 @@ public final class SaltVideoBindings implements AutoCloseable {
                 if(Math.abs(targetSpeed-videoSpeed)>0.002) {
                     property.invoke(handle,"speed",Double.toString(targetSpeed));videoSpeed=targetSpeed;
                 }
-            }
-        } catch(Exception | LinkageError failure) {if(player!=null)failed(generation);}
+            } catch(Exception | LinkageError failure) {failed(ticket);}
+        }
     }
     private void publish(boolean requested,boolean loading,String message) {
         View next=new View(selection,source!=null || hasNativeVideo(videoState.getValue()),requested,loading,message,player);
@@ -663,10 +696,13 @@ public final class SaltVideoBindings implements AutoCloseable {
         for(var surface:surfaces) {surface.close();barriers.add(surface.released());}
         surfaces.clear();
         Object retired=player;player=null;handle=null;
-        stream=null;paused=null;loaded=false;
+        stream=null;
+        retirePlayer(retired,CompletableFuture.allOf(barriers.toArray(CompletableFuture[]::new)));
+    }
+    private void retirePlayer(Object retired,CompletableFuture<Void> released) {
         if(retired instanceof AutoCloseable closeable)
-            CompletableFuture.allOf(barriers.toArray(CompletableFuture[]::new)).thenRunAsync(()->{
-                try{closeable.close();}catch(Exception ignored){}
+            released.thenRunAsync(()->{
+                synchronized(nativeControl) {try{closeable.close();}catch(Exception ignored){}}
             },RETIREMENTS);
     }
     @Override public synchronized void close() {

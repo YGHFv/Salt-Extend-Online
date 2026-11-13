@@ -41,6 +41,12 @@ public final class LoopbackRangeServer implements AutoCloseable {
     private final java.util.concurrent.ExecutorService cacheIo=java.util.concurrent.Executors.newSingleThreadExecutor(
             r->daemon(r,"salt-cache-maintenance"));
     private boolean deferCacheIo(Runnable operation) {
+        // Expiry/revoke/stop can run on a worker while holding the transport monitor.
+        // Waiting for disk there would also block AWT registration and shutdown.
+        if(Thread.holdsLock(this)) {
+            try {cacheIo.execute(operation);}catch(RejectedExecutionException stopped) { }
+            return true;
+        }
         // Keep this transport runnable with java.base in trimmed hosts/offline tests.
         try {
             Class<?> queue=Class.forName("java.awt.EventQueue");

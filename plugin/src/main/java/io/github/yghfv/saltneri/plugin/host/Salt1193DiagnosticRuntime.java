@@ -46,17 +46,23 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
         store.entries().forEach(savedTracks::register);
         savedTracks.prefetch(queue);
     }
-    public synchronized void submitOnline(io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio audio,
+    public void submitOnline(io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Audio audio,
                                          BooleanSupplier accountActive,io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws Exception {
+        SavedTrackStore store;SavedTrackSession tracks;SavedTrackSession.Resolver resolver;
+        synchronized(this) {
         if(closed || !permitted() || !accountActive.getAsBoolean() || savedTracks==null) throw new IllegalStateException("Persistent playback unavailable");
         engine.ensureAttached();
-        var entry=savedStore.save(audio.target(),new io.github.yghfv.saltneri.plugin.library.Catalog.Item(
+        store=savedStore;tracks=savedTracks;resolver=savedResolver;
+        }
+        var entry=store.save(audio.target(),new io.github.yghfv.saltneri.plugin.library.Catalog.Item(
                 io.github.yghfv.saltneri.plugin.library.Catalog.Kind.TRACK,audio.target().id(),audio.metadata().title(),audio.metadata().artist(),0,true));
         if(!accountActive.getAsBoolean()) throw new SecurityException("Account changed");
-        savedTracks.prime(entry,audio,savedResolver.revision(entry.target().platform()));
+        tracks.prime(entry,audio,resolver.revision(entry.target().platform()));
         Object item=media.create(entry.trackId(),audio.metadata().title(),audio.metadata().artist(),audio.metadata().album(),audio.metadata().albumArtist(),entry.path());
-        if(!accountActive.getAsBoolean()) throw new SecurityException("Account changed");
+        synchronized(this) {
+        if(closed || !permitted() || savedTracks!=tracks || !accountActive.getAsBoolean()) throw new SecurityException("Account changed");
         if(action==io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.PLAY) queue.addToPlay(item);else queue.insert(item,action);
+        }
     }
     private MediaLease.Platform playlistPlatform;
     private final java.util.Map<String, Salt1193PlaybackSession> sessions = new java.util.HashMap<>();
@@ -134,39 +140,42 @@ public final class Salt1193DiagnosticRuntime implements AutoCloseable {
 
     public boolean isClosed() { return closed; }
     /** Explicit platform queue submission. Preparation/resolution elsewhere never calls this method. */
-    public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+    public void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive) throws ReflectiveOperationException {
         playTrack(key,metadata,lease,accountActive,null);
     }
-    public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+    public void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive, OnlineLyrics.Source lyrics) throws ReflectiveOperationException {
         playTrack(key,metadata,lease,accountActive,lyrics,null);
     }
-    public synchronized void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+    public void playTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive, OnlineLyrics.Source lyrics, Salt1193PlaybackSession.Renewer renewer) throws ReflectiveOperationException {
         submitTrack(key, metadata, lease, accountActive, lyrics, renewer,
                 io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.PLAY);
     }
-    public synchronized void submitTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
+    public void submitTrack(TrackKey key, Salt1193PlaybackSession.Metadata metadata, MediaLease lease,
                                        BooleanSupplier accountActive, OnlineLyrics.Source lyrics, Salt1193PlaybackSession.Renewer renewer,
                                        io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction action) throws ReflectiveOperationException {
+        Salt1193PlaybackSession session;
+        synchronized(this) {
         if (closed || !permitted()) throw new IllegalStateException("Arm the experimental adapter first");
         if (!accountActive.getAsBoolean()) throw new SecurityException("Account revision revoked");
         engine.ensureAttached();
         sessions.entrySet().removeIf(entry -> { if (entry.getValue().isClosed()) { sessionPlatforms.remove(entry.getKey()); return true; } return false; });
         String sessionId=lease.platform().name()+":"+lease.scope();
-        Salt1193PlaybackSession session = sessions.get(sessionId);
+        session = sessions.get(sessionId);
         if (session == null) {
             if (sessions.size() >= 5) throw new IllegalStateException("Too many active account sessions");
             session = new Salt1193PlaybackSession(profile, lease.scope(), () -> permitted() && accountActive.getAsBoolean(), adapter, transport, false);
             sessions.put(sessionId, session); sessionPlatforms.put(sessionId, lease.platform());
         }
+        }
         Salt1193PlaybackSession.PreparedTrack track = session.prepare(key, metadata, lease, lyrics,renewer);
-        try { session.enqueue(track, item -> {
-            if (!permitted() || !accountActive.getAsBoolean()) throw new SecurityException("Account/permission revoked before enqueue");
+        try { synchronized(this) {session.enqueue(track, item -> {
+            if (closed || !permitted() || !accountActive.getAsBoolean()) throw new SecurityException("Account/permission revoked before enqueue");
             if (action == io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.QueueAction.PLAY) queue.addToPlay(item);
             else queue.insert(item, action);
-        }); }
+        });} }
         catch (ReflectiveOperationException | RuntimeException failure) { track.close(); throw failure; }
     }
     public synchronized void revokePlatform(MediaLease.Platform platform) {

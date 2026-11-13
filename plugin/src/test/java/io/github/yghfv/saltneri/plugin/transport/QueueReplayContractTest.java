@@ -18,6 +18,11 @@ import kotlin.coroutines.*;
 public final class QueueReplayContractTest {
     private static int checks;
     private static void check(boolean value) { checks++; if(!value) throw new AssertionError("Queue replay check "+checks); }
+    @FunctionalInterface private interface Done {boolean get() throws Exception;}
+    private static void await(Done done) throws Exception {
+        long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(3);
+        while(!done.get() && System.nanoTime()<end)Thread.sleep(5);check(done.get());
+    }
     private static final class Time extends Clock {
         final AtomicReference<Instant> now=new AtomicReference<>(Instant.parse("2026-11-07T00:00:00Z"));
         public Instant instant() { return now.get(); }
@@ -93,7 +98,7 @@ public final class QueueReplayContractTest {
                 check(open(adapter,lastInserted.mediaItem()).equals(321));
                 var extra=audio(key,"account-A",clock,png);
                 session.prepare(key,extra.metadata(),extra.lease(),null,r->audio(key,"account-A",clock,png));
-                check(Files.isRegularFile(cover) && Files.size(cover)==42);
+                await(()->Files.isRegularFile(cover) && Files.size(cover)==42);
                 check(open(adapter,queue.getFirst()).equals(321) && renewals.get()==2 && Files.size(cover)>42);
                 check(open(adapter,lastInserted.mediaItem()).equals(321));
                 // Logical queue entries must not consume one live URL each or hit the former 64-lease limit.
@@ -124,7 +129,7 @@ public final class QueueReplayContractTest {
                 clock.advance(61);
                 check(open(adapter,recovered.mediaItem()).equals(321) && Files.size(recoveredPath)>42);
                 check(Arrays.equals(recoveredFields,profile.mediaFactory().read(recovered.mediaItem())));
-                recovered.close(); check(!Files.exists(recoveredPath));
+                recovered.close();await(()->!Files.exists(recoveredPath));
                 AtomicInteger concurrent=new AtomicInteger(); CountDownLatch started=new CountDownLatch(1),release=new CountDownLatch(1);
                 var next=audio(key,"account-A",clock,null);
                 var parallel=session.prepare(key,next.metadata(),next.lease(),null,r->{concurrent.incrementAndGet();started.countDown();release.await(3,TimeUnit.SECONDS);r.check();return audio(key,"account-A",clock,null);});
@@ -142,8 +147,9 @@ public final class QueueReplayContractTest {
                     check(waiting.await(3,TimeUnit.SECONDS)); int before=streams.get(); session.close(); resume.countDown();
                     check(result.get(3,TimeUnit.SECONDS) && streams.get()==before);
                 } finally { resume.countDown(); }
-                check(!Files.exists(cover) && OnlineLyrics.load(fields[0],fields[5])==null && queue.size()==1);
+                check(OnlineLyrics.load(fields[0],fields[5])==null && queue.size()==1);
                 rejected(adapter,queue.getFirst());
+                await(()->!Files.exists(cover));
             }
         }
         playlist(profile);
@@ -176,7 +182,8 @@ public final class QueueReplayContractTest {
             session.play(); Object first=queue.getFirst(); String[] original=profile.mediaFactory().read(first);
             for(int i=0;i<10;i++) check(open(adapter,queue.get(i)).equals(321));
             for(Object item:queue) covers.add(Path.of(profile.mediaFactory().read(item)[5]));
-            check(calls.get()==10 && binding.paths.size()==10 && Files.size(covers.getFirst())==42);
+            check(calls.get()==10 && binding.paths.size()==10);
+            await(()->Files.size(covers.getFirst())==42);
             check(open(adapter,first).equals(321) && calls.get()==11 && Files.size(covers.getFirst())>42);
             check(Arrays.equals(original,profile.mediaFactory().read(queue.getFirst())));
             check(OnlineLyrics.load(original[0],original[5]).contains("Song 1"));
@@ -186,6 +193,7 @@ public final class QueueReplayContractTest {
             check(Arrays.equals(original,profile.mediaFactory().read(queue.getFirst())) && covers.stream().allMatch(Files::isRegularFile));
             active.set(false); int before=calls.get(); rejected(adapter,first); check(calls.get()==before);
         }
-        check(binding.paths.isEmpty() && covers.stream().noneMatch(Files::exists));
+        check(binding.paths.isEmpty());
+        await(()->covers.stream().noneMatch(Files::exists));
     }
 }

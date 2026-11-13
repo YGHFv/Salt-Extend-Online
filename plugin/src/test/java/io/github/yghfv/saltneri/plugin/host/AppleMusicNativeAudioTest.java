@@ -58,6 +58,8 @@ public final class AppleMusicNativeAudioTest {
             check(pauses.get()==0,"Range boundaries paused the continuous PCM producer");
             check(transport.cacheBytes()==0,"Decrypted Apple PCM entered disk cache");
             transport.revoke(uri);
+            long retired=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+            while(closes.get()==0 && System.nanoTime()<retired)Thread.sleep(5);
             check(closes.get()==1 && !transport.isAvailable(uri),"Revoke did not close browser");
             try {source.read(new ByteRange(0,43),()->true);throw new AssertionError("Revoked PCM served");}
             catch(IOException expected) {}

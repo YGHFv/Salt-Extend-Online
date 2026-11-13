@@ -124,10 +124,14 @@ final class ScopedNativeStreams implements Salt1193StreamAdapter.StreamFactory {
         if (scopes.isEmpty()) aborts.shutdown();
     }
 
-    private synchronized void retire(Scope scope) {
+    private void retire(Scope scope) {
+        synchronized(this) {
+            scopes.remove(scope);
+            if (closed && scopes.isEmpty()) aborts.shutdown();
+        }
+        // Exact staged-file deletion can wait on filesystem handles. Do not make
+        // factory revoke/close inherit that wait through the stream ownership lock.
         if (scope.sealed != null) scope.sealed.close();
-        scopes.remove(scope);
-        if (closed && scopes.isEmpty()) aborts.shutdown();
     }
 
     private final class Scope {
