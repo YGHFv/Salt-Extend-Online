@@ -509,6 +509,21 @@
       "offline": false
     },
     {
+      "class": "io.github.yghfv.saltneri.plugin.transport.CacheUiResponsivenessTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.VideoSurfaceRetirementTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.NativeWindowCallbackRetentionTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
       "class": "io.github.yghfv.saltneri.plugin.video.VideoPrecacheContractTest",
       "baseOnly": false,
       "offline": false

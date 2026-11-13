@@ -90,6 +90,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
 
     @Override public synchronized void start() {
         if (!stopped) return;
+        io.github.yghfv.saltneri.plugin.ui.NativeWindowCallbackRetention.capture();
         stopped = false;
         diagnosticExport = new DiagnosticExport(ExperimentalPlugin.class.getClassLoader());
         active = this;
@@ -375,6 +376,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        io.github.yghfv.saltneri.plugin.ui.NativeWindowCallbackRetention.capture();
         DiagnosticExport exporter=diagnosticExport;
         diagnosticExport=null;
         if(exporter!=null) exporter.close();
@@ -545,6 +547,6 @@ public final class ExperimentalPlugin extends SpwPlugin {
         Salt1193DiagnosticRuntime current=plugin.runtime;
         if(current!=null) current.clearCache();
         if(plugin.playbackVideo!=null)plugin.playbackVideo.clearCache();
-        plugin.status="已清理本插件音频和视频缓存，不清空播放队列或登录。";
+        plugin.status="已提交后台清理本插件音频和视频缓存，不清空播放队列或登录。";
     }); }
 }

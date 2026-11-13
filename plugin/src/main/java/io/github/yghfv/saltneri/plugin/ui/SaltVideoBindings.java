@@ -56,7 +56,11 @@ public final class SaltVideoBindings implements AutoCloseable {
         Thread t=new Thread(r,"salt-video-resolve");t.setDaemon(true);return t;
     });
     private final List<HookHandle> hooks=new ArrayList<>();
+    private static final ExecutorService RETIREMENTS=Executors.newCachedThreadPool(r->{
+        Thread t=new Thread(r,"salt-video-retirement");t.setDaemon(true);return t;
+    });
     private final Set<SaltVideoSurface> surfaces=Collections.newSetFromMap(new IdentityHashMap<>());
+    private final List<CompletableFuture<Void>> surfaceRetirements=new ArrayList<>();
     private final StateFlow<?> current,progress,isPlaying,videoState;
     private final Method itemId,itemPath,progressPosition;
     private final Constructor<?> playerConstructor;
@@ -141,6 +145,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
             BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
             Consumer<String> toast,VideoRequests requests,LoopbackRangeServer transport,Runnable playbackAction) throws Exception {
+        NativeWindowCallbackRetention.capture();
         this.host=host;this.active=active;this.tracks=tracks;this.accounts=accounts;this.toast=toast;
         this.requests=requests;
         this.playbackAction=playbackAction;
@@ -238,7 +243,10 @@ public final class SaltVideoBindings implements AutoCloseable {
     private void replace(HookRegistrar registrar,String owner,String caller,List<String> parameters,String name) throws Exception {
         hooks.add(registrar.replaceComposable(owner,"\u037f",caller,parameters,50,content(name)));
     }
-    public void captionProperties(Object value){captionProperties.setValue(value);}
+    public void captionProperties(Object value){
+        NativeWindowCallbackRetention.capture();
+        captionProperties.setValue(value);
+    }
     private void activateNativeTransport(Object owner) {
         try {
             var state=transportState.get(owner);
@@ -398,12 +406,15 @@ public final class SaltVideoBindings implements AutoCloseable {
         if(closed || player!=renderer)return null;
         long ticket=generation;
         try {
-            var surface=new SaltVideoSurface(renderer,window,redraw,error->surfaceFailed(renderer,ticket));
+            surfaceRetirements.removeIf(CompletableFuture::isDone);
+            var ready=CompletableFuture.allOf(surfaceRetirements.toArray(CompletableFuture[]::new));
+            var surface=new SaltVideoSurface(renderer,window,redraw,error->surfaceFailed(renderer,ticket),ready);
             surfaces.add(surface);return surface;
         } catch(Exception | LinkageError failure) {surfaceFailed(renderer,ticket);return null;}
     }
     public synchronized void disposeSurface(SaltVideoSurface surface) {
-        if(surface==null)return;surfaces.remove(surface);surface.close();
+        if(surface==null || !surfaces.remove(surface))return;
+        surface.close();surfaceRetirements.add(surface.released());
     }
     private void surfaceFailed(Object renderer,long ticket) {
         // Defer state changes and native teardown until the current Compose draw pass has finished.
@@ -648,14 +659,18 @@ public final class SaltVideoBindings implements AutoCloseable {
     public void cacheLimit(long bytes) {transport.cacheLimit(bytes);precache.cancel();}
     public void clearCache() {transport.clearCache();precache.cancel();}
     private void releasePlayer() {
-        surfaces.forEach(SaltVideoSurface::close);surfaces.clear();
+        var barriers=new ArrayList<>(surfaceRetirements);surfaceRetirements.clear();
+        for(var surface:surfaces) {surface.close();barriers.add(surface.released());}
+        surfaces.clear();
         Object retired=player;player=null;handle=null;
         stream=null;paused=null;loaded=false;
-        if(retired instanceof AutoCloseable closeable)SaltPageContentBinding.onUiThread(()->{
-            try{closeable.close();}catch(Exception ignored){}
-        });
+        if(retired instanceof AutoCloseable closeable)
+            CompletableFuture.allOf(barriers.toArray(CompletableFuture[]::new)).thenRunAsync(()->{
+                try{closeable.close();}catch(Exception ignored){}
+            },RETIREMENTS);
     }
     @Override public synchronized void close() {
+        NativeWindowCallbackRetention.capture();
         if(closed)return;closed=true;generation++;cancelRequest();releasePlayer();
         precache.close();
         SaltPageContentBinding.onUiThread(this::restoreNativeTransport);

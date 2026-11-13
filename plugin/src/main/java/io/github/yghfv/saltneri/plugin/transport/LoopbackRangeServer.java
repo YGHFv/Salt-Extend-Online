@@ -38,15 +38,35 @@ import io.github.yghfv.saltneri.plugin.net.PinnedHttpsConnection;
 /** Private pull-only transport using java.base, available in Salt's trimmed runtime. */
 public final class LoopbackRangeServer implements AutoCloseable {
     public Instant now() { return clock.instant(); }
+    private final java.util.concurrent.ExecutorService cacheIo=java.util.concurrent.Executors.newSingleThreadExecutor(
+            r->daemon(r,"salt-cache-maintenance"));
+    private boolean deferCacheIo(Runnable operation) {
+        // Keep this transport runnable with java.base in trimmed hosts/offline tests.
+        try {
+            Class<?> queue=Class.forName("java.awt.EventQueue");
+            if(Boolean.TRUE.equals(queue.getMethod("isDispatchThread").invoke(null))) {
+                try {cacheIo.execute(operation);}catch(RejectedExecutionException stopped) { }
+                return true;
+            }
+        } catch(ReflectiveOperationException | LinkageError ignored) { }
+        return false;
+    }
     private final RangeDiskCache cache=new RangeDiskCache();
-    public synchronized void cacheLimit(long bytes) {
-        if(cache.limitBytes()==bytes) return;
+    public void cacheLimit(long bytes) {
+        if(bytes<0 || bytes>8L*1024*1024*1024)throw new IllegalArgumentException("Invalid cache budget");
+        if(deferCacheIo(()->cacheLimit(bytes)))return;
+        // Cache has its own monitor. Do not hold the transport monitor across disk IO:
+        // registration/revoke/stop on AWT must stay independent of this background wait.
+        if(closed.get() || cache.limitBytes()==bytes) return;
         cache.limit(bytes); cancelReadAhead();
     }
     public long cacheBytes() { return cache.usedBytes(); }
     public long cacheLimitBytes() { return cache.limitBytes(); }
     public long cacheRevision() {return cache.revision();}
-    public void clearCache() { cache.clear(); cancelReadAhead(); }
+    public void clearCache() {
+        if(deferCacheIo(this::clearCache))return;
+        cache.clear(); cancelReadAhead();
+    }
     /** Native WAV open probes the tail. Restore a continuous producer before handing it to playback. */
     public void prepareForPlayback(URI uri) throws IOException {
         if(!"http".equals(uri.getScheme()) || uri.getPort()!=listener.getLocalPort() || !"127.0.0.1".equals(uri.getHost())
@@ -145,7 +165,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         private boolean closed;
         Request(Socket socket) { this.socket = socket; }
         synchronized void attach(HttpURLConnection connection) throws IOException {
-            if (closed) { connection.disconnect(); throw new IOException("Request cancelled"); }
+            if (closed) { io.github.yghfv.saltneri.plugin.net.RequestScope.cancelConnection(connection); throw new IOException("Request cancelled"); }
             upstream = connection;
         }
         void detach(HttpURLConnection connection) {
@@ -332,7 +352,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         finally {
             leases.remove(token, entry);
             requests.forEach(request -> { if (request.entry == entry) request.close(); });
-            cache.revoke(entry);
+            if(!deferCacheIo(()->cache.revoke(entry)))cache.revoke(entry);
             if(entry.lease!=null)entry.lease.release();
         }
     }
@@ -718,6 +738,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         readAheadPlan=null;
         readAheadWorker.shutdownNow();
         deadlines.shutdownNow();
-        cache.close();
+        if(!deferCacheIo(cache::close))cache.close();
+        cacheIo.shutdown();
     }
 }

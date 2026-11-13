@@ -195,6 +195,7 @@ public final class SaltNativeUi implements AutoCloseable {
     }
     @SuppressWarnings("unchecked")
     public SaltNativeUi(ClassLoader host, HookRegistrar hooks, NativeDesk desk, BooleanSupplier permitted, CoverLoader covers, CoverLoader avatars) throws Exception {
+        NativeWindowCallbackRetention.capture();
         this.covers = covers;
         this.host = host; this.hooks = hooks;
         this.avatars = avatars;
@@ -625,6 +626,7 @@ public final class SaltNativeUi implements AutoCloseable {
     }
     public void canvas(Modifier modifier, Object draw, Composer composer) { invoke(canvas, null, modifier, draw, composer, 0); }
     @Override public synchronized void close() {
+        NativeWindowCallbackRetention.capture();
         closed = true; navigator = null; sidebarStyle.setValue(null); pendingLogin.set(null); pages.clear();
         homeWorker.shutdownNow();homePending=false;
         if(playlistMenu!=null)playlistMenu.close();

@@ -18,6 +18,8 @@ public final class SaltVideoSurface implements AutoCloseable {
     private final Object handle;
     private final long pointer;
     private final ScheduledExecutorService reader;
+    private final CompletableFuture<Void> released = new CompletableFuture<>();
+    private final CompletableFuture<Void> ready;
     private final Object nativeLock=new Object();
     private volatile boolean closed,reported;
     private int configuredWidth,configuredHeight;
@@ -30,6 +32,10 @@ public final class SaltVideoSurface implements AutoCloseable {
     private volatile long publishedFrames,drawnFrames;
 
     public SaltVideoSurface(Object player,Window window,Runnable redraw,Consumer<Throwable> failure) throws Exception {
+        this(player,window,redraw,failure,CompletableFuture.completedFuture(null));
+    }
+    SaltVideoSurface(Object player,Window window,Runnable redraw,Consumer<Throwable> failure,CompletableFuture<Void> ready) throws Exception {
+        this.ready=ready;
         this.player=player;this.failure=failure;this.redraw=redraw;
         handle=player.getClass().getMethod("\u052b").invoke(player);
         pointer=(long)handle.getClass().getMethod("\u037f").invoke(handle);
@@ -47,7 +53,7 @@ public final class SaltVideoSurface implements AutoCloseable {
     }
     private void capture() {
         synchronized(nativeLock) {
-            if(closed || reported)return;
+            if(closed || reported || !ready.isDone())return;
             try {
                 long now=System.nanoTime();
                 // A late poll must not trigger a burst of catch-up copies.
@@ -110,12 +116,24 @@ public final class SaltVideoSurface implements AutoCloseable {
         reported=true;failure.accept(error);
     }
     @Override public void close() {
-        synchronized(nativeLock) {
-            if(closed)return;closed=true;reader.shutdownNow();
-            Image unpublished=pending.getAndSet(null);if(unpublished!=null)unpublished.close();
-            // Stop native reads before the player can destroy its mpv handle.
-            try {releaseSurface.invoke(player);}catch(Exception ignored){}
+        synchronized(this) {
+            if(closed)return;closed=true;
+            // Queue behind any native read; Compose disposal must not wait for the GPU
+            // or acquire nativeLock. The player waits for this barrier before handle destruction.
+            reader.execute(() -> {
+                try {
+                    // A replacement surface can be disposed before its predecessor retires.
+                    // Its own release must respect the same barrier as its first native read.
+                    ready.join();
+                    synchronized(nativeLock) {
+                        Image unpublished=pending.getAndSet(null);if(unpublished!=null)unpublished.close();
+                        try {releaseSurface.invoke(player);}catch(Exception ignored){}
+                    }
+                } finally {released.complete(null);}
+            });
+            reader.shutdown();
         }
         SaltPageContentBinding.onUiThread(()->{if(image!=null){image.close();image=null;}});
     }
+    CompletableFuture<Void> released() { return released; }
 }
