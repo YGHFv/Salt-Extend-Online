@@ -29,7 +29,7 @@ public final class CoverSource {
     public static URI playbackFallback(URI source) {
         URI original=original(source);
         if(original==null || !original.getHost().equals("y.qq.com")
-                || !original.getPath().matches("/music/photo_new/T002R[0-9]{2,4}x[0-9]{2,4}M000[A-Za-z0-9]{14}\\.jpg")) return null;
+                || !original.getPath().matches("/music/photo_new/T(002|062)R[0-9]{2,4}x[0-9]{2,4}M000[A-Za-z0-9]{14}\\.jpg")) return null;
         return URI.create("https://y.gtimg.cn"+original.getPath());
     }
     public static URI parse(AccountPlatform platform, String value) {

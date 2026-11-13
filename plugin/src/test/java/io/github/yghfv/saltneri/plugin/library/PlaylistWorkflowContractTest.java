@@ -84,6 +84,7 @@ public final class PlaylistWorkflowContractTest {
         cases.put(new io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.TrackUnavailable(104003),"QQ_TRACK_UNAVAILABLE=104003");
         cases.put(AuthFailure.code(AuthFailure.Stage.QQ_VERIFY,AuthFailure.Reason.API,1000),"QQ_VERIFY/API=1000");
         cases.put(new io.github.yghfv.saltneri.plugin.net.MediaRangeProbe.Rejected(403),"MEDIA_HTTP=403");
+        cases.put(new io.github.yghfv.saltneri.plugin.net.MediaRangeProbe.Rejected(404),"MEDIA_HTTP=404");
         cases.put(new java.net.SocketTimeoutException("URL_SECRET"),"NETWORK_TIMEOUT");
         cases.put(new java.io.IOException("COOKIE_SECRET https://secret.invalid"),"IOException");
         try(var player=new OnlinePlaybackController(p->null,()->true,()->true,(audio,active)->{throw new AssertionError("No playback");})) {
@@ -98,6 +99,17 @@ public final class PlaylistWorkflowContractTest {
                     if(status.contains("PLAYLIST/"))break;Thread.sleep(10);
                 }
                 check(status.contains("[PLAYLIST/"+test.getValue()+"]") && !status.contains("SECRET") && !status.contains("https://"));
+                try(var single=new OnlinePlaybackController(p->null,()->true,()->true,
+                        (audio,active)->{throw new AssertionError("Failed resolution must not play");},Clock.systemUTC(),
+                        account->(target,quality,scope,request)->{throw (Exception)test.getKey();})) {
+                    single.playSelected(new OnlinePlaybackController.Target(AccountPlatform.QQMUSIC,"00123456789abc"),()->{});
+                    until=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
+                    do {
+                        status=String.valueOf(single.snapshot().get("error"));
+                        if(!status.isEmpty())break;Thread.sleep(10);
+                    }while(System.nanoTime()<until);
+                    check(status.startsWith("音轨加载失败 ["+test.getValue()+"]") && !status.contains("SECRET"));
+                }
             }
         }
     }

@@ -33,6 +33,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile Salt1193DiagnosticRuntime runtime;
     private volatile boolean stopped = true;
     private volatile Object generation;
+    private io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup startup;
+    private volatile boolean startupReady;
     private volatile BiliResolutionController bili;
     private volatile NeteaseResolutionController netease;
     private ConfigManager configManager;
@@ -81,10 +83,21 @@ public final class ExperimentalPlugin extends SpwPlugin {
     public ExperimentalPlugin(PluginContext context) { super(context); }
 
     @Override public synchronized void start() {
+        if (!stopped) return;
         stopped = false;
         active = this;
         Object started = new Object(); generation = started;
+        startupReady = false;
         status = "Checking native UI capabilities; no network or queue changes.";
+        startup = new io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup(this, () -> {
+            if (generation != started || stopped) return;
+            initialize(started);
+            startupReady = true;
+        }, failure -> status = "Plugin initialization failed (" + failure.getClass().getSimpleName() + "); restart Salt to retry.");
+    }
+
+    /** The startup worker holds the lifecycle monitor, so stop drains it before PF4J closes our loader. */
+    private void initialize(Object started) {
         configManager = WorkshopApi.manager().createConfigManager();
         ConfigHelper initialConfig = configManager.getConfig();
         navigationPreferences=new io.github.yghfv.saltneri.plugin.ui.NavigationPreferences(initialConfig);
@@ -269,6 +282,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private static void openSettings(io.github.yghfv.saltneri.plugin.ui.SettingsCatalog.Page page) {
         ExperimentalPlugin plugin=active;
         if(plugin==null)return;
+        if(!plugin.startupReady) {toast(plugin.status,WorkshopApi.Ui.ToastType.Warning);return;}
         try {plugin.ensureNativeUi();plugin.nativeUi.openConfiguration(page);}
         catch(Exception failure) {toast("Sidebar settings unavailable",WorkshopApi.Ui.ToastType.Error);}
     }
@@ -353,6 +367,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        stopped = true;
+        generation = null;
+        startupReady = false;
+        if (startup != null) { startup.close(); startup = null; }
         io.github.yghfv.saltneri.plugin.net.SourceProxySettings.reset();
         if(playbackVideo!=null){playbackVideo.close();playbackVideo=null;}
         if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
@@ -360,8 +378,6 @@ public final class ExperimentalPlugin extends SpwPlugin {
         if(savedPlaylists!=null) {savedPlaylists.close();savedPlaylists=null;}
         if(platformPlaylists!=null) {platformPlaylists.close();platformPlaylists=null;}
         if(mediaIdentity!=null) { mediaIdentity.close(); mediaIdentity=null; }
-        stopped = true;
-        generation = null;
         try { disarm(); }
         finally {
             try {
@@ -391,6 +407,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private static void action(Action action, boolean includeResolution) {
         ExperimentalPlugin plugin = active;
         if (plugin == null) { toast("Experimental plugin disabled.", WorkshopApi.Ui.ToastType.Warning); return; }
+        // An early settings click must never wait on reflection, disk IO or hook installation.
+        if (!plugin.startupReady) { toast(plugin.status, WorkshopApi.Ui.ToastType.Warning); return; }
         try {
             action.run(plugin);
             String detail = plugin.status;

@@ -42,7 +42,8 @@ public final class MediaRangeProbe {
                 headers.forEach(connection::setRequestProperty);
                 connection.setRequestProperty("Accept-Encoding", "identity"); connection.setRequestProperty("Range", "bytes=0-0");
                 int status = connection.getResponseCode(); check.run();
-                if (List.of(403, 412, 429).contains(status)) throw new Rejected(status);
+                if (List.of(403, 412, 429).contains(status)
+                        || platform == MediaLease.Platform.QQMUSIC && status >= 400 && status <= 599) throw new Rejected(status);
                 if (List.of(301, 302, 303, 307, 308).contains(status)) {
                     String location = connection.getHeaderField("Location"); URI next;
                     try { next = location == null ? null : uri.resolve(location); }

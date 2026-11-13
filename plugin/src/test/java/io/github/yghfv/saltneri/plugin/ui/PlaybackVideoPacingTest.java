@@ -25,6 +25,10 @@ public final class PlaybackVideoPacingTest {
     private static final class Hooks extends PlaybackVideoHostFixture.RegistrationOnlyHooks { }
     public static void main(String[] args) throws Exception {
         clock();
+        if(!DesktopTestMode.interactive()) {
+            System.out.println("PASS: "+checks+" video clock checks; SKIP interactive screen pacing (explicit local opt-in required)");
+            return;
+        }
         AtomicReference<Throwable> failure=new AtomicReference<>();
         Thread.setDefaultUncaughtExceptionHandler((thread,error)->{failure.set(error);error.printStackTrace();});
         byte[] motion=PlaybackVideoMotionFixture.bytes();

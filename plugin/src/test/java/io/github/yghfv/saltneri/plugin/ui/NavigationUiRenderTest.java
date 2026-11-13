@@ -266,12 +266,14 @@ public final class NavigationUiRenderTest {
             var library=new LibraryController(p->null,permitted::get,t->{throw new AssertionError("Playback");},()->{});
             var ui=new SaltNativeUi(NavigationUiRenderTest.class.getClassLoader(),new NativePageRenderTest.Hooks(),
                     new NativeDesk(library,player,p->null,(p,a)->{},permitted::get),permitted::get)) {
-            ui.configuration(manager,preferences);
             Object nav=navigator();var stack=(List<Object>)nav.getClass().getMethod("getNavBackStack").invoke(nav);
             var field=SaltNativeUi.class.getDeclaredField("navigator");field.setAccessible(true);field.set(ui,nav);
             config.set("ui.home","BILIBILI");
+            // The new background installer may publish the navigator before configuration.
             SwingUtilities.invokeAndWait(()->{ui.observeNavigation(nav);check(stack.size()==1);});
+            ui.configuration(manager,preferences);
             SwingUtilities.invokeAndWait(()->{});SwingUtilities.invokeAndWait(()->{});
+            SwingUtilities.invokeAndWait(()->{}); // Configuration handoff, home resolution, then navigation.
             check(ui.platform(stack.getLast())==io.github.yghfv.saltneri.plugin.auth.AccountPlatform.BILIBILI);
             ui.openSidebarConfiguration();SwingUtilities.invokeAndWait(()->{});
             check(ui.settingsPage(stack.getLast()));

@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**0.9.10 · 开发预览** · Windows / Steam Salt 1.19.3
+**1.0.0 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -77,7 +77,11 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 
 ## 版本与兼容
 
-当前版本 **0.9.10** 修复启用或更新模组后全界面点击无反应的问题：窗口框架改用执行后观察钩子，避免重装原生消息回调。更新后需要完整退出并重新启动播放器，详见 [窗口点击修复](docs/WINDOW_INPUT_FIX_0.9.10.md)。视频胶囊背景同步隐藏与输入锁修复见 [0.9.9 修复记录](docs/VIDEO_INPUT_FIX_0.9.9.md)。0.9.8 的视频初始化和右上角按钮修复见 [宿主钩子修复](docs/VIDEO_HOOK_FIX_0.9.8.md)。菜单定位、标题栏注册与视频缓冲回收修复见 [0.9.6 修复记录](docs/MENU_VIDEO_FIX_0.9.6.md)。逐源代理、视频和切歌续播见 [0.9.5 功能说明](docs/PROXY_VIDEO_0.9.5.md)。视频流畅度见 [0.9.4 修复记录](docs/VIDEO_PACING_0.9.4.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。其他历史修复见 [更新记录](docs/HISTORY.md)。
+当前版本 **1.0.0** 修复模组更新／卸载后侧栏清理触发缺类异常、导致界面停止重组但快捷键仍有效的问题。宿主探测、歌单恢复准备、系统媒体身份注册和界面钩子安装改为后台初始化，减少安装模组后对 Salt 启动的阻塞；旧格式歌单恢复也减少重复文件检查。初始化期间打开设置会提示当前状态。原因、复现和验证范围见 [界面卡死与启动优化](docs/UI_STARTUP_FIX_1.0.0.md)。更新后需要完整退出并重新启动播放器。
+
+同时包含 QQ 歌曲音频地址 404/410 的官方节点与音质降级、无专辑单曲的官方歌曲封面补齐，以及自动构建默认关闭置顶桌面测试窗口，详见 [播放与测试窗口修复及尚未解决的歌曲差异](docs/PLAYBACK_CI_FIX_0.9.11.md)。
+
+0.9.10 的全界面点击修复见 [窗口点击修复](docs/WINDOW_INPUT_FIX_0.9.10.md)。视频胶囊背景同步隐藏与输入锁修复见 [0.9.9 修复记录](docs/VIDEO_INPUT_FIX_0.9.9.md)。0.9.8 的视频初始化和右上角按钮修复见 [宿主钩子修复](docs/VIDEO_HOOK_FIX_0.9.8.md)。菜单定位、标题栏注册与视频缓冲回收修复见 [0.9.6 修复记录](docs/MENU_VIDEO_FIX_0.9.6.md)。逐源代理、视频和切歌续播见 [0.9.5 功能说明](docs/PROXY_VIDEO_0.9.5.md)。视频流畅度见 [0.9.4 修复记录](docs/VIDEO_PACING_0.9.4.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。其他历史修复见 [更新记录](docs/HISTORY.md)。
 
 实际回归基线为 **Windows / Steam Salt 1.19.3**。模组使用官方插件接口及部分原生 UI／播放内部绑定，按所需接口结构检查兼容性；未来宿主更新可能影响部分功能。
 

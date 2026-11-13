@@ -15,6 +15,7 @@ class PassContract {
     public static void main(String[] args) {
         if (!System.getProperty("user.home").equals(System.getenv("APPDATA")) ||
             !System.getenv("APPDATA").equals(System.getenv("LOCALAPPDATA"))) throw new AssertionError("Profile isolation");
+        if (Boolean.getBoolean("salt.test.interactiveDesktop")) throw new AssertionError("Unexpected interactive desktop access");
         System.out.println("PASS: isolated profile");
     }
 }

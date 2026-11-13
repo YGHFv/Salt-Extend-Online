@@ -122,8 +122,10 @@ public final class CoverLoader implements AutoCloseable {
             byte[] png;
             try {png=load(thumbnail,scope,LIST_EDGE,8*MAX_BYTES);}
             catch(IOException unsupported) {
-                scope.check();if(thumbnail.equals(original))throw unsupported;
-                png=load(original,scope,LIST_EDGE,8*MAX_BYTES);
+                scope.check();
+                URI alternate=thumbnail.equals(original)?CoverSource.playbackFallback(original):original;
+                if(alternate==null)throw unsupported;
+                png=load(alternate,scope,LIST_EDGE,8*MAX_BYTES);
             }
             scope.check();
             synchronized(this) {

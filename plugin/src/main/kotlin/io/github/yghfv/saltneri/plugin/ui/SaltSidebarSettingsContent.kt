@@ -57,13 +57,15 @@ class SaltSidebarToggleContent(private val ui: SaltNativeUi) : ComposableHook() 
                         ui.captionModifier(child,replacement)
                     }
                 } else {
-                    saved.forEach { child, original -> ui.captionModifier(child,original) }
+                    for ((child, original) in saved) ui.captionModifier(child,original)
                     saved.clear()
                 }
             }) }
             DisposableEffect(ui) {
                 onDispose {
-                    saved.forEach { child, original ->
+                    // A Kotlin Map.forEach callback is a separate class first loaded on
+                    // disposal. PF4J may already have closed the old plugin loader then.
+                    for ((child, original) in saved) {
                         if(ui.captionModifier(child)===hidden || ui.captionModifier(child)===Modifier) ui.captionModifier(child,original)
                     }
                 }

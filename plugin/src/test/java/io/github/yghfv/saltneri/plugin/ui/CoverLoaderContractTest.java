@@ -75,6 +75,18 @@ public final class CoverLoaderContractTest {
         byte[] fixture = png(); Response response = new Response(SOURCE, fixture);
         URI album=URI.create("https://y.qq.com/music/photo_new/T002R800x800M00000123456789abc.jpg");
         URI albumCdn=URI.create("https://y.gtimg.cn/music/photo_new/T002R800x800M00000123456789abc.jpg");
+        URI songPicture=URI.create("https://y.qq.com/music/photo_new/T062R800x800M00000123456789abc.jpg");
+        var songRequests=new ArrayList<URI>();
+        try(var loader=new CoverLoader(uri->{
+            songRequests.add(uri);var songResponse=new Response(uri,fixture);
+            if(uri.getHost().equals("y.qq.com"))songResponse.status=404;
+            return songResponse;
+        });var scope=new RequestScope(()->true)) {
+            check(loader.load(songPicture,scope).length>0);
+            check(songRequests.size()==2 && songRequests.getLast().equals(CoverSource.playbackFallback(songPicture)));
+            check(loader.load(songPicture,scope).length>0 && songRequests.size()==2);
+            check(loader.loadPlayback(songPicture,scope).length>0 && songRequests.size()==4);
+        }
         check(albumCdn.equals(CoverSource.playbackFallback(album)));
         for(URI bad:List.of(SOURCE,URI.create("https://y.qq.com/other.jpg"),URI.create(album+"?token=SECRET"),
                 URI.create("https://y.qq.com/music/photo_new/T002R800x800M000wrong.jpg")))

@@ -60,6 +60,8 @@ val contractMatrix = groovy.json.JsonSlurper().parse(rootProject.file("scripts/c
         environment("LOCALAPPDATA", hostProfile.absolutePath)
         jvmArgs("-Duser.home=" + hostProfile.absolutePath)
         jvmArgs("-Dfile.encoding=UTF-8", "-Djava.io.tmpdir=" + tempFiles.get().asFile.absolutePath)
+        // Screen/Robot fixtures are only enabled by the explicit local PowerShell switch.
+        jvmArgs("-Dsalt.test.interactiveDesktop=false")
         if (entry["baseOnly"] == true) jvmArgs("--limit-modules=java.base")
         else {
             jvmArgs("--enable-native-access=ALL-UNNAMED")

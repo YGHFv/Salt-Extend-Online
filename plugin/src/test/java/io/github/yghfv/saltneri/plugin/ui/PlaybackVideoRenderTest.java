@@ -376,6 +376,7 @@ public final class PlaybackVideoRenderTest {
                 try{return Math.abs((double)nativeNumber.invoke(handle,"time-pos")-2.5)<0.3;}
                 catch(Exception failure){throw new AssertionError(failure);}
             });
+            if(DesktopTestMode.interactive()) {
             var window=new AtomicReference<androidx.compose.ui.awt.ComposeWindow>();
             var hookRevision=SnapshotStateKt.mutableStateOf(0,SnapshotStateKt.structuralEqualityPolicy());
             PlaybackVideoHostFixture.Bridge.enabled=false;
@@ -602,6 +603,15 @@ public final class PlaybackVideoRenderTest {
                 SwingUtilities.invokeAndWait(()->window.get().dispose());
             }
             check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
+            } else {
+                System.out.println("SKIP: interactive video window, screen capture and Robot input (explicit local opt-in required)");
+                // Exercise the same failed-player cleanup without constructing a desktop surface.
+                Method failed=SaltVideoBindings.class.getDeclaredMethod("failed",long.class);failed.setAccessible(true);
+                SwingUtilities.invokeAndWait(()->{
+                    try{failed.invoke(video,first);}catch(Exception failure){throw new AssertionError(failure);}
+                });
+                check(!video.view().requested() && video.view().player()==null && toasts.size()==1);
+            }
             SwingUtilities.invokeAndWait(video::toggle);
             check(!video.view().requested() && video.view().player()==null);
             current.invoke(null,owned);await(()->video.view().available());

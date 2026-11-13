@@ -77,8 +77,7 @@ public final class OnlinePlaybackController implements AutoCloseable {
         resolver = new PlatformResolutionController<>("Online", account -> testResolver == null ? (target, quality, scope, request) -> resolveAudio(account,target,scope,request,settings.get(),accounts)
             : testResolver.apply(account), () -> accounts.apply(platform), authorized, clock, Audio::expiresAt,
                 audio -> "\u97f3\u8f68\u5df2\u51c6\u5907\uff0c\u5c1a\u672a\u64ad\u653e\u3002",
-                error -> error instanceof java.io.IOException && error.getMessage()!=null && error.getMessage().matches("(APPLE|KUGOU)/[A-Z0-9_]{1,48}")
-                    ? (error.getMessage().startsWith("KUGOU/")?"酷狗音乐音轨加载失败 ["+error.getMessage()+"]":error.getMessage()):null);
+                error -> "音轨加载失败 ["+playbackFailureReason(error)+"]");
         resolver.onDiscard(audio->{if(!transferred.remove(audio.lease()))audio.lease().release();});
         playbackWorker = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "salt-neri-doubleclick-play"); thread.setDaemon(true); return thread;

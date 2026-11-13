@@ -62,8 +62,8 @@ public final class SaltNativeUi implements AutoCloseable {
     private final ProvidableCompositionLocal<Object> styleLocal;
     private final MutableState<Object> sidebarStyle = SnapshotStateKt.mutableStateOf(null, SnapshotStateKt.structuralEqualityPolicy());
     private volatile Object navigator;
-    private com.xuncorp.spw.workshop.api.config.ConfigManager configManager;
-    private NavigationPreferences navigationPreferences;
+    private volatile com.xuncorp.spw.workshop.api.config.ConfigManager configManager;
+    private volatile NavigationPreferences navigationPreferences;
     private final MutableState<Integer> settingsRevision=SnapshotStateKt.mutableStateOf(0,SnapshotStateKt.structuralEqualityPolicy());
     private java.util.function.Consumer<com.xuncorp.spw.workshop.api.config.ConfigHelper> settingsChanged=ignored->{};
     public void settingsChanged(java.util.function.Consumer<com.xuncorp.spw.workshop.api.config.ConfigHelper> action) {settingsChanged=Objects.requireNonNull(action);}
@@ -75,7 +75,14 @@ public final class SaltNativeUi implements AutoCloseable {
     });
     public static final String SIDEBAR_CONFIG=PLUGIN_ID+"/settings/sidebar";
     public void configuration(com.xuncorp.spw.workshop.api.config.ConfigManager manager,NavigationPreferences preferences) {
+        boolean first=navigationPreferences==null;
         configManager=manager;navigationPreferences=preferences;
+        // Background installation can render the sidebar before preferences arrive.
+        // Retry the first home observation even if its LaunchedEffect has already run.
+        if(first) SaltPageContentBinding.onUiThread(()->{
+            Object current=navigator;
+            if(current!=null)observeNavigation(current);
+        });
     }
     public boolean settingsPage(Object route) {
         return available() && route!=null && routeConstructor.getDeclaringClass().isInstance(route)

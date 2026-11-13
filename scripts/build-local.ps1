@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$SaltHome,
     [Parameter(Mandatory = $true)][string]$JdkHome,
     [switch]$Experimental,
+    [switch]$InteractiveDesktopTests,
     [ValidateRange(1, 3600)][int]$ContractTimeoutSeconds = 300,
     [string]$BilibiliProbe = '',
     [string]$NeteaseProbe = '',
@@ -9,6 +10,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if ($InteractiveDesktopTests -and ($env:CI -eq 'true' -or $env:GITHUB_ACTIONS -eq 'true')) {
+    throw 'Interactive desktop tests are local-only; CI must not open windows or control the desktop.'
+}
 $root = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 & python (Join-Path $root 'scripts/verify-project.py')
 if ($LASTEXITCODE -ne 0) { throw 'Project metadata or contract matrix validation failed.' }
@@ -71,6 +75,8 @@ function Invoke-Contract([string]$Test, [switch]$BaseOnly) {
     $runtime = if ($BaseOnly) { 'base' } else { 'host' }
     $log = Join-Path $build "$Test.$runtime.log"
     $arguments = @('-Dfile.encoding=UTF-8', "-Djava.io.tmpdir=$temporaryFiles")
+    # Override inherited JVM options too: routine builds never create screen fixtures.
+    $arguments += "-Dsalt.test.interactiveDesktop=$(([bool]$InteractiveDesktopTests).ToString().ToLowerInvariant())"
     if ($BaseOnly) { $arguments += @('--limit-modules=java.base', '-classpath', "$tests;$classes") }
     else { $arguments += @('--enable-native-access=ALL-UNNAMED', "-Dskiko.library.path=$(Join-Path $salt 'app')", '-classpath', "$tests;$classes;$hostPackage") }
     $start = [Diagnostics.ProcessStartInfo]::new($java)

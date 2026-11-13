@@ -48,6 +48,16 @@
     "transport/DecodedAudioSource.java"
   ],
   "tests": [
+    {
+      "class": "io.github.yghfv.saltneri.plugin.host.DeferredPluginStartupTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.PluginUiUnloadTest",
+      "baseOnly": false,
+      "offline": false
+    },
     {"class":"io.github.yghfv.saltneri.plugin.ui.PlaybackVideoSessionTest","baseOnly":false,"offline":false},
     {"class":"io.github.yghfv.saltneri.plugin.net.SourceProxyContractTest","baseOnly":true,"offline":true},
     {

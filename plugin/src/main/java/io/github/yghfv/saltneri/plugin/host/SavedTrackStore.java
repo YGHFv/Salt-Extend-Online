@@ -46,7 +46,9 @@ public final class SavedTrackStore implements AutoCloseable {
                     Target target=canonical(new Target(AccountPlatform.valueOf(in.readUTF()),in.readUTF()));
                     String id=id(target), title=text(in.readUTF()), artist=text(in.readUTF()); long duration=in.readLong();
                     if(!file.getFileName().toString().equals(id+".track") || duration<0 || duration>86400000 || in.read()!=-1) continue;
-                    entries.put(id,new Entry(id,target,title,artist,duration,PlaybackCoverFile.persistent(root,id)));
+                    // Like batch records, reserve identities without rechecking the same
+                    // directory and artwork for every old single-track record at startup.
+                    entries.put(id,new Entry(id,target,title,artist,duration,PlaybackCoverFile.reservePersistent(root,id)));
                 } catch(IOException | IllegalArgumentException ignored) { /* Isolate a damaged entry; retain other playlists. */ }
             }
         }

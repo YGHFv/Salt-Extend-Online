@@ -49,6 +49,10 @@ public final class QqMusicContractTest {
         int businessCode,dataCode,dataSubcode,denyHigh,denied,playlistTotal=23;
         boolean truncated,wrongSong,allQualities,canonicalPath,badEcho;String malformed;
         List<String> sip=List.of("http://dl.stream.qqmusic.qq.com/");
+        final Map<String,Integer> mediaStatuses=new HashMap<>();
+        final Map<String,Integer> hostStatuses=new HashMap<>();
+        final Set<String> unavailableFormats=new HashSet<>();
+        long size320;
         Map<String,Object> discoveryCover=Map.of("default_url","https://y.qq.com/cover.jpg");
         public HttpURLConnection open(URI uri,byte[] body) throws IOException {
             Object data;var headers=new HashMap<String,String>();int status=200;
@@ -64,11 +68,14 @@ public final class QqMusicContractTest {
                             track.put("file",Map.of("media_mid",MEDIA,"size_128mp3",4096,"size_192ogg",4096,
                                     "size_flac",4096,"size_dolby",4096,"size_new",Collections.nCopies(10,4096)));
                         }
+                        if(size320>0) {
+                            var file=new LinkedHashMap<>(object(track.get("file")));file.put("size_320mp3",size320);track.put("file",file);
+                        }
                         yield Map.of("track_info",track);
                     }
                     case "UrlGetVkey","CgiGetVkey" -> {
                         String filename=(String)array(param.get("filename")).getFirst();
-                        boolean reject=denied!=0 || denyHigh!=0 && !filename.startsWith("M500");
+                        boolean reject=denied!=0 || denyHigh!=0 && !filename.startsWith("M500") || unavailableFormats.contains(filename.substring(0,4));
                         String returned=canonicalPath?filename.substring(0,4)+MEDIA+filename.substring(filename.indexOf('.')):filename;
                         yield Map.of("sip",sip,"midurlinfo",List.of(Map.of(
                                 "songmid",vkeyMid,"result",reject?104003:0,"vkey","TOKEN_SECRET","filename",badEcho?"FOREIGN_SECRET":filename,
@@ -107,8 +114,9 @@ public final class QqMusicContractTest {
                 } else data=Map.of("code",0,"data",Map.of("totaldiss",0,"cdlist",List.of()));
             }
             else {
+                status=hostStatuses.getOrDefault(uri.getHost(),mediaStatuses.getOrDefault(uri.getPath().substring(1,5),206));
                 headers.put("Content-Range","bytes 0-0/"+mediaSize);headers.put("Content-Length","1");
-                var response=new Response(uri,206,new byte[]{42},headers);requests.add(response);return response;
+                var response=new Response(uri,status,new byte[]{42},headers);requests.add(response);return response;
             }
             var response=new Response(uri,status,jsonBytes(data),headers);requests.add(response);return response;
         }
@@ -125,6 +133,15 @@ public final class QqMusicContractTest {
     }
     public static void main(String[] args) throws Exception {
         check(TrackKey.qqmusic(MID).stableId().equals("qqmusic:song:"+MID));
+        var albumless=new LinkedHashMap<String,Object>(song(0));
+        albumless.put("album",Map.of("id",0,"mid","","name",""));
+        albumless.put("vs",List.of("",ALBUM));
+        check(QqMusicClient.parseSong(albumless).cover().getPath().equals("/music/photo_new/T062R800x800M000"+ALBUM+".jpg"));
+        check(CoverSource.playbackFallback(QqMusicClient.parseSong(albumless).cover()).getHost().equals("y.gtimg.cn"));
+        albumless.put("vs",List.of("","../SECRET"));check(QqMusicClient.parseSong(albumless).cover()==null);
+        albumless.put("vs",List.of(""));check(QqMusicClient.parseSong(albumless).cover()==null);
+        albumless.put("album",Map.of("mid",ALBUM));albumless.put("vs",List.of("",MEDIA));
+        check(QqMusicClient.parseSong(albumless).cover().getPath().equals("/music/photo_new/T002R800x800M000"+ALBUM+".jpg"));
         for(String bad:List.of("123",MID+"x","https://y.qq.com/"+MID,"../"+MID))fails(()->QqMusicTarget.parse(bad));
         check(!AccountPlatform.QQMUSIC.allows("qq.com") && !AccountPlatform.QQMUSIC.allows("y.qq.com.evil"));
         check(CoverSource.parse(AccountPlatform.QQMUSIC,"http://y.qq.com/music/photo_new/cover.jpg")!=null);
@@ -176,6 +193,41 @@ public final class QqMusicContractTest {
             fails(()->MediaLease.requireTarget(MediaLease.Platform.QQMUSIC,URI.create("https://"+host+"/media.mp3")));
         f=new Fixture();f.denyHigh=1;check(resolve(f,null,QqMusicClient.Quality.LOSSLESS).quality().equals("standard"));
         check(f.bodies.stream().filter(b->textUnchecked(b).contains("Vkey")).count()==3);
+        // Official vkeys may name encodings missing from the CDN: mirrors first, then quality.
+        var missingHigh=new Fixture();missingHigh.allQualities=true;
+        missingHigh.mediaStatuses.put("F000",404);missingHigh.mediaStatuses.put("O800",410);
+        check(resolve(missingHigh,null,QqMusicClient.Quality.LOSSLESS).quality().equals("higher"));
+        check(missingHigh.requests.stream().filter(r->!r.getURL().getHost().equals("u.y.qq.com")).count()==3);
+        var mirror=new Fixture();mirror.canonicalPath=true;
+        mirror.sip=List.of("http://aqqmusic.tc.qq.com/","http://aqqmusic.tc.qq.com/","http://sjy6.stream.qqmusic.qq.com/");
+        mirror.hostStatuses.put("aqqmusic.tc.qq.com",404);
+        check(resolve(mirror,null,QqMusicClient.Quality.LOSSLESS).quality().equals("lossless"));
+        check(mirror.requests.getLast().getURL().getHost().equals("sjy6.stream.qqmusic.qq.com"));
+        check(mirror.requests.size()==4 && mirror.requests.stream().allMatch(r->r.disconnected));
+        for(int status:List.of(401,403,412,429,500)) {
+            var blocked=new Fixture();blocked.allQualities=true;blocked.sip=mirror.sip;
+            blocked.mediaStatuses.put("F000",status);
+            try {resolve(blocked,null,QqMusicClient.Quality.LOSSLESS);throw new AssertionError("HTTP rejection expected");}
+            catch(MediaRangeProbe.Rejected rejection){check(rejection.status()==status);}
+            check(blocked.requests.size()==3); // Never switch quality/mirror on an authorization or service failure.
+        }
+        var absent=new Fixture();absent.mediaStatuses.put("M500",404);
+        try {resolve(absent,null,QqMusicClient.Quality.STANDARD);throw new AssertionError("Missing media expected");}
+        catch(MediaRangeProbe.Rejected rejection){check(rejection.status()==404);}
+        var corrupt=new Fixture();corrupt.mediaSize="4095";
+        fails(()->resolve(corrupt,null,QqMusicClient.Quality.LOSSLESS));
+        check(corrupt.requests.size()==3); // An incomplete/mismatched file is still rejected.
+        for(boolean missing:List.of(false,true))for(boolean canonical:List.of(false,true)) {
+            var hq=new Fixture();hq.size320=4096;hq.canonicalPath=canonical;
+            hq.unavailableFormats.add("F000");
+            if(missing)hq.mediaStatuses.put("O800",404);else hq.unavailableFormats.add("O800");
+            check(resolve(hq,null,QqMusicClient.Quality.LOSSLESS).quality().equals("exhigh"));
+            check(hq.requests.getLast().getURL().getPath().equals("/M800"+(canonical?MEDIA:MID+MEDIA)+".mp3"));
+            check(hq.bodies.stream().noneMatch(b->b.toString().contains("O600") || b.toString().contains("M500")));
+        }
+        var hqMismatch=new Fixture();hqMismatch.size320=4095;hqMismatch.unavailableFormats.add("O800");
+        fails(()->resolve(hqMismatch,null,QqMusicClient.Quality.HIGH));
+        check(hqMismatch.requests.getLast().getURL().getPath().startsWith("/M800"));
         for(String preview:List.of("RS02"+MEDIA+".mp3?vkey=TOKEN_SECRET","M500"+MID+MEDIA+".mp3?vkey=OTHER","https://evil/SECRET",
                 "M50000999999999999.mp3?vkey=TOKEN_SECRET","F000"+MEDIA+".mp3?vkey=TOKEN_SECRET",
                 "M500"+MEDIA+".flac?vkey=TOKEN_SECRET","M500"+MID+MEDIA+".mp3?notvkey=TOKEN_SECRET",
