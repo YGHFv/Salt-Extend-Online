@@ -147,7 +147,9 @@ public final class NavigationUiRenderTest {
                             check(config.get(setting.key(),"").equals("direct"));
                         }
                     } else {
-                        var setting=ui.settingsItems(page).getFirst();click(scene,setting.title());
+                        var setting=page==SettingsCatalog.Page.QUALITY?ui.settingsItems(page).stream()
+                                .filter(item->item.key().equals("bili.quality")).findFirst().orElseThrow():ui.settingsItems(page).getFirst();
+                        click(scene,setting.title());
                         var label=page==SettingsCatalog.Page.QUALITY?"Hi-Res":"酷狗音乐";
                         check(find(scene,label,SemanticsActions.INSTANCE.getOnClick())!=null);
                         choiceClick(scene,label);
@@ -156,13 +158,19 @@ public final class NavigationUiRenderTest {
                         checks++;
                         check(find(scene,label,SemanticsActions.INSTANCE.getGetTextLayoutResult())!=null);
                         var invalid=new Object();check(!ui.changeSetting(setting,invalid));
+                        if(page==SettingsCatalog.Page.QUALITY) {
+                            var resolution=ui.settingsItems(page).stream().filter(item->item.key().equals("video.resolution")).findFirst().orElseThrow();
+                            check(ui.settingValue(resolution).equals("1080"));
+                            click(scene,resolution.title());choiceClick(scene,"720p");
+                            check(config.get("video.resolution","").equals("720") && ui.settingValue(resolution).equals("720"));
+                        }
                     }
                     pixels(scene,"settings-"+page.id());ui.settingsBack();check(!ui.settingsPage(stack.getLast()));
                 } catch(Exception failure){throw new AssertionError(failure);}
                 finally {scene.close();}
             });
         }
-        check(changes.get()==16);
+        check(changes.get()==17);
         ui.homePlaylistChoices(List.of(new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice("91","Fixture local playlist",new Object())));
         var home=ui.settingsItems(SettingsCatalog.Page.HOME).getFirst();
         check(home.entries().contains("歌单 · Fixture local playlist") && home.values().contains("playlist:91"));

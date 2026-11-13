@@ -54,6 +54,8 @@ public final class TransportContractTest {
         cancellation();
         recovery();
         videoStreaming();
+        videoCache();
+        stalledVideoPrefetch();
         System.out.println("PASS: " + checks + " transport contract checks (offline fake upstream, real loopback HTTP)");
     }
     private static void videoStreaming() throws Exception {
@@ -80,6 +82,52 @@ public final class TransportContractTest {
             server.revoke(uri);
             connection=(HttpURLConnection)uri.toURL().openConnection();eq(404,connection.getResponseCode());connection.disconnect();
         }
+    }
+    private static byte[] videoRead(URI uri,String range) throws Exception {
+        var connection=(HttpURLConnection)uri.toURL().openConnection();
+        connection.setReadTimeout(3000);
+        if(range!=null)connection.setRequestProperty("Range",range);
+        try {eq(range==null?200:206,connection.getResponseCode());return connection.getInputStream().readAllBytes();}
+        finally {connection.disconnect();}
+    }
+    private static void videoCache() throws Exception {
+        byte[] bytes=new byte[5*1024*1024+17];for(int i=0;i<bytes.length;i++)bytes[i]=(byte)(i*31);
+        var chunks=new CopyOnWriteArrayList<ByteRange>();
+        try(var server=videoServer(bytes,()->true,chunks::add);
+            var request=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {
+            server.cacheLimit(16L*1024*1024);
+            var uri=server.register(new MediaLease(MediaLease.Platform.BILIBILI,TARGET,Map.of(),"video-cache",Instant.now().plusSeconds(60),bytes.length));
+            server.prefetchVideoStart(uri,request);eq(2,chunks.size());
+            eq(0L,chunks.getFirst().first());eq((long)bytes.length-1,chunks.getLast().last());
+            server.prefetch(uri,request);eq(3,chunks.size());check(server.isFullyCached(uri),"Full video cache missing");
+            int first=2*1024*1024-7,last=first+30;
+            check(Arrays.equals(Arrays.copyOfRange(bytes,first,last+1),videoRead(uri,"bytes="+first+"-"+last)),"Unaligned video seek returned wrong bytes");
+            check(Arrays.equals(bytes,videoRead(uri,null)),"Cached video replay returned wrong bytes");
+            eq(3,chunks.size());eq((long)bytes.length,server.cacheBytes());
+            server.clearCache();eq(0L,server.cacheBytes());check(!server.isFullyCached(uri),"Video clear retained cache");
+            server.cacheLimit(0);chunks.clear();
+            eq(1,videoRead(uri,"bytes=1-1").length);eq(1L,chunks.getFirst().length());eq(0L,server.cacheBytes());
+            server.revoke(uri);check(!server.isAvailable(uri),"Revoked video remained available");
+        }
+    }
+    private static void stalledVideoPrefetch() throws Exception {
+        byte[] bytes=new byte[2*1024*1024+17];var blocked=new CountDownLatch(1);var release=new CountDownLatch(1);
+        var first=new AtomicBoolean(true);
+        try(var server=videoServer(bytes,()->true,range->{
+            if(range.first()==0 && first.compareAndSet(true,false)) {
+                blocked.countDown();try {release.await(5,TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}
+            }
+        });var worker=java.util.concurrent.Executors.newSingleThreadExecutor();
+            var request=new io.github.yghfv.saltneri.plugin.net.RequestScope(()->true)) {
+            server.cacheLimit(8L*1024*1024);
+            var uri=server.register(new MediaLease(MediaLease.Platform.BILIBILI,TARGET,Map.of(),"stalled-video",Instant.now().plusSeconds(60),bytes.length));
+            var copy=worker.submit(()->{try {server.prefetchVideoStart(uri,request);}catch(IOException ignored) { }});
+            check(blocked.await(3,TimeUnit.SECONDS),"Video prefetch did not start");
+            long start=System.nanoTime();
+            eq(1,videoRead(uri,"bytes=0-0").length);
+            check(System.nanoTime()-start<TimeUnit.SECONDS.toNanos(2),"Current playback waited for stalled video speculation");
+            release.countDown();copy.get(3,TimeUnit.SECONDS);
+        } finally {release.countDown();}
     }
 
     private static void ranges() {

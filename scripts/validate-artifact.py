@@ -60,7 +60,7 @@ def validate(path, experimental):
             expected_pages = {
                 "sidebar": {"ui.sidebarOptimization", "ui.hiddenSidebar", "ui.hideSidebarToggle"},
                 "auto-source": {"netease.autoSourceSwitch", "qqmusic.autoSourceSwitch", "kugou.autoSourceSwitch", "applemusic.autoSourceSwitch"},
-                "quality": {"bili.quality", "netease.quality", "qqmusic.quality", "kugou.quality"},
+                "quality": {"bili.quality", "netease.quality", "qqmusic.quality", "kugou.quality", "video.resolution"},
                 "home": {"ui.home", "bili.home", "netease.home", "qqmusic.home", "applemusic.home", "kugou.home"},
                 "proxy": {"bili.proxy", "netease.proxy", "qqmusic.proxy", "applemusic.proxy", "kugou.proxy"},
             }
@@ -71,6 +71,8 @@ def validate(path, experimental):
                     raise ValueError("Secondary settings keys mismatch: " + page)
             prefs = dict(main)
             prefs.update({p["key"]: p for items in pages.values() for p in items if "key" in p})
+            if prefs["video.resolution"]["entry_values"] != ["2160", "1440", "1080", "720", "480", "360"] or prefs["video.resolution"]["default_value"] != "1080":
+                raise ValueError("Wrong preferred video resolution options")
             for key in expected_pages["proxy"]:
                 if prefs[key]["entry_values"] != ["direct", "system"] or prefs[key]["default_value"] != "direct":
                     raise ValueError("Source proxy routing must default to direct")

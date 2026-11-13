@@ -84,8 +84,8 @@
         {
           "key": "cache.limitMiB",
           "type": "list",
-          "title": "音频缓存上限",
-          "summary": "默认 2 GB，按实际读取的音频分段缓存；超限淘汰最久未用分段，不影响队列。仅限本插件缓存，不修改 Salt 自身的临时播放缓冲。",
+          "title": "音频／视频各自缓存上限",
+          "summary": "默认每类 2 GB，音频与视频分别使用此上限，超限淘汰最久未用的分段。视频模式预缓存当前视频及实际队列后三首；不修改 Salt 自身缓冲。",
           "entries": [
             "不缓存",
             "512 MB",
@@ -106,7 +106,7 @@
         },
         {
           "type": "button",
-          "title": "清理音频缓存",
+          "title": "清理音频与视频缓存",
           "summary": "只清除本插件缓存，后续按需重新获取；不删除账号、队列或本地音乐。",
           "arrow_type": "none",
           "on_click": "io.github.yghfv.saltneri.plugin.ExperimentalPlugin.clearCache"

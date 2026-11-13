@@ -499,6 +499,16 @@
       "class": "io.github.yghfv.saltneri.plugin.host.AppleMusicQueueContractTest",
       "baseOnly": false,
       "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.ui.UiCancellationContractTest",
+      "baseOnly": false,
+      "offline": false
+    },
+    {
+      "class": "io.github.yghfv.saltneri.plugin.video.VideoPrecacheContractTest",
+      "baseOnly": false,
+      "offline": false
     }
   ]
 }

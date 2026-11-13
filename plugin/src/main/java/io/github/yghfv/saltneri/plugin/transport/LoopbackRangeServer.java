@@ -44,6 +44,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         cache.limit(bytes); cancelReadAhead();
     }
     public long cacheBytes() { return cache.usedBytes(); }
+    public long cacheLimitBytes() { return cache.limitBytes(); }
     public long cacheRevision() {return cache.revision();}
     public void clearCache() { cache.clear(); cancelReadAhead(); }
     /** Native WAV open probes the tail. Restore a continuous producer before handing it to playback. */
@@ -147,8 +148,10 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if (closed) { connection.disconnect(); throw new IOException("Request cancelled"); }
             upstream = connection;
         }
-        synchronized void detach(HttpURLConnection connection) {
-            if (upstream == connection) { upstream = null; connection.disconnect(); }
+        void detach(HttpURLConnection connection) {
+            boolean release;
+            synchronized(this) {release=upstream==connection;if(release)upstream=null;}
+            if(release)connection.disconnect();
         }
         synchronized void check() throws IOException { if(closed) throw new IOException("Request cancelled"); }
         @Override
@@ -158,7 +161,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if(socket!=null) try { socket.close(); } catch (IOException ignored) { }
             HttpURLConnection connection = upstream;
             upstream = null;
-            if (connection != null) connection.disconnect();
+            if (connection != null) io.github.yghfv.saltneri.plugin.net.RequestScope.cancelConnection(connection);
         }
     }
 
@@ -173,8 +176,11 @@ public final class LoopbackRangeServer implements AutoCloseable {
 
     /** MPV uses open-ended HTTP reads. Keep each upstream request bounded and video off the audio cache. */
     public static LoopbackRangeServer video(BooleanSupplier authorized) throws IOException {
-        return new LoopbackRangeServer(Clock.systemUTC(), LoopbackRangeServer::openMedia, authorized, true);
+        var server=new LoopbackRangeServer(Clock.systemUTC(), LoopbackRangeServer::openMedia, authorized, true);
+        server.cacheLimit(RangeDiskCache.DEFAULT_LIMIT);
+        return server;
     }
+    private long cacheChunkBytes() { return streamingVideo ? VIDEO_CHUNK_BYTES : HOST_CHUNK_BYTES; }
     LoopbackRangeServer(Clock clock, ConnectionOpener opener) throws IOException {
         this(clock, opener, () -> true);
     }
@@ -252,22 +258,34 @@ public final class LoopbackRangeServer implements AutoCloseable {
         ensureValid(entry); request.check();
         if(entry.length()>cache.limitBytes()) throw new IOException("Track exceeds audio cache budget");
         long revision=cache.revision();
-        for(long first=0;first<entry.length();first+=HOST_CHUNK_BYTES) {
+        long chunk=cacheChunkBytes();
+        for(long first=0;first<entry.length();first+=chunk) {
             request.check(); ensureValid(entry);
             if(revision!=cache.revision()) throw new IOException("Audio cache settings changed");
-            ByteRange range=new ByteRange(first,Math.min(entry.length()-1,first+HOST_CHUNK_BYTES-1));
+            ByteRange range=new ByteRange(first,Math.min(entry.length()-1,first+chunk-1));
             if(cache.get(entry,range)==null) prefetchRange(uri,range,request);
         }
-        for(long first=0;first<entry.length();first+=HOST_CHUNK_BYTES)
-            if(cache.get(entry,new ByteRange(first,Math.min(entry.length()-1,first+HOST_CHUNK_BYTES-1)))==null)
+        for(long first=0;first<entry.length();first+=chunk)
+            if(cache.get(entry,new ByteRange(first,Math.min(entry.length()-1,first+chunk-1)))==null)
                 throw new IOException("Full track not retained in audio cache");
+    }
+    /** MP4 headers can live at either end. Warm only two bounded blocks before handing off to mpv. */
+    public void prefetchVideoStart(URI uri,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws IOException {
+        if(!streamingVideo || cache.limitBytes()<VIDEO_CHUNK_BYTES || !isAvailable(uri))return;
+        Entry entry=leases.get(uri.getRawPath().substring(7));
+        if(entry==null)return;
+        ByteRange prefix=new ByteRange(0,Math.min(entry.length(),VIDEO_CHUNK_BYTES)-1);
+        if(!cache.contains(entry,prefix))prefetchRange(uri,prefix,request);
+        long first=(entry.length()-1)/VIDEO_CHUNK_BYTES*VIDEO_CHUNK_BYTES;
+        ByteRange tail=new ByteRange(first,entry.length()-1);
+        if(!cache.contains(entry,tail))prefetchRange(uri,tail,request);
     }
     private void prefetchRange(URI uri,ByteRange range,io.github.yghfv.saltneri.plugin.net.RequestScope request) throws IOException {
         long count=range.length();
         HttpURLConnection connection=(HttpURLConnection)uri.toURL().openConnection(java.net.Proxy.NO_PROXY);
         request.attach(connection);
         try {
-            connection.setConnectTimeout(2000); connection.setReadTimeout(2000); connection.setInstanceFollowRedirects(false);
+            connection.setConnectTimeout(2000); connection.setReadTimeout(streamingVideo?10000:2000); connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Range",range.requestHeader()); connection.setUseCaches(false);
             connection.setRequestProperty("X-Salt-Prefetch","1");
             if(connection.getResponseCode()!=206 || connection.getContentLengthLong()!=count) throw new IOException("Invalid prefetch range");
@@ -302,8 +320,9 @@ public final class LoopbackRangeServer implements AutoCloseable {
         if(!isAvailable(uri)) return false;
         Entry entry=leases.get(uri.getRawPath().substring(7));
         if(entry==null) return false;
-        for(long first=0;first<entry.length();first+=HOST_CHUNK_BYTES)
-            if(!cache.contains(entry,new ByteRange(first,Math.min(entry.length()-1,first+HOST_CHUNK_BYTES-1)))) return false;
+        long chunk=cacheChunkBytes();
+        for(long first=0;first<entry.length();first+=chunk)
+            if(!cache.contains(entry,new ByteRange(first,Math.min(entry.length()-1,first+chunk-1)))) return false;
         return true;
     }
 
@@ -384,7 +403,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
                 reply(request, 200, Map.of("Content-Length", Long.toString(total), "Accept-Ranges", "bytes")); return;
             }
             if(streamingVideo) {
-                streamVideo(request,entry,headers.get("range"));return;
+                streamVideo(request,entry,headers.get("range"),!headers.containsKey("x-salt-prefetch"));return;
             }
             ByteRange range;
             try { range = ByteRange.parse(headers.get("range"), total); }
@@ -405,7 +424,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         }
     }
 
-    private void streamVideo(Request request,Entry entry,String header) throws IOException {
+    private void streamVideo(Request request,Entry entry,String header,boolean foreground) throws IOException {
         long total=entry.length(),first=0,last=total-1;
         try {
             if(header!=null) {
@@ -428,17 +447,25 @@ public final class LoopbackRangeServer implements AutoCloseable {
         headers.put("Content-Length",Long.toString(last-first+1));headers.put("Accept-Ranges","bytes");
         if(header!=null)headers.put("Content-Range","bytes "+first+"-"+last+"/"+total);
         // Validate the first chunk before accepting the native player's request.
-        ByteRange range=new ByteRange(first,Math.min(last,first+HOST_CHUNK_BYTES-1));
-        byte[] data=download(request,entry,range);
+        boolean cached=cache.limitBytes()>=VIDEO_CHUNK_BYTES;
+        ByteRange range=videoRange(first,last,total,cached,HOST_CHUNK_BYTES);
+        byte[] data=cached?fetchData(request,entry,range,foreground):download(request,entry,range);
         reply(request,header==null?200:206,headers);
         for(;;) {
             ensureValid(entry);request.check();
-            request.socket.getOutputStream().write(data);request.socket.getOutputStream().flush();
+            int offset=(int)(first-range.first()),count=(int)(Math.min(last,range.last())-first+1);
+            request.socket.getOutputStream().write(data,offset,count);request.socket.getOutputStream().flush();
+            if(cached && foreground)scheduleReadAhead(entry,range);
             first=range.last()+1;if(first>last)break;
             // Preserve a short startup read; sustained video needs fewer CDN round trips than audio.
-            range=new ByteRange(first,Math.min(last,first+VIDEO_CHUNK_BYTES-1));
-            data=download(request,entry,range);
+            range=videoRange(first,last,total,cached,VIDEO_CHUNK_BYTES);
+            data=cached?fetchData(request,entry,range,foreground):download(request,entry,range);
         }
+    }
+    private static ByteRange videoRange(long first,long last,long total,boolean cached,long maximum) {
+        if(!cached)return new ByteRange(first,Math.min(last,first+maximum-1));
+        long aligned=first/VIDEO_CHUNK_BYTES*VIDEO_CHUNK_BYTES;
+        return new ByteRange(aligned,Math.min(total,aligned+VIDEO_CHUNK_BYTES)-1);
     }
 
     private void fetch(Request request, Entry entry, ByteRange range, boolean foreground) throws IOException {
@@ -450,9 +477,17 @@ public final class LoopbackRangeServer implements AutoCloseable {
             reply(request,206,Map.of("Content-Length",Long.toString(data.length),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
             request.socket.getOutputStream().write(data);return;
         }
+        byte[] data=fetchData(request,entry,range,foreground);
+        ensureValid(entry); request.check();
+        reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
+        request.socket.getOutputStream().write(data); request.socket.getOutputStream().flush();
+        if(foreground) scheduleReadAhead(entry,range);
+    }
+
+    private byte[] fetchData(Request request,Entry entry,ByteRange range,boolean foreground) throws IOException {
         ReadAheadPlan previous=readAheadPlan;
         if(foreground && previous!=null && (previous.entry()!=entry || range.first()<previous.first()
-                || range.first()>=previous.first()+READ_AHEAD_CHUNKS*HOST_CHUNK_BYTES)) {
+                || range.first()>=previous.first()+READ_AHEAD_CHUNKS*cacheChunkBytes())) {
             readAheadPlan=null;
             requests.forEach(r->{if(r.speculative!=null) r.close();});
         }
@@ -474,10 +509,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
             } finally { releaseDownload(entry,range,download,locked); }
         }
         ensureValid(entry); request.check();
-        // Publish only complete verified ranges; the host buffers the same aligned chunk.
-        reply(request,206,Map.of("Content-Length",Long.toString(range.length()),"Content-Range",range.contentHeader(entry.length()),"Accept-Ranges","bytes"));
-        request.socket.getOutputStream().write(data); request.socket.getOutputStream().flush();
-        if(foreground) scheduleReadAhead(entry,range);
+        return data;
     }
 
     private byte[] download(Request request, Entry entry, ByteRange range) throws IOException {
@@ -495,8 +527,9 @@ public final class LoopbackRangeServer implements AutoCloseable {
     }
 
     private void scheduleReadAhead(Entry entry,ByteRange range) {
-        if(cache.limitBytes()<HOST_CHUNK_BYTES || range.first()%HOST_CHUNK_BYTES!=0
-                || range.length()!=Math.min(HOST_CHUNK_BYTES,entry.length()-range.first())) return;
+        long chunk=cacheChunkBytes();
+        if(cache.limitBytes()<chunk || range.first()%chunk!=0
+                || range.length()!=Math.min(chunk,entry.length()-range.first())) return;
         // Only an actual host read advances the window. Prefix prefetch cannot chain to a whole song.
         ReadAheadPlan plan=new ReadAheadPlan(entry,range.last()+1,cache.revision());
         readAheadPlan=plan;
@@ -517,15 +550,15 @@ public final class LoopbackRangeServer implements AutoCloseable {
 
     private boolean aheadValid(ReadAheadPlan plan) {
         return readAheadPlan==plan && cache.revision()==plan.cacheRevision()
-                && cache.limitBytes()>=HOST_CHUNK_BYTES && valid(plan.entry());
+                && cache.limitBytes()>=cacheChunkBytes() && valid(plan.entry());
     }
 
     private boolean aheadRangeValid(ReadAheadPlan original,ByteRange range) {
         ReadAheadPlan current=readAheadPlan;
         return current!=null && range!=null && current.entry()==original.entry()
                 && current.cacheRevision()==original.cacheRevision() && cache.revision()==current.cacheRevision()
-                && range.first()>=current.first() && range.first()<current.first()+READ_AHEAD_CHUNKS*HOST_CHUNK_BYTES
-                && cache.limitBytes()>=HOST_CHUNK_BYTES && valid(current.entry());
+                && range.first()>=current.first() && range.first()<current.first()+READ_AHEAD_CHUNKS*cacheChunkBytes()
+                && cache.limitBytes()>=cacheChunkBytes() && valid(current.entry());
     }
 
     private void readAhead() {
@@ -533,10 +566,11 @@ public final class LoopbackRangeServer implements AutoCloseable {
         try {
             if(plan==null) return;
             Entry entry=plan.entry();
+            long chunk=cacheChunkBytes();
             for(int i=0;i<READ_AHEAD_CHUNKS && aheadValid(plan);i++) {
-                long first=plan.first()+i*HOST_CHUNK_BYTES;
+                long first=plan.first()+i*chunk;
                 if(first>=entry.length()) break;
-                ByteRange range=new ByteRange(first,Math.min(entry.length(),first+HOST_CHUNK_BYTES)-1);
+                ByteRange range=new ByteRange(first,Math.min(entry.length(),first+chunk)-1);
                 Request request=new Request(null); request.entry=entry; request.speculative=plan; request.speculativeRange=range;
                 requests.add(request);
                 ScheduledFuture<?> deadline=deadlines.schedule(request::close,2500,TimeUnit.MILLISECONDS);

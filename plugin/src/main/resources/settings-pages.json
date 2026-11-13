@@ -68,6 +68,15 @@
   ],
   "quality": [
     {
+      "key": "video.resolution",
+      "type": "list",
+      "title": "默认视频分辨率",
+      "summary": "Bilibili、网易云和 QQ MV 优先所选分辨率，不可用时自动降至较低的可用分辨率；视频模式预缓存当前视频及实际队列后三首，修改后重新加载当前视频。",
+      "entries": ["4K · 2160p", "2K · 1440p", "1080p", "720p", "480p", "360p"],
+      "entry_values": ["2160", "1440", "1080", "720", "480", "360"],
+      "default_value": "1080"
+    },
+    {
       "key": "bili.quality",
       "type": "list",
       "title": "Bilibili 音质",

@@ -8,6 +8,9 @@ import io.github.yghfv.saltneri.plugin.host.SavedTrackStore;
 import io.github.yghfv.saltneri.plugin.net.RequestScope;
 import io.github.yghfv.saltneri.plugin.transport.*;
 import io.github.yghfv.saltneri.plugin.video.MusicVideoClient;
+import io.github.yghfv.saltneri.plugin.video.VideoResolution;
+import io.github.yghfv.saltneri.plugin.video.VideoPrecache;
+import io.github.yghfv.saltneri.plugin.host.NativePlaylistOrder;
 import java.lang.reflect.*;
 import java.net.URI;
 import java.util.*;
@@ -74,9 +77,20 @@ public final class SaltVideoBindings implements AutoCloseable {
     private java.awt.event.MouseAdapter windowObserver;
     private volatile java.awt.Point lastPointer;
     private final LoopbackRangeServer transport;
+    private final VideoPrecache precache;
+    private volatile Supplier<VideoResolution> resolution=()->VideoResolution.DEFAULT;
+    private volatile VideoResolution selectedResolution=VideoResolution.DEFAULT;
+    private volatile StateFlow<?> queue;
+    private volatile boolean queueUnavailable;
+    private record QueuePlan(Object state,SavedTrackStore.Entry entry,String selection,
+            List<io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target> targets) { }
+    private volatile QueuePlan cachedOrder;
     interface VideoRequests {
         MusicVideoClient.Source discover(MusicVideoClient.Source selected,AccountCredentials credentials,RequestScope request) throws Exception;
         MediaLease resolve(MusicVideoClient.Source selected,AccountCredentials credentials,String scope,RequestScope request) throws Exception;
+        default MediaLease resolve(MusicVideoClient.Source selected,VideoResolution resolution,AccountCredentials credentials,String scope,RequestScope request) throws Exception {
+            return resolve(selected,credentials,scope,request);
+        }
     }
     private final VideoRequests requests;
     private final Runnable playbackAction;
@@ -85,7 +99,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     private volatile long generation;
     private volatile String selection="";
     private volatile SavedTrackStore.Entry entry;
-    private MusicVideoClient.Source source;
+    private volatile MusicVideoClient.Source source;
     private AccountCredentials account;
     private Object player,handle;
     private URI stream;
@@ -96,7 +110,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     private long loadDeadline,lastSeek,driftSince;
     private boolean loaded,nativeAvailable;
     private final MutableState<Boolean> expanded=SnapshotStateKt.mutableStateOf(false,SnapshotStateKt.structuralEqualityPolicy());
-    private boolean videoMode;
+    private volatile boolean videoMode;
 
     public SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
             BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
@@ -108,7 +122,16 @@ public final class SaltVideoBindings implements AutoCloseable {
             public MediaLease resolve(MusicVideoClient.Source selected,AccountCredentials credentials,String scope,RequestScope request) throws Exception {
                 return new MusicVideoClient(credentials).resolve(selected,scope,request);
             }
+            public MediaLease resolve(MusicVideoClient.Source selected,VideoResolution resolution,AccountCredentials credentials,String scope,RequestScope request) throws Exception {
+                return new MusicVideoClient(credentials).resolve(selected,resolution,scope,request);
+            }
         },null);
+    }
+    public SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
+            BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
+            Consumer<String> toast,Supplier<VideoResolution> resolution) throws Exception {
+        this(host,registrar,active,tracks,accounts,toast);
+        this.resolution=resolution;
     }
     SaltVideoBindings(ClassLoader host,HookRegistrar registrar,BooleanSupplier active,
             BiFunction<String,String,SavedTrackStore.Entry> tracks,Function<AccountPlatform,AccountCredentials> accounts,
@@ -151,6 +174,14 @@ public final class SaltVideoBindings implements AutoCloseable {
         playOrPause=controller.getMethod("playOrPause");
         playbackController=controller.getField("INSTANCE");
         this.transport=transport==null?LoopbackRangeServer.video(()->!closed && active.getAsBoolean()):transport;
+        precache=new VideoPrecache(this::videoOrder,()->resolution.get(),accounts,()->!closed && active.getAsBoolean(),
+                ()->videoMode && view().player()!=null && !view().loading() && this.transport.cacheLimitBytes()>0,
+                this.transport,(target,cap,credentials,request)->{
+                    var selected=source;
+                    if(selected==null || !selected.track().equals(target))selected=requests.discover(new MusicVideoClient.Source(target,""),credentials,request);
+                    return selected==null?null:requests.resolve(selected,cap,credentials,
+                            credentials==null?"anonymous-video":credentials.accountScope(),request);
+                });
         try {
             Class<?> content=Class.forName("io.github.yghfv.saltneri.plugin.ui.SaltVideoContent",true,getClass().getClassLoader());
             hooks.add(registrar.replaceComposable(TITLE,"\u037f",WINDOW,TITLE_PARAMETERS,50,
@@ -383,7 +414,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     public void toggle() {
         if(closed || !active.getAsBoolean())return;
         synchronized(this) {
-            if(videoMode) {videoMode=false;generation++;cancelRequest();releasePlayer();publish(false,false,"");return;}
+            if(videoMode) {videoMode=false;generation++;cancelRequest();precache.cancel();releasePlayer();publish(false,false,"");return;}
             videoMode=true;
             if(source==null) {
                 if(hasNativeVideo(videoState.getValue()))toggleNativeVideo();
@@ -395,16 +426,15 @@ public final class SaltVideoBindings implements AutoCloseable {
     }
     private synchronized void requestVideo() {
         if(!videoMode || source==null || closed)return;
+        selectedResolution=resolution.get();
         long ticket=++generation;cancelRequest();publish(true,true,"正在加载视频");
         var selected=source;var credentials=account;
         pending=new RequestScope(()->valid(ticket,credentials),30000);
         var request=pending;
         resolver.execute(()->{
             try {
-                String scope=credentials==null?"anonymous-video":credentials.accountScope();
-                var lease=requests.resolve(selected,credentials,scope,request);
-                lease=lease.bindTo(scope,()->valid(ticket,credentials));
-                URI local=transport.register(lease);
+                URI local=precache.resolve(selected.track(),request);
+                if(local==null)throw new IllegalStateException("No exact MV");
                 SaltPageContentBinding.onUiThread(()->startPlayer(ticket,credentials,local));
             } catch(Exception | LinkageError failed) {failed(ticket);}
             finally {request.close();}
@@ -433,6 +463,7 @@ public final class SaltVideoBindings implements AutoCloseable {
     }
     private boolean valid(long ticket,AccountCredentials credentials) {
         return !closed && active.getAsBoolean() && generation==ticket
+                && (!videoMode || selectedResolution==resolution.get())
                 && (entry==null || accounts.apply(entry.target().platform())==credentials)
                 && (credentials==null || credentials.isActive()) && selection.equals(currentId());
     }
@@ -441,7 +472,7 @@ public final class SaltVideoBindings implements AutoCloseable {
         catch(ReflectiveOperationException ignored) {return "";}
     }
     private synchronized void startPlayer(long ticket,AccountCredentials credentials,URI local) {
-        if(!valid(ticket,credentials)){transport.revoke(local);return;}
+        if(!valid(ticket,credentials))return;
         Object created=null;
         try {
             releasePlayer();
@@ -452,6 +483,9 @@ public final class SaltVideoBindings implements AutoCloseable {
                     "keepaspect","yes","video-unscaled","no").entrySet())
                 if(!Boolean.TRUE.equals(property.invoke(port,option.getKey(),option.getValue())))
                     throw new IllegalStateException("Video option rejected");
+            // Keep a bounded demuxer buffer as well as disk ranges; mpv pauses during brief CDN gaps.
+            property.invoke(port,"cache","yes");property.invoke(port,"cache-pause","yes");
+            property.invoke(port,"demuxer-max-bytes","32MiB");property.invoke(port,"demuxer-readahead-secs","20");
             double position=position()/1000d;
             if(!Boolean.TRUE.equals(command.invoke(port,(Object)new String[]{"loadfile",local.toString(),"replace","-1","start="+position})))
                 throw new IllegalStateException("Video stream rejected");
@@ -478,12 +512,13 @@ public final class SaltVideoBindings implements AutoCloseable {
         try {
             if(closed)return;
             if(!active.getAsBoolean()){close();return;}
+            if(videoMode && source!=null && selectedResolution!=resolution.get())requestVideo();
             pollPointer();
             Object item=current.getValue();String id=item==null?"":(String)itemId.invoke(item);
             boolean changedAccount=entry!=null && accounts.apply(entry.target().platform())!=account;
             if(!id.equals(selection) || changedAccount) {
                 if(changedAccount || id.isEmpty())videoMode=false;
-                generation++;cancelRequest();releasePlayer();selection=id;entry=null;source=null;account=null;
+                generation++;cancelRequest();releasePlayer();selection=id;entry=null;source=null;account=null;selectedResolution=resolution.get();
                 if(item!=null)entry=tracks.apply(id,(String)itemPath.invoke(item));
                 publish(false,false,"");
                 if(entry!=null) {
@@ -575,17 +610,54 @@ public final class SaltVideoBindings implements AutoCloseable {
         });
     }
     private void cancelRequest() {var request=pending;pending=null;if(request!=null)request.close();}
+    private List<io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target> videoOrder() {
+        var selected=entry;
+        if(selected==null)return List.of();
+        var result=new ArrayList<io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target>();
+        result.add(selected.target());
+        try {
+            // Reading INSTANCE initializes PlaybackService/BASS. Wait until video is requested,
+            // and do it on the precache worker, never during plugin startup or composition.
+            if(videoMode && queue==null && !queueUnavailable)try {
+                queue=(StateFlow<?>)playbackController.getDeclaringClass().getMethod("getPlaybackQueueState").invoke(playbackController.get(null));
+            } catch(ReflectiveOperationException | LinkageError unavailable) {queueUnavailable=true;}
+            if(queue!=null) {
+                Object state=queue.getValue();String idNow=selection;var cached=cachedOrder;
+                if(cached!=null && cached.state()==state && cached.entry()==selected && cached.selection().equals(idNow))return cached.targets();
+                var plan=NativePlaylistOrder.read(state);
+                if(plan.current().equals(idNow)) {
+                    var wanted=new HashSet<>(plan.next());
+                    var found=new HashMap<String,io.github.yghfv.saltneri.plugin.library.OnlinePlaybackController.Target>();
+                    List<?> items=(List<?>)state.getClass().getMethod(plan.mode().equals("Random")?"\u052a":"\u0528").invoke(state);
+                    for(Object row:items) {
+                        Object item=row.getClass().getMethod("\u0528").invoke(row);
+                        String id=(String)itemId.invoke(item);
+                        if(wanted.remove(id)) {
+                            var next=tracks.apply(id,(String)itemPath.invoke(item));
+                            if(next!=null)found.put(id,next.target());
+                            if(wanted.isEmpty())break;
+                        }
+                    }
+                    for(String id:plan.next())if(found.containsKey(id) && !result.contains(found.get(id)))result.add(found.get(id));
+                }
+                cachedOrder=new QueuePlan(state,selected,idNow,List.copyOf(result));
+            }
+        } catch(ReflectiveOperationException ignored) { }
+        return List.copyOf(result);
+    }
+    public void cacheLimit(long bytes) {transport.cacheLimit(bytes);precache.cancel();}
+    public void clearCache() {transport.clearCache();precache.cancel();}
     private void releasePlayer() {
         surfaces.forEach(SaltVideoSurface::close);surfaces.clear();
         Object retired=player;player=null;handle=null;
-        URI local=stream;stream=null;paused=null;loaded=false;
-        if(local!=null && "http".equals(local.getScheme()))transport.revoke(local);
+        stream=null;paused=null;loaded=false;
         if(retired instanceof AutoCloseable closeable)SaltPageContentBinding.onUiThread(()->{
             try{closeable.close();}catch(Exception ignored){}
         });
     }
     @Override public synchronized void close() {
         if(closed)return;closed=true;generation++;cancelRequest();releasePlayer();
+        precache.close();
         SaltPageContentBinding.onUiThread(this::restoreNativeTransport);
         detachWindowObserver();
         hooks.forEach(HookHandle::close);hooks.clear();worker.shutdownNow();resolver.shutdownNow();transport.close();

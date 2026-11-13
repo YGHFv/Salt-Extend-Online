@@ -55,19 +55,31 @@ public final class MusicVideoClient {
         };
     }
     public MediaLease resolve(Source source,String scope,RequestScope request) throws IOException {
+        return resolve(source,VideoResolution.DEFAULT,scope,request);
+    }
+    public MediaLease resolve(Source source,VideoResolution resolution,String scope,RequestScope request) throws IOException {
         check(request);
         if(account!=null && account.platform()!=source.track().platform())throw new IOException("Wrong video account");
         if(source.track().platform()==AccountPlatform.BILIBILI)
-            return new BiliClient(account).resolveVideo(BiliTarget.parse(source.track().id()),scope,request).lease();
+            return new BiliClient(account).resolveVideo(BiliTarget.parse(source.track().id()),resolution,scope,request).lease();
         List<URI> urls=new ArrayList<>();
         if(source.track().platform()==AccountPlatform.NETEASE) {
-            var root=json(URI.create("https://music.163.com/weapi/song/enhance/play/mv/url"),
-                    NeteaseWeapi.form(Map.of("id",source.videoId(),"r",1080,"csrf_token","")),request);
-            var data=BoundedJson.object(root.get("data"));
-            if(BoundedJson.integer(data.get("id"))!=Long.parseLong(source.videoId())
-                    || BoundedJson.integer(data.getOrDefault("code",200))!=200
-                    || flag(data.get("is_preview")) || flag(data.get("is_trial")))throw invalid();
-            urls.add(media(source.track().platform(),data.get("url")));
+            for(var quality:resolution.fallback()) {
+                var root=json(URI.create("https://music.163.com/weapi/song/enhance/play/mv/url"),
+                        NeteaseWeapi.form(Map.of("id",source.videoId(),"r",quality.height(),"csrf_token","")),request);
+                if(root.get("data")==null)continue;
+                var data=BoundedJson.object(root.get("data"));
+                if(BoundedJson.integer(data.get("id"))!=Long.parseLong(source.videoId())
+                        || flag(data.get("is_preview")) || flag(data.get("is_trial")))throw invalid();
+                if(BoundedJson.integer(data.getOrDefault("code",200))!=200 || data.get("url")==null
+                        || "".equals(data.get("url")))continue;
+                long actual=QqMusicHttp.number(data.getOrDefault("r",quality.height()),quality.height());
+                if(actual>resolution.height())continue;
+                try {return probe(source,media(source.track().platform(),data.get("url")),scope,request);}
+                catch(MediaRangeProbe.Rejected denied) {throw denied;}
+                catch(IOException unavailable) {check(request);}
+            }
+            throw new IOException("No permitted MV stream at the requested resolution or below");
         } else if(source.track().platform()==AccountPlatform.QQMUSIC) {
             var data=qq.call("music.stream.MvUrlProxy","GetMvUrls",Map.of(
                     "vids",List.of(source.videoId()),"request_type",10003,"guid",UUID.randomUUID().toString(),
@@ -80,27 +92,49 @@ public final class MusicVideoClient {
                 var row=BoundedJson.object(item);
                 if(QqMusicHttp.number(row.get("code"),-1)==0 && !flag(row.get("is_preview")) && !flag(row.get("is_trial")))permitted.add(row);
             }
-            permitted.sort(Comparator.comparingLong(row->{
-                try{return -QqMusicHttp.number(row.get("fileSize"),0);}catch(IOException e){return 0L;}
-            }));
+            permitted.removeIf(row->qqHeight(row)<=0 || qqHeight(row)>resolution.height());
+            permitted.sort(Comparator.<Map<String,Object>>comparingInt(MusicVideoClient::qqHeight).reversed()
+                    .thenComparingLong(row->{try{return -QqMusicHttp.number(row.get("fileSize"),0);}catch(IOException e){return 0L;}}));
             for(var row:permitted) {
-                var candidates=BoundedJson.array(row.get("url"));if(candidates.size()>8)throw invalid();
-                for(Object value:candidates)urls.add(media(source.track().platform(),value));
+                for(String field:List.of("freeflow_url","url")) {
+                    if(row.get(field)==null)continue;
+                    var candidates=BoundedJson.array(row.get(field));if(candidates.size()>8)throw invalid();
+                    for(Object value:candidates)try {var uri=media(source.track().platform(),value);if(!urls.contains(uri))urls.add(uri);}catch(IOException unavailable) { }
+                }
             }
         } else throw invalid();
-        var platform=MediaLease.Platform.valueOf(source.track().platform().name());
-        Map<String,String> headers=Map.of("User-Agent",QqMusicHttp.AGENT,"Referer",
-                platform==MediaLease.Platform.NETEASE?"https://music.163.com/":"https://y.qq.com/");
         for(URI url:urls) {
             check(request);
-            try {
-                var probe=MediaRangeProbe.probe(platform,url,headers,0,clock.instant().plusSeconds(1200),
-                        clock,uri->opener.open(uri,null),request,()->check(request));
-                return new MediaLease(platform,probe.uri(),headers,scope,probe.expiresAt(),probe.length());
-            } catch(MediaRangeProbe.Rejected denied) {throw denied;}
+            try {return probe(source,url,scope,request);}
+            catch(MediaRangeProbe.Rejected denied) {
+                if(denied.status()!=404 && denied.status()!=410)throw denied;
+            }
             catch(IOException unavailable) {check(request);}
         }
         throw new IOException("No permitted MV stream");
+    }
+    private static int qqHeight(Map<String,Object> row) {
+        for(String key:List.of("height","resolution","r")) {
+            try {long value=QqMusicHttp.number(row.get(key),0);if(value>0 && value<=4320)return (int)value;}
+            catch(IOException ignored) { }
+        }
+        // QQ returns quality labels on some MP4 variants instead of dimensions.
+        Object label=row.getOrDefault("name",row.getOrDefault("quality",""));
+        String text=String.valueOf(label).toLowerCase(Locale.ROOT);
+        for(var value:VideoResolution.values())if(text.contains(value.key()))return value.height();
+        // MvUrlProxy MP4 types: smooth, SD, HD, full HD, ultra HD.
+        try {return switch((int)QqMusicHttp.number(row.get("filetype"),-1)) {
+            case 0 -> 240;case 10 -> 360;case 20 -> 480;case 30 -> 720;case 40 -> 1080;case 50 -> 2160;default -> 0;
+        };} catch(IOException ignored) { }
+        return 0;
+    }
+    private MediaLease probe(Source source,URI url,String scope,RequestScope request) throws IOException {
+        var platform=MediaLease.Platform.valueOf(source.track().platform().name());
+        Map<String,String> headers=Map.of("User-Agent",QqMusicHttp.AGENT,"Referer",
+                platform==MediaLease.Platform.NETEASE?"https://music.163.com/":"https://y.qq.com/");
+        var probe=MediaRangeProbe.probe(platform,url,headers,0,clock.instant().plusSeconds(1200),
+                clock,uri->opener.open(uri,null),request,()->check(request));
+        return new MediaLease(platform,probe.uri(),headers,scope,probe.expiresAt(),probe.length());
     }
     private Map<String,Object> json(URI uri,byte[] body,RequestScope request) throws IOException {
         check(request);var connection=opener.open(uri,body);request.attach(connection);
@@ -114,7 +148,8 @@ public final class MusicVideoClient {
             if(account!=null)connection.setRequestProperty("Cookie",account.header(uri));
             if(connection.getResponseCode()!=200)throw invalid();
             var root=JsonResponse.read(connection,request,true);
-            if(BoundedJson.integer(root.get("code"))!=200)throw invalid();
+            long code=BoundedJson.integer(root.get("code"));
+            if(code!=200 && !(body!=null && (code==400 || code==404)))throw invalid();
             check(request);return root;
         } finally {request.release(connection);}
     }

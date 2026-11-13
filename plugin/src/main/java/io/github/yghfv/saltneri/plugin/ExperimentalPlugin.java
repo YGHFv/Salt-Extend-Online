@@ -61,8 +61,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
         var parsed=PlaybackSettings.parse(config.get("bili.quality","high"),config.get("netease.quality","standard"),config.get("cache.limitMiB","2048"),config.get("cover.mode","fit"));
         settings=new PlaybackSettings(parsed.bili(),parsed.netease(),parsed.cacheBytes(),parsed.coverMode(),config.get("netease.autoSourceSwitch",false),
                 io.github.yghfv.saltneri.plugin.qqmusic.QqMusicClient.Quality.fromKey(config.get("qqmusic.quality","standard")),config.get("qqmusic.autoSourceSwitch",false),config.get("kugou.quality","128"),
-                config.get("kugou.autoSourceSwitch",false),config.get("applemusic.autoSourceSwitch",false));
+                config.get("kugou.autoSourceSwitch",false),config.get("applemusic.autoSourceSwitch",false),
+                io.github.yghfv.saltneri.plugin.video.VideoResolution.parse(config.get("video.resolution","1080")));
         Salt1193DiagnosticRuntime current=runtime; if(current!=null) current.cacheLimit(settings.cacheBytes());
+        var video=playbackVideo; if(video!=null)video.cacheLimit(settings.cacheBytes());
         LibraryController catalog=library; if(catalog!=null) catalog.pageLimit(CatalogPaging.parse(config.get("catalog.pageLimit","30")));
         SaltNativeUi ui=nativeUi; if(ui!=null) applySidebarSettings(ui,config);
         if(!previous.qualityKey().equals(settings.qualityKey())) {
@@ -250,7 +252,8 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 playbackVideo=new io.github.yghfv.saltneri.plugin.ui.SaltVideoBindings(WorkshopApi.class.getClassLoader(),
                         WorkshopApi.hookRegistrar(),()->generation==owner && granted(),
                         (id,path)->savedTracks==null?null:savedTracks.find(id,path),this::credentials,
-                        text->toast(text,WorkshopApi.Ui.ToastType.Error));
+                        text->toast(text,WorkshopApi.Ui.ToastType.Error),()->settings.videoResolution());
+                playbackVideo.cacheLimit(settings.cacheBytes());
                 playbackVideoFailure="";
             } catch(Exception | LinkageError unavailable) {
                 playbackVideoFailure="; playback video unavailable: "+unavailable.getClass().getSimpleName();
@@ -487,6 +490,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     public static void clearCache() { action(plugin -> {
         Salt1193DiagnosticRuntime current=plugin.runtime;
         if(current!=null) current.clearCache();
-        plugin.status="\u5df2\u6e05\u7406\u672c\u63d2\u4ef6\u97f3\u9891\u7f13\u5b58\uff0c\u4e0d\u6e05\u7a7a\u64ad\u653e\u961f\u5217\u6216\u767b\u5f55\u3002";
+        if(plugin.playbackVideo!=null)plugin.playbackVideo.clearCache();
+        plugin.status="已清理本插件音频和视频缓存，不清空播放队列或登录。";
     }); }
 }

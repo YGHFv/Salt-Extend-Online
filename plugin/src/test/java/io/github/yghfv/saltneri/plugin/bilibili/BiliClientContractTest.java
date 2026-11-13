@@ -96,6 +96,25 @@ public final class BiliClientContractTest {
             check(fixture.requests.stream().anyMatch(r->r.getURL().getPath().equals("/1080.m4s")));
             check(fixture.requests.stream().noneMatch(r->r.getURL().getPath().equals("/4k.m4s")));
             check(!video.toString().contains("https"));
+            fixture.requests.clear();
+            fails(()->fixture.client().resolveVideo(new BiliTarget(BV,2),io.github.yghfv.saltneri.plugin.video.VideoResolution.P480,"fixture-anonymous",request));
+            check(fixture.requests.stream().noneMatch(r->r.getURL().getPath().endsWith(".m4s")));
+            fixture.client().resolveVideo(new BiliTarget(BV,2),io.github.yghfv.saltneri.plugin.video.VideoResolution.P1440,"fixture-anonymous",request);
+            check(fixture.requests.stream().anyMatch(r->r.getURL().getPath().equals("/1080.m4s")));
+            fixture.requests.clear();
+            fixture.client().resolveVideo(new BiliTarget(BV,2),io.github.yghfv.saltneri.plugin.video.VideoResolution.P2160,"fixture-anonymous",request);
+            check(fixture.requests.stream().anyMatch(r->r.getURL().getPath().equals("/4k.m4s")));
+            fixture.requests.clear();
+            fixture.play=fixture.play.replace("\"base_url\":\"https://upos-fixture.bilivideo.com/1080.m4s\"",
+                    "\"base_url\":\"https://fixture.mcdn.bilivideo.cn:8082/1080.m4s\",\"backup_url\":[\"https://edge.mountaintoys.cn:4483/a\",\"https://upos-fixture.bilivideo.com/backup.m4s?token=SECRET%2FKEEP\"]");
+            var backup=fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request);
+            check(fixture.requests.getLast().getURL().getPath().equals("/backup.m4s"));
+            check(fixture.requests.getLast().getURL().getQuery().equals("token=SECRET%2FKEEP"));
+            check(fixture.requests.stream().noneMatch(r->r.getURL().getPort()>443));
+            fixture.play=fixture.play.replace("\"height\":1080,","\"height\":1920,\"width\":1080,");
+            fixture.requests.clear();
+            fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request);
+            check(fixture.requests.getLast().getURL().getPath().equals("/backup.m4s"));
             fixture.play=fixture.play.replace("\"cid\":20","\"cid\":10");
             fails(()->fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request));
             fixture.play=fixture.play.replace("\"cid\":10","\"cid\":20").replace("\"timelength\":120000","\"is_preview\":true,\"timelength\":120000");

@@ -54,6 +54,26 @@ public final class PinnedHttpsContractTest {
         });
     }
     private static PinnedHttpsConnection fixture(String response) throws IOException { return fixture(new FixtureSocket(response)); }
+    /** Exercise the production PinnedHttpsConnection.disconnect -> Socket.close path.
+     * A TLS close can wait for record locks or unread records; model that wait without external TLS. */
+    public static HttpURLConnection slowClosingFixture(URI uri,CountDownLatch reading,CountDownLatch release,
+            CountDownLatch disconnected) throws IOException {
+        Socket socket=new Socket() {
+            private void waitForRelease() {
+                while(release.getCount()>0)try {release.await();}catch(InterruptedException ignored) { }
+            }
+            @Override public void connect(SocketAddress address,int timeout) { }
+            @Override public OutputStream getOutputStream(){return new ByteArrayOutputStream();}
+            @Override public InputStream getInputStream(){return new InputStream() {
+                @Override public int read(){reading.countDown();waitForRelease();return -1;}
+            };}
+            @Override public void close(){waitForRelease();disconnected.countDown();}
+        };
+        return new PinnedHttpsConnection(uri,host->new InetAddress[]{PUBLIC},new PinnedHttpsConnection.Sockets() {
+            public Socket create(){return socket;}
+            public Socket secure(Socket raw,String host){return raw;}
+        });
+    }
     public static void main(String[] args) throws Exception {
         var context=PinnedHttpsConnection.tlsContext();
         check(context==PinnedHttpsConnection.tlsContext());

@@ -53,13 +53,14 @@ public final class MusicVideoContractTest {
             check(client.discover(new Target(AccountPlatform.APPLEMUSIC,"123"),request)==null);
         }
         qqFixtures();
+        neteaseFallback();
         System.out.println("PASS: "+checks+" MV mapping, on-demand stream and identity checks");
     }
     private static void qqFixtures() throws Exception {
         String mid="00123456789abc",vid="a0123456789";
         var requests=new ArrayList<URI>();
         var response=new HashMap<String,Object>();
-        response.put("mp4",List.of(Map.of("code",0,"fileSize",4096,"url",List.of("https://dl.stream.qqmusic.qq.com/video.mp4"))));
+        response.put("mp4",List.of(Map.of("code",0,"filetype",30,"fileSize",4096,"url",List.of("https://dl.stream.qqmusic.qq.com/video.mp4"))));
         var client=new MusicVideoClient(null,Clock.systemUTC(),(uri,body)->{
             requests.add(uri);
             if(body==null)return new Response(uri,"",true);
@@ -81,16 +82,37 @@ public final class MusicVideoContractTest {
             var source=client.discover(new Target(AccountPlatform.QQMUSIC,mid),request);
             check(source.videoId().equals(vid) && requests.size()==1);
             check(client.resolve(source,"qq-video",request).length()==4096 && requests.size()==3);
+            response.put("mp4",List.of(
+                    Map.of("code",0,"filetype",40,"fileSize",9999,"url",List.of("https://dl.stream.qqmusic.qq.com/1080.mp4")),
+                    Map.of("code",0,"filetype",20,"fileSize",4096,"url",List.of("https://dl.stream.qqmusic.qq.com/480.mp4")),
+                    Map.of("code",0,"filetype",30,"fileSize",8192,"url",List.of("https://dl.stream.qqmusic.qq.com/720.mp4"))));
+            check(client.resolve(source,VideoResolution.P720,"qq-video",request).length()==4096);
+            check(requests.getLast().getPath().equals("/720.mp4"));
+            rejects(()->client.resolve(source,VideoResolution.P360,"qq-video",request));
             response.put("mp4",List.of(Map.of("code",0,"is_trial",1,"url",List.of("https://dl.stream.qqmusic.qq.com/trial.mp4"))));
             rejects(()->client.resolve(source,"qq-video",request));
             response.put("mp4",List.of(Map.of("code",403,"url",List.of("https://dl.stream.qqmusic.qq.com/denied.mp4"))));
             rejects(()->client.resolve(source,"qq-video",request));
             response.put("mp4",List.of(Map.of("code",0,"url",List.of("https://foreign.invalid/video.mp4"))));
             rejects(()->client.resolve(source,"qq-video",request));
-            check(requests.stream().filter(u->!u.equals(QqMusicHttp.GATEWAY)).count()==1);
+            check(requests.stream().filter(u->!u.equals(QqMusicHttp.GATEWAY)).count()==2);
         }
         try(var request=new RequestScope(()->false)) {
             rejects(()->client.discover(new Target(AccountPlatform.QQMUSIC,mid),request));
         } catch(java.util.concurrent.CancellationException expected) {checks++;}
+    }
+    private static void neteaseFallback() throws Exception {
+        var requests=new java.util.concurrent.atomic.AtomicInteger();
+        var client=new MusicVideoClient(null,Clock.systemUTC(),(uri,body)->{
+            if(body==null)return new Response(uri,"",true);
+            int attempt=requests.incrementAndGet();
+            return new Response(uri,attempt==1?"{\"code\":404,\"data\":null}":
+                    "{\"code\":200,\"data\":{\"id\":456,\"r\":480,\"code\":200,\"url\":\"https://m7.music.126.net/480.mp4\"}}",false);
+        });
+        try(var request=new RequestScope(()->true)) {
+            var source=new MusicVideoClient.Source(new Target(AccountPlatform.NETEASE,"123"),"456");
+            check(client.resolve(source,VideoResolution.P720,"net-video",request).length()==4096);
+            check(requests.get()==2);
+        }
     }
 }

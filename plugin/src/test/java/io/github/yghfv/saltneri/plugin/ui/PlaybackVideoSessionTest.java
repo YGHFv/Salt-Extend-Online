@@ -25,7 +25,7 @@ public final class PlaybackVideoSessionTest {
     }
     private static final class Hooks extends PlaybackVideoHostFixture.RegistrationOnlyHooks { }
     public static void main(String[] args) throws Exception {
-        var failure=new AtomicReference<Throwable>();Thread.setDefaultUncaughtExceptionHandler((t,e)->failure.set(e));
+        var failure=new AtomicReference<Throwable>();Thread.setDefaultUncaughtExceptionHandler((t,e)->{failure.set(e);e.printStackTrace();});
         Class<?> monitor=Class.forName("com.xuncorp.pisces.\u0786"),media=Class.forName("com.xuncorp.pisces.PiscesMediaItem");
         var update=monitor.getMethod("\u037f",media);
         Object original=((kotlinx.coroutines.flow.StateFlow<?>)monitor.getMethod("\u0528").invoke(null)).getValue();
@@ -33,6 +33,7 @@ public final class PlaybackVideoSessionTest {
         var requests=new CopyOnWriteArrayList<String>();var gate=new CountDownLatch(1);var discovering=new CountDownLatch(1);
         var errors=new CopyOnWriteArrayList<String>();
         var transport=TransportContractTest.videoServer(PlaybackVideoFixture.bytes(),()->true);
+        transport.cacheLimit(32L*1024*1024);
         Path directory=Files.createTempDirectory("video-session-");
         try(var tracks=new SavedTrackStore(directory);
             var video=new SaltVideoBindings(PlaybackVideoSessionTest.class.getClassLoader(),new Hooks(),()->true,tracks::find,p->null,errors::add,
@@ -63,6 +64,7 @@ public final class PlaybackVideoSessionTest {
             update.invoke(null,first);await(()->video.view().available());check(requests.isEmpty());
             SwingUtilities.invokeAndWait(video::toggle);await(()->video.view().player()!=null && !video.view().loading());
             Object retired=video.view().player();check(requests.equals(List.of("BV17x411w7KC")));
+            check(transport.cacheBytes()>0);
             update.invoke(null,second);await(()->video.view().player()!=null && video.view().player()!=retired && !video.view().loading());
             check(requests.equals(List.of("BV17x411w7KC","BV1xx411c7mD")));
             update.invoke(null,mv);await(()->requests.contains("10") && video.view().player()!=null && !video.view().loading());
