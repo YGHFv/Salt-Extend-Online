@@ -53,7 +53,7 @@ public final class AccountLoginController implements AutoCloseable {
     private AccountCredentials account;
     private boolean closed, startupAttempted;
     private volatile boolean rememberEnabled;
-    private Phase phase = Phase.IDLE;
+    private volatile Phase phase = Phase.IDLE;
     private String status = "Not logged in. Login is explicit; no existing account is imported.";
     public AccountLoginController(AccountPlatform platform, BooleanSupplier authorized, EncryptedAccountStore store, Runnable onChange) {
         this(platform, switch(platform) {case BILIBILI -> BiliQrClient::new; case NETEASE -> NeteaseQrClient::new; case QQMUSIC -> QqMusicQrClient::new; case APPLEMUSIC -> AppleMusicAuthClient::new; case KUGOU -> KugouQrClient::new;},
@@ -328,6 +328,8 @@ public final class AccountLoginController implements AutoCloseable {
         if (notify) changed();
     }
     public synchronized AccountCredentials credentials() { return account != null && account.isActive() && permitted() && !closed ? account : null; }
+    /** Read only: unlike snapshot(), does not watch accounts, acquire locks or copy QR/profile data. */
+    public Phase diagnosticPhase() { return phase; }
     public Snapshot snapshot() {
         watch(); synchronized (this) { return new Snapshot(phase, status, current != null && current.active.get() && current.session != null ? current.session.qrContent() : null,
                 account == null ? "" : account.userId(), account == null ? new AccountCredentials.Profile("", null) : account.profile(), account == null ? "" : account.revision(),

@@ -584,6 +584,11 @@ public final class SaltNativeUi implements AutoCloseable {
                 + ", sidebarSettings=" + sidebarSettingsFailure
                 + ", error=" + (failure.equals("none") ? pageBinding.failure() : failure);
     }
+    public record ExportState(boolean bound, int dispatched, int selected, int rendered, boolean loginPending) {}
+    /** Lock-free counters only; exporting during a stalled render must not wait for the UI monitor. */
+    public ExportState exportState() {
+        return new ExportState(pageBinding.isInstalled(), dispatched.get(), selected.get(), rendered.get(), pendingLogin.get() != null);
+    }
     public void requestLogin(AccountPlatform platform) {
         pendingLogin.set(platform);
         try {

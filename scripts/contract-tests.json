@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "offlineSources": [
+    "diagnostics/SafeDiagnosticLog.java",
     "transport/ByteRange.java",
     "transport/DiagnosticTone.java",
     "transport/MediaLease.java",
@@ -48,6 +49,8 @@
     "transport/DecodedAudioSource.java"
   ],
   "tests": [
+    {"class":"io.github.yghfv.saltneri.plugin.diagnostics.SafeDiagnosticLogTest","baseOnly":true,"offline":true},
+    {"class":"io.github.yghfv.saltneri.plugin.diagnostics.DiagnosticExportTest","baseOnly":false,"offline":false},
     {
       "class": "io.github.yghfv.saltneri.plugin.host.DeferredPluginStartupTest",
       "baseOnly": false,

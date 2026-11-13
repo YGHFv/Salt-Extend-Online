@@ -3,7 +3,7 @@
 ## 单一入口
 
 - `plugin.properties`：插件 ID、名称、提供者、实验版和被动检查版版本。PowerShell、Gradle、包验证器共用。
-- `scripts/contract-tests.json`：92 个自动插件回归入口，其中 14 个纳入公共无宿主回归。`baseOnly` 表示额外验证只需 `java.base`，`offline` 表示完全不需要 Salt 类。
+- `scripts/contract-tests.json`：96 个自动插件回归入口，其中 15 个纳入公共无宿主回归。`baseOnly` 表示额外验证只需 `java.base`，`offline` 表示完全不需要 Salt 类。
 - `scripts/verify-project.py`：检查版本格式、稳定 ID、设置 JSON、测试重复／漏项和离线源文件清单。
 
 本地完整构建先验证项目、第三方源码、class-file 检查器和核心策略，再编译 Java / Kotlin、校验实际宿主 ABI、运行插件测试，最后验证包隔离。
@@ -41,6 +41,8 @@ Windows、PowerShell、Python 3、JDK 25：
 1.0.0 新增真实 PF4J 加载器关闭后再清理 Compose 侧栏的回归，以及后台启动、AWT 响应、停止前等待初始化退出和取消旧初始化的生命周期回归。
 
 1.0.1 将回归入口增至 94 个，增加慢连接取消时翻页和页面退出的 AWT 响应测试、当前及后三首视频预缓存测试，并扩展视频 Range 缓存、非对齐进度、分辨率降级和 CDN 备用地址检查。
+
+1.0.2 将回归入口增至 96 个，增加日志投影隐私回归及后台文件导出／AWT 响应回归。仅使用合成日志和隔离目录，不导出真实用户日志；无宿主回归也覆盖 Cookie、编码／多行资料、伪造栈帧、异常类别保留与 4 MiB 尾部读取上限。
 
 默认构建不显示桌面测试窗口、不抢焦点、不移动或点击鼠标。视频测试仍运行时钟、离屏渲染、原生解码控制和生命周期检查，屏幕采样部分明确标记为 `SKIP`。需要前台窗口的 Direct3D 帧率、真实鼠标和窗口消息回归，只能在本机显式传入 `-InteractiveDesktopTests` 后运行；该模式会创建置顶测试窗口并操作鼠标，应在专门的测试时段使用。`CI=true` 或 `GITHUB_ACTIONS=true` 时禁止启用，Gradle 自动检查也始终关闭此模式。
 

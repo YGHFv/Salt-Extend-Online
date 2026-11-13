@@ -49,12 +49,12 @@ def validate(path, experimental):
             raise ValueError("Passive artifact requests permissions")
         configs = json.loads(archive.read("classes/preference_config.json"))
         buttons = [pref["on_click"] for config in configs["configs"] for pref in config["preferences"] if pref["type"] == "button"]
-        expected = ["openSidebarSettings", "openAutoSourceSettings", "openQualitySettings", "openProxySettings", "openHomeSettings", "clearCache", "showStatus"] if experimental else ["showStatus"]
+        expected = ["openSidebarSettings", "openAutoSourceSettings", "openQualitySettings", "openProxySettings", "openHomeSettings", "clearCache", "showStatus", "exportLogs"] if experimental else ["showStatus"]
         if buttons != ["io.github.yghfv.saltneri.plugin." + entry_class + "." + method for method in expected]:
             raise ValueError("Wrong opt-in action configuration")
         if experimental:
             main = {p.get("key"): p for c in configs["configs"] for p in c["preferences"] if "key" in p}
-            if set(main) != {"cache.limitMiB", "cover.mode", "catalog.pageLimit"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 10:
+            if set(main) != {"cache.limitMiB", "cover.mode", "catalog.pageLimit"} or len(configs["configs"]) != 1 or len(configs["configs"][0]["preferences"]) != 11:
                 raise ValueError("Unexpected condensed settings menu")
             pages = json.loads(archive.read("classes/settings-pages.json"))
             expected_pages = {

@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**1.0.1 · 开发预览** · Windows / Steam Salt 1.19.3
+**1.0.2 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -76,6 +76,8 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 音质以当前账号的官方权限为准，只播放可访问的完整音轨，不提供试听替代、会员或风控绕过。B站搜索需要登录，网易云部分匿名接口也可能要求登录。
 
 ## 版本与兼容
+
+**1.0.2** 在模组配置最下面增加“导出诊断日志”，后台保存到用户目录下的 `Downloads\Salt-Extend-Diagnostics`。包含模组状态、两次线程快照和最近宿主日志中的异常类型／调用栈；Cookie、账户资料、令牌、地址及未知正文过滤为 `qqcookie` 等固定标记。脱敏策略和验证见 [诊断日志导出](docs/DIAGNOSTIC_EXPORT_1.0.2.md)。
 
 **1.0.1** 修复翻页清理封面时同步断开慢连接阻塞界面线程的问题，合并请求定时线程；补齐视频分段缓存、分辨率降级及官方 CDN 备用地址处理。原因、PiliPlus 参考范围和验证见 [翻页卡顿与视频缓存](docs/VIDEO_CACHE_UI_FIX_1.0.1.md)。
 

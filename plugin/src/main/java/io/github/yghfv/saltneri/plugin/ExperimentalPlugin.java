@@ -22,6 +22,9 @@ import io.github.yghfv.saltneri.plugin.host.Salt1193Probe;
 import io.github.yghfv.saltneri.plugin.library.*;
 import io.github.yghfv.saltneri.plugin.auth.AccountCredentials;
 import io.github.yghfv.saltneri.plugin.transport.MediaLease;
+import io.github.yghfv.saltneri.plugin.diagnostics.DiagnosticExport;
+import io.github.yghfv.saltneri.plugin.diagnostics.DiagnosticExport.Flag;
+import io.github.yghfv.saltneri.plugin.diagnostics.DiagnosticExport.Counter;
 import java.io.IOException;
 import java.util.function.Consumer;
 
@@ -35,6 +38,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile Object generation;
     private io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup startup;
     private volatile boolean startupReady;
+    private volatile DiagnosticExport diagnosticExport;
     private volatile BiliResolutionController bili;
     private volatile NeteaseResolutionController netease;
     private ConfigManager configManager;
@@ -87,6 +91,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     @Override public synchronized void start() {
         if (!stopped) return;
         stopped = false;
+        diagnosticExport = new DiagnosticExport(ExperimentalPlugin.class.getClassLoader());
         active = this;
         Object started = new Object(); generation = started;
         startupReady = false;
@@ -370,6 +375,9 @@ public final class ExperimentalPlugin extends SpwPlugin {
     }
 
     @Override public synchronized void stop() {
+        DiagnosticExport exporter=diagnosticExport;
+        diagnosticExport=null;
+        if(exporter!=null) exporter.close();
         stopped = true;
         generation = null;
         startupReady = false;
@@ -448,6 +456,52 @@ public final class ExperimentalPlugin extends SpwPlugin {
                 + ", adapter=" + plugin.adapterArmed()
                 + "\nWindows media app: " + plugin.mediaIdentityStatus;
     }); }
+    /** Available even while startup is pending; collecting diagnostics must never wait on initialization. */
+    public static void exportLogs() {
+        ExperimentalPlugin plugin = active;
+        DiagnosticExport exporter=plugin==null?null:plugin.diagnosticExport;
+        if (exporter == null) { toast("模组尚未启用，无法导出诊断日志。", WorkshopApi.Ui.ToastType.Warning); return; }
+        try {
+            String appData = System.getenv("APPDATA");
+            java.nio.file.Path source = appData == null ? java.nio.file.Path.of(System.getProperty("user.home"), "AppData", "Roaming", "Salt Player for Windows", "logs.txt")
+                    : java.nio.file.Path.of(appData, "Salt Player for Windows", "logs.txt");
+            java.nio.file.Path directory = java.nio.file.Path.of(System.getProperty("user.home"), "Downloads", "Salt-Extend-Diagnostics");
+            if (!exporter.start(source, directory, plugin::exportState,
+                    filename -> toast("诊断日志已导出到用户目录下的 Downloads\\Salt-Extend-Diagnostics\\" + filename, WorkshopApi.Ui.ToastType.Success),
+                    () -> toast("诊断日志导出失败，请检查下载目录的写入权限后重试。", WorkshopApi.Ui.ToastType.Error))) {
+                toast("诊断日志正在导出，请稍候。", WorkshopApi.Ui.ToastType.Warning);
+            } else toast("正在后台导出脱敏诊断日志…", WorkshopApi.Ui.ToastType.Warning);
+        } catch (RuntimeException failure) { toast("无法创建诊断导出任务，请检查下载目录。", WorkshopApi.Ui.ToastType.Error); }
+    }
+    private DiagnosticExport.State exportState() {
+        var flags = new java.util.EnumMap<Flag,Boolean>(Flag.class);
+        var counters = new java.util.EnumMap<Counter,Long>(Counter.class);
+        var phases = new java.util.EnumMap<AccountPlatform,AccountLoginController.Phase>(AccountPlatform.class);
+        flags.put(Flag.STARTUP_READY,startupReady);
+        flags.put(Flag.STOPPED,stopped);
+        Salt1193Probe.Result hostProfile=profile;
+        flags.put(Flag.HOST_MATCHED,hostProfile!=null && hostProfile.matched());
+        flags.put(Flag.ADAPTER_PRESENT,runtime!=null);
+        flags.put(Flag.VIDEO_PRESENT,playbackVideo!=null);
+        SaltNativeUi ui=nativeUi;
+        flags.put(Flag.UI_PRESENT,ui!=null);
+        if(ui!=null) {
+            var s=ui.exportState();
+            flags.put(Flag.UI_BOUND,s.bound());
+            flags.put(Flag.LOGIN_PENDING,s.loginPending());
+            counters.put(Counter.UI_DISPATCHED,(long)s.dispatched());
+            counters.put(Counter.UI_SELECTED,(long)s.selected());
+            counters.put(Counter.UI_RENDERED,(long)s.rendered());
+        }
+        PlaybackSettings currentSettings=settings;
+        counters.put(Counter.CACHE_MIB,currentSettings.cacheBytes()/PlaybackSettings.MIB);
+        counters.put(Counter.VIDEO_RESOLUTION,(long)currentSettings.videoResolution().height());
+        for(AccountPlatform platform:AccountPlatform.values()) {
+            AccountLoginController account=switch(platform){case BILIBILI->biliLogin;case NETEASE->neteaseLogin;case QQMUSIC->qqmusicLogin;case APPLEMUSIC->appleMusicLogin;case KUGOU->kugouLogin;};
+            if(account!=null) phases.put(platform,account.diagnosticPhase());
+        }
+        return new DiagnosticExport.State(getPluginContext().getPluginVersion(),getPluginContext().getSpwVersion(),flags,counters,phases);
+    }
     private synchronized void resolveBili() {
         if (stopped || bili == null) throw new IllegalStateException("Plugin disabled");
         if (!granted()) throw new SecurityException("CLASS_TRANSFORM not granted");
