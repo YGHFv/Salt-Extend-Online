@@ -75,7 +75,7 @@ public final class PlaybackVideoHostFixture implements AutoCloseable {
         Agent.instrumentation.redefineClasses(new ClassDefinition(bridge,bridgeCode));
         Class<?> controller=Class.forName("com.xuncorp.voxzen.service.PlaybackController");originals.put(controller,bytes(controller));
         Agent.instrumentation.redefineClasses(new ClassDefinition(controller,new ByteBuddy().redefine(controller)
-                .method(ElementMatchers.named("playOrPause")).intercept(MethodDelegation.to(AudioAction.class)).make().getBytes()));
+                .method(ElementMatchers.namedOneOf("playOrPause","play","pause")).intercept(MethodDelegation.to(AudioAction.class)).make().getBytes()));
         Map<Class<?>,byte[]> transformed=new LinkedHashMap<>();
         for(Site spec:sites) {
             Object target=site(spec);Class<?> transformer=Class.forName("com.xuncorp.voxzen.workshop.hooks.\u052d");
@@ -108,6 +108,14 @@ public final class PlaybackVideoHostFixture implements AutoCloseable {
     }
     boolean captionEnabled() {
         try{return (boolean)properties.getClass().getMethod("\u052b").invoke(properties);}catch(Exception failure){throw new AssertionError(failure);}
+    }
+    Object hitTest() throws Exception {
+        Object[] args=Bridge.hitTestArguments;
+        if(args==null)throw new AssertionError("Missing native Windows hit test");
+        Method method=Arrays.stream(Class.forName(SaltVideoBindings.WINDOW_FRAME).getDeclaredMethods())
+                .filter(m->m.getName().equals("\u037f") && m.getParameterCount()==10 &&
+                        m.getParameterTypes()[0]==androidx.compose.ui.window.WindowState.class).findFirst().orElseThrow();
+        method.setAccessible(true);return method.invoke(null,args);
     }
     void audioAction(Runnable action){AudioAction.action=action;}
     void render(Object titleState,Object videoState,Composer composer) {
@@ -159,11 +167,13 @@ public final class PlaybackVideoHostFixture implements AutoCloseable {
         if(process.exitValue()!=0 || Agent.instrumentation==null)throw new AssertionError("Test agent attach failed");
     }
     public static final class Bridge {
+        static volatile boolean enabled=true;
+        static volatile Object[] hitTestArguments;
         static final Map<Integer,Site> sites=new HashMap<>();static final Map<String,MethodHook> hooks=new HashMap<>();static final Map<String,Integer> calls=new HashMap<>();
         static final Set<Integer> renderedSites=new HashSet<>();
-        public static boolean hasReplacement(int id){return !sites.get(id).after;}
-        public static void RenderReplacement(int id,Object receiver,Object[] args,Composer composer,int flags){draw(id,receiver,args,composer);}
-        public static void RenderAfter(int id,Object receiver,Object[] args,Composer composer,int flags){if(sites.get(id).after)draw(id,receiver,args,composer);}
+        public static boolean hasReplacement(int id){return enabled && !sites.get(id).after;}
+        public static void RenderReplacement(int id,Object receiver,Object[] args,Composer composer,int flags){if(enabled)draw(id,receiver,args,composer);}
+        public static void RenderAfter(int id,Object receiver,Object[] args,Composer composer,int flags){if(enabled && sites.get(id).after)draw(id,receiver,args,composer);}
         private static void draw(int id,Object receiver,Object[] args,Composer composer) {
             Site spec=sites.get(id);calls.merge(spec.owner+"@"+spec.caller,1,Integer::sum);renderedSites.add(id);
             UiHookCall call=new UiHookCall(){public Object getThisObject(){return receiver;}public List<Object> getArguments(){return Arrays.asList(args);}public Object getArgument(String name){return null;}};
@@ -173,9 +183,11 @@ public final class PlaybackVideoHostFixture implements AutoCloseable {
         }
         public static WorkshopMethodFrame enter(Class<?> owner,String name,String descriptor,Object receiver,Object[] args) throws Exception {
             String key=owner.getName()+"#"+name;MethodHook hook=hooks.get(key);if(hook==null)return null;calls.merge(key,1,Integer::sum);
+            if(owner.getName().equals(SaltVideoBindings.WINDOW_FRAME) && args.length==10)hitTestArguments=args.clone();
             Field uf=sun.misc.Unsafe.class.getDeclaredField("theUnsafe");uf.setAccessible(true);var unsafe=(sun.misc.Unsafe)uf.get(null);
             var frame=(WorkshopMethodFrame)unsafe.allocateInstance(WorkshopMethodFrame.class);
-            String[] names={"thisObject","args","method","thread"};Object[] values={receiver,args,Arrays.stream(owner.getDeclaredMethods()).filter(m->m.getName().equals(name) && m.getParameterCount()==args.length).findFirst().orElseThrow(),Thread.currentThread()};
+            String[] names={"thisObject","args","method","thread"};Object[] values={receiver,args,Arrays.stream(owner.getDeclaredMethods()).filter(m->m.getName().equals(name) &&
+                    java.lang.invoke.MethodType.methodType(m.getReturnType(),m.getParameterTypes()).descriptorString().equals(descriptor)).findFirst().orElseThrow(),Thread.currentThread()};
             for(int i=0;i<names.length;i++){Field field=WorkshopMethodFrame.class.getDeclaredField(names[i]);field.setAccessible(true);field.set(frame,values[i]);}
             hook.before(frame);return frame;
         }

@@ -38,7 +38,6 @@ class SaltVideoTransportContent(private val video: SaltVideoBindings) : Composab
     @Composable
     override fun Content(call: UiHookCall) {
         if (!video.isExpanded(currentComposer) || !video.view().requested()) {
-            SideEffect { video.restoreNativeTransport() }
             video.originalConditional(call, currentComposer)
         }
         else if (video.controlsVisible()) {
@@ -46,6 +45,15 @@ class SaltVideoTransportContent(private val video: SaltVideoBindings) : Composab
                 video.originalConditional(call, currentComposer)
             }
         }
+    }
+}
+
+/** Salt draws the capsule blur separately from the MiniPlayer controls. */
+class SaltVideoBackdropContent(private val video: SaltVideoBindings) : ComposableHook() {
+    @Composable
+    override fun Content(call: UiHookCall) {
+        if (!video.isExpanded(currentComposer) || !video.view().requested() || video.controlsVisible())
+            Box(call.getArgument(0) as Modifier)
     }
 }
 
@@ -112,9 +120,8 @@ class SaltVideoWindowFrameContent(private val video: SaltVideoBindings) : Compos
     override fun Content(call: UiHookCall) {
         val properties = call.getArgument(2)
         SideEffect { video.captionProperties(properties) }
-        // Keep the entire sheet and its video surface at one composition call site.
-        // Caption and transport supply their own theme without rebuilding the window.
-        video.originalWindowFrame(call, currentComposer)
+        // This is an after hook: the native frame and its remembered Windows
+        // message callbacks stay at their original composition call site.
     }
 }
 

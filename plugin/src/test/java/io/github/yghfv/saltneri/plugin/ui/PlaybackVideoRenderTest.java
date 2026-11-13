@@ -40,8 +40,49 @@ public final class PlaybackVideoRenderTest {
         }
         return visible;
     }
+    private static int transportResidue(java.awt.Robot robot,java.awt.Window window) {
+        var origin=window.getLocationOnScreen();
+        var pixels=robot.createScreenCapture(new java.awt.Rectangle(origin.x,origin.y+window.getHeight()-145,
+                window.getWidth(),140));
+        int residue=0;
+        // Check every color in the capsule center against the solid video/letterbox row.
+        // Its outer corners retain the host sheet's clip mask even without the backdrop.
+        for(int y=0;y<pixels.getHeight();y++)for(int x=pixels.getWidth()/4;x<pixels.getWidth()*3/4;x++) {
+            int rgb=pixels.getRGB(x,y),reference=pixels.getRGB(30,y);
+            if(Math.abs(((rgb>>16)&255)-((reference>>16)&255))>5 ||
+                    Math.abs(((rgb>>8)&255)-((reference>>8)&255))>5 || Math.abs((rgb&255)-(reference&255))>5)residue++;
+        }
+        return residue;
+    }
+    private static Object whileSessionLocked(SaltVideoBindings video,java.util.concurrent.Callable<?> action) throws Exception {
+        var result=new java.util.concurrent.CompletableFuture<Object>();
+        var thread=new Thread(()->{
+            try{result.complete(action.call());}catch(Throwable error){result.completeExceptionally(error);}
+        },"video-native-callback-regression");thread.setDaemon(true);
+        synchronized(video) {
+            thread.start();
+            try{return result.get(2,java.util.concurrent.TimeUnit.SECONDS);}
+            catch(java.util.concurrent.TimeoutException error){throw new AssertionError("Native input callback waited for the video session lock",error);}
+        }
+    }
     private static int captionPixels(java.awt.Robot robot,java.awt.Window window) {
         return captionPixels(robot,window,true);
+    }
+    private static List<Long> windowProcedures(java.awt.Window window) {
+        var nativeCall=com.sun.jna.NativeLibrary.getInstance("user32")
+                .getFunction("GetWindowLongPtrW",com.sun.jna.Function.ALT_CONVENTION);
+        var result=new ArrayList<Long>();
+        collectWindowProcedures(window,nativeCall,result);
+        return result;
+    }
+    private static void collectWindowProcedures(java.awt.Component component,com.sun.jna.Function function,List<Long> result) {
+        if(component instanceof java.awt.Window || component instanceof java.awt.Canvas) {
+            var hwnd=com.sun.jna.Native.getComponentPointer(component);
+            var pointer=(com.sun.jna.Pointer)function.invoke(com.sun.jna.Pointer.class,new Object[]{hwnd,-4});
+            result.add(com.sun.jna.Pointer.nativeValue(pointer));
+        }
+        if(component instanceof java.awt.Container container)
+            for(var child:container.getComponents())collectWindowProcedures(child,function,result);
     }
     private static int captionPixels(java.awt.Robot robot,java.awt.Window window,boolean light) {
         var origin=window.getLocationOnScreen();var insets=window.getInsets();
@@ -85,7 +126,7 @@ public final class PlaybackVideoRenderTest {
         for(var owner:window.getSemanticsOwners()){var found=tagged(owner.getUnmergedRootSemanticsNode(),tag);if(found!=null)return found;}return null;
     }
     @SuppressWarnings("unchecked")
-    private static ProvidedValue<?>[] windowLocals(Composer composer,ProvidedValue<?>... values) {
+    static ProvidedValue<?>[] windowLocals(Composer composer,ProvidedValue<?>... values) {
         try {
             Class<?> defaults=Class.forName("androidx.compose.ui.\u012e$\u037f");
             Method factory=Arrays.stream(defaults.getMethods()).filter(m->m.getName().equals("\u037f")).findFirst().orElseThrow();
@@ -206,6 +247,7 @@ public final class PlaybackVideoRenderTest {
         Object originalPlaying=playing.getValue();
         Method setPlaying=monitor.getMethod("\u037f",boolean.class);
         var playbackToggles=new java.util.concurrent.atomic.AtomicInteger();
+        var canvasToggles=new java.util.concurrent.atomic.AtomicInteger();
         try(var store=new SavedTrackStore(output.resolve("tracks"));
             var video=new SaltVideoBindings(host,hooks,()->true,store::find,p->null,toasts::add)) {
             var row=new Catalog.Item(Catalog.Kind.TRACK,"BV17x411w7KC","Video fixture","Artist",120000,true);
@@ -238,6 +280,9 @@ public final class PlaybackVideoRenderTest {
             var nativeSurface=new PlaybackVideoHostFixture(hooks.sites,hooks.methods,hooks.signatures);
             nativeSurface.audioAction(()->{
                 playbackToggles.incrementAndGet();
+                if(Arrays.stream(Thread.currentThread().getStackTrace()).anyMatch(frame->
+                        frame.getClassName().equals(SaltVideoBindings.class.getName()) && frame.getMethodName().equals("togglePlayback")))
+                    canvasToggles.incrementAndGet();
                 try{setPlaying.invoke(null,!Boolean.TRUE.equals(playing.getValue()));}catch(Exception failure){throw new AssertionError(failure);}
             });
             var hitTestLocal=(ProvidableCompositionLocal<Object>)Class.forName("androidx.compose.ui.\u056e").getMethod("\u037f").invoke(null);
@@ -332,6 +377,8 @@ public final class PlaybackVideoRenderTest {
                 catch(Exception failure){throw new AssertionError(failure);}
             });
             var window=new AtomicReference<androidx.compose.ui.awt.ComposeWindow>();
+            var hookRevision=SnapshotStateKt.mutableStateOf(0,SnapshotStateKt.structuralEqualityPolicy());
+            PlaybackVideoHostFixture.Bridge.enabled=false;
             SwingUtilities.invokeAndWait(()->{
                 var actual=new androidx.compose.ui.awt.ComposeWindow();
                 actual.setUndecorated(true); // Salt supplies its own Windows frame and hit testing.
@@ -339,6 +386,7 @@ public final class PlaybackVideoRenderTest {
                 actual.setSize(1160,770);
                 actual.setAlwaysOnTop(true); // Keep other desktop windows out of the pixel assertions.
                 actual.setContent((scope,c,flags)->{
+                    hookRevision.getValue();
                     CompositionLocalKt.CompositionLocalProvider(
                             windowLocals(c,local.provides(playerSheet),captionLocal.provides(caption),hitTestLocal.provides(hitTest),navigatorLocal.provides(navigator)),(composer,f)->{
                                 videoWindow(hooks,call,video,nativeSurface,scope,composer);
@@ -350,6 +398,20 @@ public final class PlaybackVideoRenderTest {
                 try{navigator.getClass().getMethod("expandPlayer").invoke(navigator);}catch(Exception error){throw new AssertionError(error);}
             });
             Thread.sleep(300);
+            // Salt starts plugins after creating its window, and updates them in place.
+            // A frame replacement changes remember groups and subclasses both HWNDs again.
+            var originalProcedures=new AtomicReference<List<Long>>();
+            SwingUtilities.invokeAndWait(()->originalProcedures.set(windowProcedures(window.get())));
+            check(originalProcedures.get().size()>=2 && originalProcedures.get().stream().noneMatch(p->p==0));
+            for(int revision=1;revision<=5;revision++) {
+                final int next=revision;
+                SwingUtilities.invokeAndWait(()->{
+                    PlaybackVideoHostFixture.Bridge.enabled=(next%2)==1;
+                    hookRevision.setValue(next);
+                });
+                Thread.sleep(200);
+                SwingUtilities.invokeAndWait(()->check(originalProcedures.get().equals(windowProcedures(window.get()))));
+            }
             SwingUtilities.invokeAndWait(()->{try{navigator.getClass().getMethod("expandPlayer").invoke(navigator);}catch(Exception error){throw new AssertionError(error);}});
             try {
                 var actual=window.get();var robot=new java.awt.Robot();robot.setAutoDelay(40);
@@ -391,6 +453,13 @@ public final class PlaybackVideoRenderTest {
                 await(()->captionPixels(robot,actual)>60);
                 check(video.windowVideoActive(actual));
                 check(nativeSurface.captionEnabled());
+                Class<?> transportState=Class.forName(SaltVideoBindings.TRANSPORT_STATE);
+                Object nativeTransport=transportState.getConstructor().newInstance();
+                Method transportVisible=transportState.getMethod("\u037f");
+                Field nativeState=transportState.getDeclaredField("\u037f");nativeState.setAccessible(true);
+                var originalTransportState=(androidx.compose.runtime.State<?>)nativeState.get(nativeTransport);
+                check(Boolean.TRUE.equals(whileSessionLocked(video,()->transportVisible.invoke(nativeTransport))));
+                check(Boolean.FALSE.equals(originalTransportState.getValue()));
                 SwingUtilities.invokeAndWait(()->{
                     var button=tagged(actual,"SaltPlaybackVideoButton");check(button!=null);
                     var root=actual.getSemanticsOwners().iterator().next().getUnmergedRootSemanticsNode().getBoundsInRoot();
@@ -414,11 +483,19 @@ public final class PlaybackVideoRenderTest {
                 await(()->{try{return Boolean.FALSE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
                 check(Boolean.FALSE.equals(captionActive.invoke(hitTest)));
                 await(()->transportPixels(robot,actual)==0);
+                await(()->transportResidue(robot,actual)==0);
+                SwingUtilities.invokeAndWait(()->{
+                    for(var owner:actual.getSemanticsOwners()) {
+                        var root=owner.getUnmergedRootSemanticsNode();var bounds=root.getBoundsInRoot();
+                        check(transportBounds(root,(int)bounds.getWidth(),(int)bounds.getHeight(),bounds.getHeight()/actual.getHeight())==null);
+                    }
+                });
                 javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("native-window-hidden.png").toFile());
                 await(()->captionPixels(robot,actual)==0);
                 // Remove all native button regions while their composition is hidden.
                 check(!video.windowControlsVisible(actual) && video.captionRegionsEmpty());
+                check(whileSessionLocked(video,nativeSurface::hitTest).toString().equals("HTCLIENT"));
                 SwingUtilities.invokeAndWait(()->check(tagged(actual,"SaltPlaybackVideoButton")==null));
                 javax.imageio.ImageIO.write(robot.createScreenCapture(new java.awt.Rectangle(location.x,location.y,
                         actual.getWidth(),actual.getHeight())),"PNG",output.resolve("video-window-hidden.png").toFile());
@@ -483,6 +560,18 @@ public final class PlaybackVideoRenderTest {
                 await(()->video.windowVideoActive(actual));
                 await(()->captionPixels(robot,actual)>60);
                 check(video.view().requested() && video.view().player()==renderer);
+                // Click the real native transport button after hide/recovery and sheet restore.
+                await(()->{try{return ((Number)bottom.getClass().getMethod("\u052c").invoke(bottom)).floatValue()>=.999f;}
+                    catch(Exception error){throw new AssertionError(error);}});
+                robot.mouseMove(location.x+actual.getWidth()/2,location.y+actual.getHeight()-56);
+                robot.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                await(()->playbackToggles.get()==5 && Boolean.TRUE.equals(playing.getValue()));
+                robot.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                robot.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                await(()->playbackToggles.get()==6 && Boolean.FALSE.equals(playing.getValue()));
+                check(canvasToggles.get()==4);
+                check(video.view().requested() && video.view().player()==renderer);
                 updateProgress.invoke(null,progress.getConstructor(long.class,long.class).newInstance(4000L,6000L));
                 await(()->{
                     if(uncaught.get()!=null)throw new AssertionError("Seek draw crashed",uncaught.get());
@@ -502,6 +591,7 @@ public final class PlaybackVideoRenderTest {
                 check(surface.get()!=null);
                 SwingUtilities.invokeAndWait(()->surface.get().fail(new IllegalStateException("Synthetic draw failure")));
                 await(()->!video.view().requested() && video.view().player()==null);
+                check(Boolean.FALSE.equals(transportVisible.invoke(nativeTransport)));
                 await(()->{try{return Boolean.TRUE.equals(captionActive.invoke(hitTest));}catch(Exception error){throw new AssertionError(error);}});
                 check(toasts.size()==1 && uncaught.get()==null);
                 SwingUtilities.invokeAndWait(()->video.disposeSurface(surface.get()));
@@ -525,7 +615,7 @@ public final class PlaybackVideoRenderTest {
             }finally {stream.close();nativeSurface.close();}
         }finally{current.invoke(null,original);updateProgress.invoke(null,originalProgress);setPlaying.invoke(null,originalPlaying);}
         SwingUtilities.invokeAndWait(()->{});
-        check(hooks.removed==10 && uncaught.get()==null);
+        check(hooks.removed==11 && uncaught.get()==null);
         System.out.println("PASS: "+checks+" playback video hook, native bottom controls, pointer recovery, caption render, selection and disposal checks; "+output);
     }
 }

@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**0.9.8 · 开发预览** · Windows / Steam Salt 1.19.3
+**0.9.10 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -77,7 +77,7 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 
 ## 版本与兼容
 
-当前版本 **0.9.8** 修复 0.9.7 视频初始化被宿主拒绝、右上角视频按钮消失的问题，并保留控件同步隐藏、画面单击暂停／继续、底部播放条原生位置与整页展开／收起行为，详见 [视频按钮恢复与宿主钩子修复](docs/VIDEO_HOOK_FIX_0.9.8.md)。菜单定位、标题栏注册与视频缓冲回收修复见 [0.9.6 修复记录](docs/MENU_VIDEO_FIX_0.9.6.md)。逐源代理、视频和切歌续播见 [0.9.5 功能说明](docs/PROXY_VIDEO_0.9.5.md)。视频流畅度见 [0.9.4 修复记录](docs/VIDEO_PACING_0.9.4.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。其他历史修复见 [更新记录](docs/HISTORY.md)。
+当前版本 **0.9.10** 修复启用或更新模组后全界面点击无反应的问题：窗口框架改用执行后观察钩子，避免重装原生消息回调。更新后需要完整退出并重新启动播放器，详见 [窗口点击修复](docs/WINDOW_INPUT_FIX_0.9.10.md)。视频胶囊背景同步隐藏与输入锁修复见 [0.9.9 修复记录](docs/VIDEO_INPUT_FIX_0.9.9.md)。0.9.8 的视频初始化和右上角按钮修复见 [宿主钩子修复](docs/VIDEO_HOOK_FIX_0.9.8.md)。菜单定位、标题栏注册与视频缓冲回收修复见 [0.9.6 修复记录](docs/MENU_VIDEO_FIX_0.9.6.md)。逐源代理、视频和切歌续播见 [0.9.5 功能说明](docs/PROXY_VIDEO_0.9.5.md)。视频流畅度见 [0.9.4 修复记录](docs/VIDEO_PACING_0.9.4.md)。MusicKit → PCM → Salt 的实现和实际订阅歌曲待验收状态见 [Apple Music 原生播放](docs/APPLE_NATIVE_0.8.51.md)。其他历史修复见 [更新记录](docs/HISTORY.md)。
 
 实际回归基线为 **Windows / Steam Salt 1.19.3**。模组使用官方插件接口及部分原生 UI／播放内部绑定，按所需接口结构检查兼容性；未来宿主更新可能影响部分功能。
 
