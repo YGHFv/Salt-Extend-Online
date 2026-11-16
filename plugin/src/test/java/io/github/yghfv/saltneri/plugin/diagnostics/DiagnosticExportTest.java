@@ -19,9 +19,13 @@ public final class DiagnosticExportTest {
         Path directory = Files.createTempDirectory("export-test-");
         String secret = "ACCOUNT_FIXTURE_ec1297";
         var state = new DiagnosticExport.State("1.0.2", secret,
-                Map.of(DiagnosticExport.Flag.STARTUP_READY,false,DiagnosticExport.Flag.UI_BOUND,true),
+                Map.of(DiagnosticExport.Flag.STARTUP_READY,false,DiagnosticExport.Flag.UI_BOUND,true,
+                        DiagnosticExport.Flag.CLASS_TRANSFORM_GRANTED,false),
                 Map.of(DiagnosticExport.Counter.UI_RENDERED,17L),
-                Map.of(AccountPlatform.QQMUSIC,AccountLoginController.Phase.LOGGED_IN));
+                Map.of(AccountPlatform.QQMUSIC,AccountLoginController.Phase.LOGGED_IN),
+                new io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Snapshot(
+                        io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Phase.WAITING_PERMISSION,
+                        io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Failure.PERMISSION,3));
         ClassLoader symbols = DiagnosticExportTest.class.getClassLoader();
         String originalThreadName=Thread.currentThread().getName();
         Thread.currentThread().setName(secret);
@@ -53,6 +57,8 @@ public final class DiagnosticExportTest {
             check(!output.contains(secret) && !output.contains("567891234") && !output.contains(directory.toString()));
             check(output.contains("QQMUSIC phase=LOGGED_IN credentials=qqcookie"));
             check(output.contains("Host version: unknown") && output.contains("STARTUP_READY=false") && output.contains("UI_RENDERED=17"));
+            check(output.contains("CLASS_TRANSFORM_GRANTED=false") && output.contains("NATIVE_ACTIVATION=WAITING_PERMISSION")
+                    && output.contains("NATIVE_ACTIVATION_FAILURE=PERMISSION") && output.contains("NATIVE_ACTIVATION_ATTEMPTS=3"));
             check(output.contains("java.lang.NoClassDefFoundError") && output.contains("DisposableEffectImpl.onForgotten") && output.contains("PluginClassLoader.loadClass"));
             check(output.contains("THREAD SNAPSHOT 1") && output.contains("THREAD SNAPSHOT 2") && output.contains("AWT_EVENT_QUEUE"));
             check(output.contains("END OF SAFE DIAGNOSTIC LOG") && Files.readString(source).equals(raw));

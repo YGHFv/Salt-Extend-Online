@@ -16,27 +16,35 @@ public final class BoundedJson {
     public static final int MAX_BYTES = 2 * 1024 * 1024;
     private final String text;
     private final boolean neteaseCreator;
+    private final boolean neteasePlaylist;
     private int cursor, nodes;
-    private BoundedJson(String text,boolean neteaseCreator) { this.text = text;this.neteaseCreator=neteaseCreator; }
+    private BoundedJson(String text,boolean neteaseCreator,boolean neteasePlaylist) {
+        this.text = text;this.neteaseCreator=neteaseCreator;this.neteasePlaylist=neteasePlaylist;
+    }
     public static Object parse(byte[] bytes) throws IOException {
-        return parse(bytes,false);
+        return parse(bytes,false,false);
     }
     /** Only the private-playlist endpoint emits creator:null followed by the creator object. */
     public static Object parseNeteaseRecommendations(byte[] bytes) throws IOException {
-        return parse(bytes,true);
+        return parse(bytes,true,false);
     }
-    private static Object parse(byte[] bytes,boolean neteaseCreator) throws IOException {
+    /** v6 radar tracks emit alg:null followed by an algorithm string in the same song object. */
+    public static Object parseNeteasePlaylist(byte[] bytes) throws IOException {
+        return parse(bytes,false,true);
+    }
+    private static Object parse(byte[] bytes,boolean neteaseCreator,boolean neteasePlaylist) throws IOException {
         if (bytes.length > MAX_BYTES) throw invalid();
         try {
             String text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                     .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
-            BoundedJson parser = new BoundedJson(text,neteaseCreator);
-            Object result = parser.value(0); parser.whitespace();
+            BoundedJson parser = new BoundedJson(text,neteaseCreator,neteasePlaylist);
+            Object result = parser.value(0,neteasePlaylist?1:0); parser.whitespace();
             if (parser.cursor != text.length()) throw invalid();
             return result;
         } catch (CharacterCodingException failure) { throw invalid(); }
     }
-    private Object value(int depth) throws IOException {
+    // Context follows only root.playlist.tracks[*]; nested metadata cannot inherit the exception.
+    private Object value(int depth,int context) throws IOException {
         whitespace();
         if (depth > 32 || ++nodes > 100000 || cursor >= text.length()) throw invalid();
         char next = text.charAt(cursor);
@@ -46,8 +54,10 @@ public final class BoundedJson {
             if (consume('}')) return result;
             do {
                 whitespace(); String key = string(); whitespace(); require(':');
-                Object value=value(depth+1);
-                if(result.containsKey(key) && !(neteaseCreator && key.equals("creator") && result.get(key)==null && value instanceof Map<?,?>))throw invalid();
+                int childContext=context==1 && key.equals("playlist")?2:context==2 && key.equals("tracks")?3:0;
+                Object value=value(depth+1,childContext);
+                if(result.containsKey(key) && !(neteaseCreator && key.equals("creator") && result.get(key)==null && value instanceof Map<?,?>)
+                        && !(neteasePlaylist && context==4 && key.equals("alg") && result.get(key)==null && value instanceof String))throw invalid();
                 result.put(key, value); whitespace();
                 if (consume('}')) return result;
                 require(',');
@@ -57,7 +67,7 @@ public final class BoundedJson {
             cursor++; List<Object> result = new ArrayList<>(); whitespace();
             if (consume(']')) return result;
             do {
-                result.add(value(depth + 1)); whitespace();
+                result.add(value(depth + 1,context==3?4:0)); whitespace();
                 if (consume(']')) return result;
                 require(',');
             } while (true);

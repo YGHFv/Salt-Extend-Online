@@ -35,6 +35,26 @@ public final class BoundedJsonContractTest {
         fails(()->BoundedJson.encode(new java.math.BigDecimal("1E+1000000")));
         fails(()->BoundedJson.encode(new java.math.BigDecimal("1E-1000000")));
         fails(()->BoundedJson.encode(new java.math.BigDecimal("1".repeat(129))));
+        String radar="{\"playlist\":{\"tracks\":[{\"id\":1,\"alg\":null,\"alg\":\"radar\"}]}}";
+        fails(()->parse(radar));
+        fails(()->BoundedJson.parseNeteaseRecommendations(radar.getBytes(StandardCharsets.UTF_8)));
+        var playlist=BoundedJson.object(BoundedJson.object(BoundedJson.parseNeteasePlaylist(radar.getBytes(StandardCharsets.UTF_8))).get("playlist"));
+        check(BoundedJson.object(BoundedJson.array(playlist.get("tracks")).getFirst()).get("alg").equals("radar"));
+        for(String invalid:java.util.List.of(
+                "{\"alg\":null,\"alg\":\"radar\"}",
+                "{\"playlist\":{\"alg\":null,\"alg\":\"radar\"}}",
+                "{\"data\":{\"playlist\":{\"tracks\":[{\"alg\":null,\"alg\":\"radar\"}]}}}",
+                "{\"playlist\":{\"trackIds\":[{\"alg\":null,\"alg\":\"radar\"}]}}",
+                "{\"playlist\":{\"tracks\":[{\"al\":{\"alg\":null,\"alg\":\"radar\"}}]}}",
+                radar.replace("\"alg\":null","\"alg\":\"first\""),
+                radar.replace("\"alg\":\"radar\"","\"alg\":null"),
+                radar.replace("\"alg\":\"radar\"","\"alg\":1"),
+                radar.replace("\"alg\":\"radar\"","\"alg\":\"radar\",\"alg\":\"third\""),
+                radar.replace("\"id\":1","\"id\":1,\"id\":1"))) {
+            fails(()->BoundedJson.parseNeteasePlaylist(invalid.getBytes(StandardCharsets.UTF_8)));
+        }
+        fails(()->BoundedJson.parseNeteasePlaylist(new byte[BoundedJson.MAX_BYTES+1]));
+        fails(()->BoundedJson.parseNeteasePlaylist(("[".repeat(34)+"0"+"]".repeat(34)).getBytes(StandardCharsets.UTF_8)));
         System.out.println("PASS: " + checks + " bounded JSON checks");
     }
 }

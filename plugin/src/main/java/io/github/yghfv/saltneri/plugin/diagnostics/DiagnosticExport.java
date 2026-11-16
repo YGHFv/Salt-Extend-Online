@@ -14,11 +14,15 @@ import java.util.function.*;
 
 /** One bounded, background export. Account stores/configuration/raw messages are never serialized. */
 public final class DiagnosticExport implements AutoCloseable {
-    public enum Flag { STARTUP_READY, STOPPED, HOST_MATCHED, ADAPTER_PRESENT, VIDEO_PRESENT, UI_PRESENT, UI_BOUND, LOGIN_PENDING }
+    public enum Flag { STARTUP_READY, PLAYBACK_SUPPORT_READY, STOPPED, HOST_MATCHED, CLASS_TRANSFORM_GRANTED, ADAPTER_PRESENT, VIDEO_PRESENT, UI_PRESENT, UI_BOUND, LOGIN_PENDING }
     public enum Counter { UI_DISPATCHED, UI_SELECTED, UI_RENDERED, VIDEO_RESOLUTION, CACHE_MIB }
     public record State(String pluginVersion, String hostVersion, Map<Flag, Boolean> flags,
-                        Map<Counter, Long> counters, Map<AccountPlatform, Phase> phases) {
+                        Map<Counter, Long> counters, Map<AccountPlatform, Phase> phases,
+                        io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Snapshot activation) {
         public State { flags = Map.copyOf(flags); counters = Map.copyOf(counters); phases = Map.copyOf(phases); }
+        public State(String pluginVersion,String hostVersion,Map<Flag,Boolean> flags,Map<Counter,Long> counters,Map<AccountPlatform,Phase> phases) {
+            this(pluginVersion,hostVersion,flags,counters,phases,null);
+        }
     }
     private final AtomicBoolean busy = new AtomicBoolean();
     private volatile boolean closed;
@@ -61,6 +65,9 @@ public final class DiagnosticExport implements AutoCloseable {
                 output.write("Java feature: " + Runtime.version().feature() + "\nCPU count: " + Runtime.getRuntime().availableProcessors() + "\n");
                 for (Flag flag : Flag.values()) if (state.flags.containsKey(flag)) output.write(flag.name() + "=" + state.flags.get(flag) + "\n");
                 for (Counter counter : Counter.values()) if (state.counters.containsKey(counter)) output.write(counter.name() + "=" + Math.max(0, state.counters.get(counter)) + "\n");
+                if(state.activation!=null)output.write("NATIVE_ACTIVATION="+state.activation.phase().name()
+                        + "\nNATIVE_ACTIVATION_FAILURE="+state.activation.failure().name()
+                        + "\nNATIVE_ACTIVATION_ATTEMPTS="+Math.max(0,state.activation.attempts())+"\n");
                 for (AccountPlatform platform : AccountPlatform.values()) {
                     Phase phase = state.phases.get(platform);
                     output.write(platform.name() + " phase=" + (phase == null ? "OFF" : phase.name()) + " credentials=" + marker(platform) + "\n");

@@ -124,7 +124,7 @@ public final class CoverLoaderContractTest {
         check(CoverSource.thumbnail(SOURCE,480).toString().equals(SOURCE+"@480w.webp"));
         check(CoverSource.thumbnail(URI.create(SOURCE+"@96w_96h_1c.webp"),480).toString().equals(SOURCE+"@480w.webp"));
         URI originalNetease=URI.create("https://p1.music.126.net/fixture.jpg");
-        check(CoverSource.thumbnail(URI.create(originalNetease+"?param=96y96"),480).equals(originalNetease));
+        check(CoverSource.thumbnail(URI.create(originalNetease+"?param=96y96"),480).equals(URI.create(originalNetease+"?param=480y480")));
         check(CoverSource.thumbnail(URI.create("https://evil.example/fixture.jpg"),480)==null);
         for(int edge:new int[]{0,1025})try {CoverSource.thumbnail(SOURCE,edge);throw new AssertionError("Unbounded thumbnail");}
         catch(IllegalArgumentException expected){checks++;}
@@ -270,7 +270,48 @@ public final class CoverLoaderContractTest {
         retainedCovers(fixture);
         sharedCovers(fixture);
         largeOriginal();
+        largeNeteaseOriginal();
         System.out.println("PASS: " + checks + " cover source/HTTPS/bounds/decoder/cache/revocation checks (fake image HTTP)");
+    }
+    private static void largeNeteaseOriginal() throws Exception {
+        URI original=URI.create("https://p1.music.126.net/fixture_base64==/123456789.jpg");
+        URI list=URI.create(original+"?param=480y480"),playback=URI.create(original+"?param=1024y1024");
+        check(CoverSource.thumbnail(original,480).equals(list));
+        check(CoverSource.playback(list).equals(playback));
+        check(CoverSource.original(list).equals(original) && CoverSource.original(playback).equals(original));
+        check(CoverSource.playback(SOURCE).equals(SOURCE) && CoverSource.playback(null)==null);
+        check(CoverSource.thumbnail(URI.create(original+"?param=96y96"),480).equals(list));
+        check(CoverSource.original(URI.create(list+"&token=SECRET"))==null);
+        byte[] oversized=png(4500,4500),listBytes=png(480,480),playbackBytes=png(1024,1024);
+        var requests=new ArrayList<URI>();
+        try(var loader=new CoverLoader(uri->{
+            requests.add(uri);
+            return new Response(uri,uri.equals(list)?listBytes:uri.equals(playback)?playbackBytes:oversized);
+        });var scope=new RequestScope(()->true)) {
+            var small=ImageIO.read(new ByteArrayInputStream(loader.load(original,scope)));
+            var large=ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(original,scope)));
+            check(small.getWidth()==480 && small.getHeight()==480 && large.getWidth()==1024 && large.getHeight()==1024);
+            small.flush();large.flush();
+            check(requests.equals(List.of(list,playback)));
+            check(loader.load(list,scope).length>0 && requests.size()==2);
+        }
+        requests.clear();
+        // Older CDN images may not support resizing; an original within decoder limits still works.
+        try(var loader=new CoverLoader(uri->{
+            requests.add(uri);var response=new Response(uri,listBytes);
+            if(uri.getRawQuery()!=null)response.status=404;
+            return response;
+        });var scope=new RequestScope(()->true)) {
+            check(loader.load(original,scope).length>0 && loader.loadPlayback(original,scope).length>0);
+            check(requests.equals(List.of(list,original,playback,original)));
+        }
+        var opens=new AtomicInteger();
+        // A CDN ignoring the transform must still pass the existing dimensions gate.
+        try(var loader=new CoverLoader(uri->{opens.incrementAndGet();return new Response(uri,oversized);});
+            var scope=new RequestScope(()->true)) {
+            rejects(()->loader.load(original,scope));rejects(()->loader.loadPlayback(original,scope));
+            check(opens.get()==4);
+        }
     }
     private static void largeOriginal() throws Exception {
         var image=new BufferedImage(1600,1000,BufferedImage.TYPE_INT_RGB);var random=new Random(42);

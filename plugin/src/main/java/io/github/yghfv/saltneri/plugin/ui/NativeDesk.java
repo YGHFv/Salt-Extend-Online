@@ -37,7 +37,7 @@ public final class NativeDesk {
     }
     private Consumer<LibraryController.Playlist> playlistPlayer = list -> { throw new IllegalStateException("Playlist playback not configured"); };
     public void playlistPlayer(Consumer<LibraryController.Playlist> player) { playlistPlayer=Objects.requireNonNull(player); }
-    private SavedPlaylistController savedPlaylists;
+    private volatile SavedPlaylistController savedPlaylists;
     public void savedPlaylists(SavedPlaylistController controller) {savedPlaylists=controller;}
     public SavedPlaylistController.Snapshot savedPlaylists() {return savedPlaylists==null?new SavedPlaylistController.Snapshot(java.util.List.of(),false,""):savedPlaylists.snapshot();}
     public void loadSavedPlaylists() {check();if(savedPlaylists!=null) savedPlaylists.load();}

@@ -7,13 +7,14 @@ import io.github.yghfv.saltneri.plugin.net.RequestScope;
 public final class CatalogLiveProbe {
     public static void main(String[] args) {
         if (args.length != 2 || !args[0].equals("--explicit-public-probe")
-                || !args[1].equals("search") && !args[1].equals("discover")) {
-            System.err.println("Requires --explicit-public-probe search|discover."); System.exit(2); return;
+                || !args[1].equals("search") && !args[1].equals("discover") && !args[1].equals("radar")) {
+            System.err.println("Requires --explicit-public-probe search|discover|radar."); System.exit(2); return;
         }
         boolean search = args[1].equals("search");
+        boolean radar = args[1].equals("radar");
         try (RequestScope request = new RequestScope(() -> true)) {
-            var query = new Catalog.Query(AccountPlatform.NETEASE, search ? Catalog.View.SEARCH : Catalog.View.DISCOVER,
-                    0, 1, 0, search ? "music" : "");
+            var query = new Catalog.Query(AccountPlatform.NETEASE, radar ? Catalog.View.FOLDER : search ? Catalog.View.SEARCH : Catalog.View.DISCOVER,
+                    radar ? 3136952023L : 0, 1, 0, search ? "music" : "");
             var page = new CatalogClient(null).load(query,request);
             System.out.println("PASS: anonymous NetEase " + args[1] + "; rows=" + page.items().size()
                     + "; enabled=" + page.items().stream().filter(Catalog.Item::enabled).count() + "; pages=" + page.totalPages());

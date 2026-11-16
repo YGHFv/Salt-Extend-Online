@@ -152,9 +152,10 @@ public final class CoverLoader implements AutoCloseable {
     public byte[] loadPlayback(URI source, RequestScope scope) throws IOException {
         URI original = CoverSource.original(source);
         if (original == null) throw invalid();
-        try {return load(original, scope, 1024, 8 * MAX_BYTES);}
+        URI image=CoverSource.playback(original);
+        try {return load(image, scope, 1024, 8 * MAX_BYTES);}
         catch(IOException unavailable) {
-            scope.check();URI fallback=CoverSource.playbackFallback(original);
+            scope.check();URI fallback=image.equals(original)?CoverSource.playbackFallback(original):original;
             if(fallback==null)throw unavailable;
             return load(fallback,scope,1024,8*MAX_BYTES);
         }

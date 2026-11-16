@@ -7,11 +7,21 @@ import java.util.Set;
 /** Public image hosts only. Audio URLs, arbitrary hosts and credential-bearing queries are excluded. */
 public final class CoverSource {
     private CoverSource() { }
-    /** Width-only Bilibili scaling preserves aspect ratio. NetEase keeps its original image URL. */
+    /** Ask the image CDN to resize before decoding; NetEase originals can exceed decoder limits. */
     public static URI thumbnail(URI source,int edge) {
         if(edge<1 || edge>1024) throw new IllegalArgumentException("Invalid thumbnail edge");
         URI original=original(source);if(original==null)return null;
-        return parse(AccountPlatform.BILIBILI,original.toString())!=null?URI.create(original+"@"+edge+"w.webp"):original;
+        if(parse(AccountPlatform.BILIBILI,original.toString())!=null)return URI.create(original+"@"+edge+"w.webp");
+        return neteaseSize(original,edge);
+    }
+    /** Playback retains the canonical image identity while bounding NetEase's downloaded dimensions. */
+    public static URI playback(URI source) {
+        URI original=original(source);
+        return original==null?null:neteaseSize(original,1024);
+    }
+    private static URI neteaseSize(URI original,int edge) {
+        return parse(AccountPlatform.NETEASE,original.toString())!=null
+                ? URI.create(original+"?param="+edge+"y"+edge):original;
     }
     /** Remove only known CDN thumbnail transforms; never pass through arbitrary query parameters. */
     public static URI original(URI source) {

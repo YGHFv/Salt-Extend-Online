@@ -37,6 +37,10 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile boolean stopped = true;
     private volatile Object generation;
     private io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup startup;
+    private volatile io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation nativeActivation;
+    private io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup supportStartup;
+    private boolean retiring;
+    private volatile boolean supportReady;
     private volatile boolean startupReady;
     private volatile DiagnosticExport diagnosticExport;
     private volatile BiliResolutionController bili;
@@ -50,7 +54,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private volatile io.github.yghfv.saltneri.plugin.ui.SaltVideoBindings playbackVideo;
     private String playbackVideoFailure = "";
     private NativeDesk desk;
-    private io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
+    private volatile io.github.yghfv.saltneri.plugin.host.SavedTrackStore savedTracks;
     private SavedPlaylistController savedPlaylists;
     private PlatformPlaylistController platformPlaylists;
     private java.util.concurrent.ScheduledExecutorService savedRestore;
@@ -90,20 +94,43 @@ public final class ExperimentalPlugin extends SpwPlugin {
 
     @Override public synchronized void start() {
         if (!stopped) return;
+        if(retiring)throw new IllegalStateException("Previous plugin generation still retiring");
         io.github.yghfv.saltneri.plugin.ui.NativeWindowCallbackRetention.capture();
         stopped = false;
         diagnosticExport = new DiagnosticExport(ExperimentalPlugin.class.getClassLoader());
         active = this;
         Object started = new Object(); generation = started;
         startupReady = false;
+        supportReady = false;
         status = "Checking native UI capabilities; no network or queue changes.";
         startup = new io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup(this, () -> {
             if (generation != started || stopped) return;
             initialize(started);
-            startupReady = true;
+            requestNativeActivation(started);
         }, failure -> status = "Plugin initialization failed (" + failure.getClass().getSimpleName() + "); restart Salt to retry.");
     }
-
+    private void requestNativeActivation(Object started) {
+        nativeActivation=new io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation(this,
+                ()->generation==started && !stopped,this::granted,
+                ()->nativeUi!=null && nativeUi.available(),this::ensureNativeUi,snapshot->{
+                    if(snapshot.phase()==io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Phase.INSTALLING) {
+                        status="正在后台安装模组界面，请稍候。";
+                    } else if(snapshot.phase()==io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Phase.WAITING_PERMISSION) {
+                        status="请在模组管理中授予 CLASS_TRANSFORM 权限，再重新启用模组。";
+                        if(snapshot.attempts()==30)toast(status,WorkshopApi.Ui.ToastType.Warning);
+                        if(nativeActivation!=null && nativeActivation.finished())startupReady=true;
+                    } else if(snapshot.phase()==io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Phase.READY) {
+                        startupReady=true;
+                        if(supportStartup==null) supportStartup=new io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup(
+                                this,()->{},()->initializeSupport(started),
+                                failure->{supportReady=true;status="后台播放准备失败（"+failure.getClass().getSimpleName()+"），请导出诊断日志。";});
+                    } else if(snapshot.phase()==io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation.Phase.FAILED) {
+                        startupReady=true;
+                        status="模组界面安装失败（"+snapshot.failure().name()+"），请导出诊断日志。";
+                        toast(status,WorkshopApi.Ui.ToastType.Error);
+                    }
+                });
+    }
     /** The startup worker holds the lifecycle monitor, so stop drains it before PF4J closes our loader. */
     private void initialize(Object started) {
         configManager = WorkshopApi.manager().createConfigManager();
@@ -155,8 +182,35 @@ public final class ExperimentalPlugin extends SpwPlugin {
         desk.coverMode(()->settings.coverMode());
         desk.platformHome(navigationPreferences::platformHome);
         desk.preferences(new io.github.yghfv.saltneri.plugin.ui.CatalogPreferences(configManager.getConfig("catalog-ui.json")));
+        desk.playlistPlayer(list -> startedOnline.playPlaylist(list, () -> {
+            try { arm(); } catch(Exception failure) { throw new IllegalStateException("Adapter unavailable"); }
+        }, (playlist,valid) -> {
+            Salt1193DiagnosticRuntime current=runtime;
+            if(current==null) throw new IllegalStateException("Adapter unavailable");
+            current.playPlaylist(playlist,valid);
+        }));
+        configListener = config -> {
+            applySettings(config);
+            boolean remember = true;
+            AccountLoginController a = biliLogin, b = neteaseLogin;
+            if (a != null) a.setRememberEnabled(remember);
+            if (b != null) b.setRememberEnabled(remember);
+            if (qqmusicLogin != null) qqmusicLogin.setRememberEnabled(remember);
+            if(kugouLogin!=null)kugouLogin.setRememberEnabled(remember);
+        };
+        configManager.addConfigChangeListener(configListener);
+    }
+    /** Slow persistence, playback bindings and shell registration cannot delay sidebar activation. */
+    private void initializeSupport(Object started) {
+        if(generation!=started || !granted())return;
+        profile = Salt1193Probe.inspect(WorkshopApi.class.getClassLoader(),
+                getPluginContext().getSpwVersion(), getPluginContext().getSpwChannel().name());
         try {
-            savedTracks=new io.github.yghfv.saltneri.plugin.host.SavedTrackStore(configManager.getConfig().getConfigPath().getParent().resolve("saved-online-tracks"));
+            var store=new io.github.yghfv.saltneri.plugin.host.SavedTrackStore(configManager.getConfig().getConfigPath().getParent().resolve("saved-online-tracks"));
+            synchronized(this) {
+                if(generation!=started || !granted()){store.close();return;}
+                savedTracks=store;
+            }
             var gateway=new io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway(WorkshopApi.class.getClassLoader());
             savedPlaylists=new SavedPlaylistController(new SavedPlaylistController.Gateway() {
                 public java.util.List<io.github.yghfv.saltneri.plugin.host.SaltPlaylistGateway.Choice> choices() throws Exception {return gateway.choices();}
@@ -177,44 +231,14 @@ public final class ExperimentalPlugin extends SpwPlugin {
             },()->generation==started && granted());
             desk.savedPlaylists(savedPlaylists);
         } catch(Exception failure) { status="Native saved playlists unavailable ("+failure.getClass().getSimpleName()+")"; }
-        desk.playlistPlayer(list -> startedOnline.playPlaylist(list, () -> {
-            try { arm(); } catch(Exception failure) { throw new IllegalStateException("Adapter unavailable"); }
-        }, (playlist,valid) -> {
-            Salt1193DiagnosticRuntime current=runtime;
-            if(current==null) throw new IllegalStateException("Adapter unavailable");
-            current.playPlaylist(playlist,valid);
-        }));
-        configListener = config -> {
-            applySettings(config);
-            boolean remember = true;
-            AccountLoginController a = biliLogin, b = neteaseLogin;
-            if (a != null) a.setRememberEnabled(remember);
-            if (b != null) b.setRememberEnabled(remember);
-            if (qqmusicLogin != null) qqmusicLogin.setRememberEnabled(remember);
-            if(kugouLogin!=null)kugouLogin.setRememberEnabled(remember);
-        };
-        configManager.addConfigChangeListener(configListener);
-        profile = Salt1193Probe.inspect(WorkshopApi.class.getClassLoader(),
-                getPluginContext().getSpwVersion(), getPluginContext().getSpwChannel().name());
-        status = profile.detail();
-        if(savedTracks!=null && profile.matched() && granted()) try {
-            savedRecovery=new io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery(
-                    io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery.nativeHost(WorkshopApi.class.getClassLoader(),profile),
-                    io.github.yghfv.saltneri.plugin.host.Salt1193EngineLink.hooks(WorkshopApi.hookRegistrar()),
-                    ()->generation==started && granted(),savedTracks::owns,()->{
-                        if(!adapterArmed()) try {arm();} catch(Exception failure) {throw new IllegalStateException("Playback adapter unavailable");}
-                    });
-        } catch(ReflectiveOperationException | RuntimeException failure) {status="Saved playback recovery unavailable";}
-        if (granted()) {
-            try {
-                mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install();
-                mediaIdentityStatus=mediaIdentity==null?"not Windows":"Salt Player for Windows (Start Menu registered; restart for shell refresh)";
-            }
-            catch(RuntimeException | LinkageError failure) { mediaIdentityStatus="registration failed: "+failure.getClass().getSimpleName(); }
-            try { ensureNativeUi(); }
-            catch (Exception | LinkageError failure) { status = "Native UI unavailable (" + failure.getClass().getSimpleName() + "). No browser fallback."; }
-        }
+        if(generation!=started || !granted())return;
+        try { activateNativeFeatures(started); }
+        catch(Exception | LinkageError failure) {status="Native playback support unavailable ("+failure.getClass().getSimpleName()+")";}
+        if(generation!=started || !granted())return;
+        supportReady=true;
         if(savedTracks!=null && !savedTracks.entries().isEmpty()) {
+            synchronized(this) {
+                if(generation!=started || !granted())return;
             savedRestore=java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"salt-online-playlist-restore");t.setDaemon(true);return t;});
             var attempts=new java.util.concurrent.atomic.AtomicInteger();
             savedRestore.scheduleWithFixedDelay(()->{
@@ -226,6 +250,28 @@ public final class ExperimentalPlugin extends SpwPlugin {
                     }
                 }
             },0,1,java.util.concurrent.TimeUnit.SECONDS);
+            }
+        }
+    }
+    private void activateNativeFeatures(Object started) throws Exception {
+        if(generation!=started || !granted())throw new SecurityException("Native activation no longer permitted");
+        if(savedRecovery==null && savedTracks!=null && profile.matched()) try {
+            savedRecovery=new io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery(
+                    io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery.nativeHost(WorkshopApi.class.getClassLoader(),profile),
+                    io.github.yghfv.saltneri.plugin.host.Salt1193EngineLink.hooks(WorkshopApi.hookRegistrar()),
+                    ()->generation==started && granted(),savedTracks::owns,()->{
+                        if(!adapterArmed()) try {arm();} catch(Exception failure) {throw new IllegalStateException("Playback adapter unavailable");}
+                    });
+        } catch(ReflectiveOperationException | RuntimeException failure) {status="Saved playback recovery unavailable";}
+        if(generation!=started || !granted())return;
+        ensurePlaybackVideo(started);
+        supportReady=true;
+        if(mediaIdentity==null) {
+            try {
+                mediaIdentity=io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity.install();
+                mediaIdentityStatus=mediaIdentity==null?"not Windows":"Salt Player for Windows (Start Menu registered; restart for shell refresh)";
+            }
+            catch(RuntimeException | LinkageError failure) { mediaIdentityStatus="registration failed: "+failure.getClass().getSimpleName(); }
         }
     }
 
@@ -251,32 +297,41 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private synchronized void ensureNativeUi() throws Exception {
         if (stopped || !granted()) throw new SecurityException("Experimental permission required");
         if (nativeUi == null || !nativeUi.available()) {
+            if(javax.swing.SwingUtilities.isEventDispatchThread()) {
+                startupReady=false;
+                if(nativeActivation!=null)nativeActivation.close();
+                requestNativeActivation(generation);
+                throw new IllegalStateException("Native UI repair scheduled in background");
+            }
             if (nativeUi != null) nativeUi.close();
             Object owner = generation;
             nativeUi = new SaltNativeUi(WorkshopApi.class.getClassLoader(), WorkshopApi.hookRegistrar(), desk,
                     () -> generation == owner && granted());
             applySidebarSettings(nativeUi,configManager.getConfig());
         }
-        if(playbackVideo==null && savedTracks!=null) {
-            Object owner=generation;
-            try {
-                playbackVideo=new io.github.yghfv.saltneri.plugin.ui.SaltVideoBindings(WorkshopApi.class.getClassLoader(),
-                        WorkshopApi.hookRegistrar(),()->generation==owner && granted(),
-                        (id,path)->savedTracks==null?null:savedTracks.find(id,path),this::credentials,
-                        text->toast(text,WorkshopApi.Ui.ToastType.Error),()->settings.videoResolution());
-                playbackVideo.cacheLimit(settings.cacheBytes());
-                playbackVideoFailure="";
-            } catch(Exception | LinkageError unavailable) {
-                playbackVideoFailure="; playback video unavailable: "+unavailable.getClass().getSimpleName();
-            }
-        }
-        status = "Salt native UI requested; remembered plugin logins are verified in background. No automatic playback."+playbackVideoFailure;
+        status = "Salt native UI installed; playback support prepares in background.";
         boolean remember = true;
         biliLogin.restoreOnStartup(remember);
         neteaseLogin.restoreOnStartup(remember);
         qqmusicLogin.restoreOnStartup(remember);
         appleMusicLogin.restoreOnStartup(remember);
         kugouLogin.restoreOnStartup(remember);
+    }
+    private void ensurePlaybackVideo(Object owner) {
+        if(playbackVideo==null && savedTracks!=null && generation==owner && granted()) {
+            try {
+                var video=new io.github.yghfv.saltneri.plugin.ui.SaltVideoBindings(WorkshopApi.class.getClassLoader(),
+                        WorkshopApi.hookRegistrar(),()->generation==owner && granted(),
+                        (id,path)->savedTracks==null?null:savedTracks.find(id,path),this::credentials,
+                        text->toast(text,WorkshopApi.Ui.ToastType.Error),()->settings.videoResolution());
+                synchronized(this) {
+                    if(generation!=owner || !granted()){video.close();return;}
+                    playbackVideo=video;video.cacheLimit(settings.cacheBytes());playbackVideoFailure="";
+                }
+            } catch(Exception | LinkageError unavailable) {
+                playbackVideoFailure="; playback video unavailable: "+unavailable.getClass().getSimpleName();
+            }
+        }
     }
     private synchronized void openListeningDesk() throws Exception {
         ensureNativeUi(); nativeUi.open(AccountPlatform.NETEASE);
@@ -338,6 +393,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
 
     private synchronized void arm() throws IOException, ReflectiveOperationException {
         if (stopped) throw new IllegalStateException("Plugin disabled");
+        if(!supportReady)throw new IllegalStateException("Playback support still preparing");
         if (profile == null || !profile.matched()) throw new IllegalStateException("Required playback capabilities unavailable");
         if (!granted()) throw new SecurityException("CLASS_TRANSFORM not granted");
         if (runtime == null || runtime.isClosed()) {
@@ -380,15 +436,34 @@ public final class ExperimentalPlugin extends SpwPlugin {
         finally { runtime = null; status = "Adapter stopped; host queue left unchanged. Cached audio may briefly drain."; }
     }
 
-    @Override public synchronized void stop() {
+    @Override public void stop() {
         io.github.yghfv.saltneri.plugin.ui.NativeWindowCallbackRetention.capture();
+        io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup initial, support;
+        io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation activation;
+        synchronized(this) {
+            if(retiring || stopped)return;
+            retiring=true;
+            stopped=true;generation=null;startupReady=false;supportReady=false;
+            initial=startup;startup=null;
+            support=supportStartup;supportStartup=null;
+            activation=nativeActivation;nativeActivation=null;
+        }
+        try {
+            if(initial!=null)initial.close();
+            if(activation!=null)activation.close();
+            // Support can need this monitor to discard a result. Never retain it while draining.
+            if(support!=null)support.close();
+        } finally {
+            synchronized(this) {
+                try { cleanup(); }
+                finally {retiring=false;}
+            }
+        }
+    }
+    private void cleanup() {
         DiagnosticExport exporter=diagnosticExport;
         diagnosticExport=null;
         if(exporter!=null) exporter.close();
-        stopped = true;
-        generation = null;
-        startupReady = false;
-        if (startup != null) { startup.close(); startup = null; }
         io.github.yghfv.saltneri.plugin.net.SourceProxySettings.reset();
         if(playbackVideo!=null){playbackVideo.close();playbackVideo=null;}
         if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
@@ -485,9 +560,11 @@ public final class ExperimentalPlugin extends SpwPlugin {
         var counters = new java.util.EnumMap<Counter,Long>(Counter.class);
         var phases = new java.util.EnumMap<AccountPlatform,AccountLoginController.Phase>(AccountPlatform.class);
         flags.put(Flag.STARTUP_READY,startupReady);
+        flags.put(Flag.PLAYBACK_SUPPORT_READY,supportReady);
         flags.put(Flag.STOPPED,stopped);
         Salt1193Probe.Result hostProfile=profile;
         flags.put(Flag.HOST_MATCHED,hostProfile!=null && hostProfile.matched());
+        flags.put(Flag.CLASS_TRANSFORM_GRANTED,granted());
         flags.put(Flag.ADAPTER_PRESENT,runtime!=null);
         flags.put(Flag.VIDEO_PRESENT,playbackVideo!=null);
         SaltNativeUi ui=nativeUi;
@@ -507,7 +584,9 @@ public final class ExperimentalPlugin extends SpwPlugin {
             AccountLoginController account=switch(platform){case BILIBILI->biliLogin;case NETEASE->neteaseLogin;case QQMUSIC->qqmusicLogin;case APPLEMUSIC->appleMusicLogin;case KUGOU->kugouLogin;};
             if(account!=null) phases.put(platform,account.diagnosticPhase());
         }
-        return new DiagnosticExport.State(getPluginContext().getPluginVersion(),getPluginContext().getSpwVersion(),flags,counters,phases);
+        var activation=nativeActivation;
+        return new DiagnosticExport.State(getPluginContext().getPluginVersion(),getPluginContext().getSpwVersion(),flags,counters,phases,
+                activation==null?null:activation.snapshot());
     }
     private synchronized void resolveBili() {
         if (stopped || bili == null) throw new IllegalStateException("Plugin disabled");

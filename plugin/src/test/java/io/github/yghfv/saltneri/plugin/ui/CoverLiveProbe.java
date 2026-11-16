@@ -13,13 +13,15 @@ import javax.imageio.ImageIO;
 /** Opt-in public cover check. Never emits/stores image bytes, URLs, account data or audio. */
 public final class CoverLiveProbe {
     public static void main(String[] args) {
-        if (args.length != 1 || !args[0].equals("--explicit-public-cover")) {
-            System.err.println("Requires --explicit-public-cover."); System.exit(2); return;
+        if (args.length < 1 || args.length > 2 || !args[0].equals("--explicit-public-cover")
+                || args.length == 2 && !args[1].matches("[1-9][0-9]{0,17}")) {
+            System.err.println("Requires --explicit-public-cover [song-id]."); System.exit(2); return;
         }
+        String songId=args.length==2?args[1]:"347230";
         try (RequestScope request = new RequestScope(() -> true);
              CatalogHttp api = new CatalogHttp(AccountPlatform.NETEASE,null,Clock.systemUTC(),CatalogHttp::openPinned);
              CoverLoader loader = new CoverLoader()) {
-            var root = api.json(URI.create("https://music.163.com/api/song/detail?ids=%5B347230%5D"),null,request);
+            var root = api.json(URI.create("https://music.163.com/api/song/detail?ids=%5B"+songId+"%5D"),null,request);
             if (BoundedJson.integer(root.get("code")) != 200) throw new java.io.IOException();
             var song = BoundedJson.object(BoundedJson.array(root.get("songs")).getFirst());
             var album = BoundedJson.object(song.get("album"));
@@ -28,6 +30,9 @@ public final class CoverLiveProbe {
             var image = ImageIO.read(new ByteArrayInputStream(loader.load(cover,request)));
             System.out.println("PASS: public NetEase list cover decoded to " + image.getWidth() + "x" + image.getHeight());
             image.flush();
+            var playback = ImageIO.read(new ByteArrayInputStream(loader.loadPlayback(cover,request)));
+            System.out.println("PASS: public NetEase playback cover decoded to " + playback.getWidth() + "x" + playback.getHeight());
+            playback.flush();
             System.out.println("No image bytes/URL saved or printed; no account, host, audio or queue accessed.");
         } catch (Exception failure) {
             System.err.println("STOP: public cover could not load (" + failure.getClass().getSimpleName() + "); no response data printed.");

@@ -19,8 +19,8 @@ public final class NeteaseCatalogCompatibilityTest {
         return "{\"id\":"+id+",\"name\":\"Song\",\"fee\":0,\"dt\":120000,\"ar\":[{\"name\":\"Artist\"}],\"al\":{\"picUrl\":\""+picture+"\"}}";
     }
     public static void main(String[] args) throws Exception {
-        personal(); inline(); artwork(); revoke();
-        System.out.println("PASS: "+checks+" NetEase partial creator/labels/paging/inline metadata/artwork-only recovery and revocation checks; fake HTTP only");
+        personal(); inline(); radar(); artwork(); revoke();
+        System.out.println("PASS: "+checks+" NetEase partial creator/labels/paging/radar duplicate alg/inline metadata/artwork-only recovery and revocation checks; fake HTTP only");
     }
     private static void personal() throws Exception {
         var account=account(AccountPlatform.NETEASE);
@@ -84,6 +84,48 @@ public final class NeteaseCatalogCompatibilityTest {
             f.songs=f.songs.replace("\"id\":1","\"id\":2");fails(()->client.neteaseCover(track,request));checks++;
             f.songs="{\"code\":200,\"songs\":[]}";check(client.neteaseCover(track,request)==null);
         }
+    }
+    private static void radar() throws Exception {
+        var account=account(AccountPlatform.NETEASE);
+        Query query=new Query(AccountPlatform.NETEASE,View.FOLDER,3136952023L,1);
+        var ids=new ArrayList<String>();var inline=new ArrayList<String>();var remaining=new ArrayList<String>();
+        for(int i=1;i<=55;i++) {
+            ids.add("{\"id\":"+i+"}");
+            if(i<=10)inline.add(song(i,COVER.toString()).replace("\"name\":\"Song\"","\"alg\":null,\"name\":\"Song\",\"alg\":\"radar_fixture\""));
+            else remaining.add(song(i,COVER.toString()));
+        }
+        String detail="{\"code\":200,\"playlist\":{\"id\":3136952023,\"name\":\"Radar\",\"trackCount\":55,\"trackIds\":["+
+                String.join(",",ids)+"],\"tracks\":["+String.join(",",inline)+"]}}";
+        try {
+            Fixture f=new Fixture();f.detail=detail;
+            f.songs="{\"code\":200,\"songs\":["+String.join(",",remaining.subList(0,10))+"]}";
+            var first=f.load(query,account);
+            check(first.items().size()==20 && first.totalCount()==55 && first.hasMore());
+            check(first.items().getFirst().target().equals("1") && first.items().getLast().target().equals("20"));
+            check(first.items().stream().allMatch(i->i.enabled() && COVER.equals(i.cover())));
+            check(f.requests.getLast().getURL().getQuery().equals("ids=%5B11%2C12%2C13%2C14%2C15%2C16%2C17%2C18%2C19%2C20%5D"));
+            f.songs="{\"code\":200,\"songs\":["+String.join(",",remaining.subList(30,45))+"]}";
+            var last=f.load(new Query(AccountPlatform.NETEASE,View.FOLDER,3136952023L,3),account);
+            check(last.items().size()==15 && !last.hasMore() && last.items().getFirst().target().equals("41"));
+            f.songs="{\"code\":200,\"songs\":["+String.join(",",remaining)+"]}";
+            try(var request=new RequestScope(()->true)) {
+                var all=new CatalogClient(account,CLOCK,f).loadAll(query,request);
+                check(all.totalCount()==55 && all.items().size()==55 && all.items().getLast().target().equals("55"));
+            }
+            // An explicit empty list is valid; malformed metadata must not be silently dropped.
+            f.detail="{\"code\":200,\"playlist\":{\"id\":3136952023,\"name\":\"Radar\",\"trackIds\":[],\"tracks\":[]}}";
+            check(f.load(query,account).items().isEmpty());
+            for(String invalid:List.of(
+                    detail.replace("\"alg\":null","\"alg\":\"other\""),
+                    detail.replace("\"alg\":\"radar_fixture\"","\"alg\":{}"),
+                    detail.replace("\"alg\":\"radar_fixture\"","\"alg\":\"radar_fixture\",\"alg\":\"third\""),
+                    detail.replace("\"code\":200","\"code\":200,\"code\":200"),
+                    detail.replace("\"id\":1}","\"id\":1,\"id\":1}"),
+                    detail.replace("\"id\":2}","\"id\":1}"))) {
+                f.detail=invalid;
+                safeFailure(()->f.load(query,account),CatalogFailure.Stage.NET_CONTENTS,CatalogFailure.Reason.RESPONSE,null);checks++;
+            }
+        } finally {account.retire();}
     }
     private static String row(LibraryController library) throws Exception {
         for(int i=0;i<400;i++){var rows=(List<?>)library.snapshot().get("items");if(!rows.isEmpty())return (String)((Map<?,?>)rows.getFirst()).get("token");Thread.sleep(5);}throw new AssertionError("Timeout");

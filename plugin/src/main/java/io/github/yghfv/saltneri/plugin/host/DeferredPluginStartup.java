@@ -9,13 +9,20 @@ import java.util.function.Consumer;
 public final class DeferredPluginStartup implements AutoCloseable {
     private final Object lifecycle;
     private final Runnable initialize;
+    private final Runnable support;
+    private final Object supportLock = new Object();
     private final Consumer<Throwable> failure;
     private final ExecutorService worker;
-    private boolean closed;
+    private volatile boolean closed;
 
     public DeferredPluginStartup(Object lifecycle, Runnable initialize, Consumer<Throwable> failure) {
+        this(lifecycle,initialize,()->{},failure);
+    }
+    /** Optional work drains separately and never holds the monitor used by native UI actions. */
+    public DeferredPluginStartup(Object lifecycle, Runnable initialize, Runnable support, Consumer<Throwable> failure) {
         this.lifecycle = Objects.requireNonNull(lifecycle);
         this.initialize = Objects.requireNonNull(initialize);
+        this.support = Objects.requireNonNull(support);
         this.failure = Objects.requireNonNull(failure);
         worker = Executors.newSingleThreadExecutor(task -> {
             Thread thread = new Thread(task, "salt-extend-startup");
@@ -26,12 +33,14 @@ public final class DeferredPluginStartup implements AutoCloseable {
     }
 
     private void run() {
-        synchronized (lifecycle) {
-            if (closed) return;
-            try { initialize.run(); }
-            catch (RuntimeException | LinkageError error) { failure.accept(error); }
-            finally { worker.shutdown(); }
-        }
+        try {
+            synchronized (lifecycle) {
+                if (closed) return;
+                initialize.run();
+            }
+            synchronized(supportLock) {if(!closed)support.run();}
+        } catch (RuntimeException | LinkageError error) {if(!closed)failure.accept(error);}
+        finally {worker.shutdown();}
     }
 
     @Override public void close() {
@@ -39,5 +48,7 @@ public final class DeferredPluginStartup implements AutoCloseable {
             closed = true;
             worker.shutdownNow();
         }
+        // Callers must release lifecycle before draining support, which publishes under that monitor.
+        synchronized(supportLock) { }
     }
 }

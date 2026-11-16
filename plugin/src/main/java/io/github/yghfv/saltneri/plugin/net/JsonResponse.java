@@ -15,6 +15,10 @@ public final class JsonResponse {
         return read(connection,scope,allowGzip,false);
     }
     public static Map<String,Object> read(HttpURLConnection connection,RequestScope scope,boolean allowGzip,boolean neteaseRecommendations) throws IOException {
+        return read(connection,scope,allowGzip,neteaseRecommendations,false);
+    }
+    public static Map<String,Object> read(HttpURLConnection connection,RequestScope scope,boolean allowGzip,
+                                         boolean neteaseRecommendations,boolean neteasePlaylist) throws IOException {
         String type = connection.getHeaderField("Content-Type"), encoding = connection.getHeaderField("Content-Encoding");
         if (type == null || !type.split(";", 2)[0].trim().equalsIgnoreCase("application/json")
                 || connection.getContentLengthLong() > BoundedJson.MAX_BYTES) throw invalid();
@@ -29,7 +33,9 @@ public final class JsonResponse {
                 bytes.write(buffer, 0, count);
             }
         }
-        scope.check(); return BoundedJson.object(neteaseRecommendations?BoundedJson.parseNeteaseRecommendations(bytes.toByteArray()):BoundedJson.parse(bytes.toByteArray()));
+        scope.check(); byte[] payload=bytes.toByteArray();
+        return BoundedJson.object(neteasePlaylist?BoundedJson.parseNeteasePlaylist(payload):
+                neteaseRecommendations?BoundedJson.parseNeteaseRecommendations(payload):BoundedJson.parse(payload));
     }
     public static List<String> setCookies(HttpURLConnection connection) {
         return connection.getHeaderFields().entrySet().stream()

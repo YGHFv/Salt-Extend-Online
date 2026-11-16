@@ -10,7 +10,7 @@
 [![下载模组](https://img.shields.io/badge/GitHub-下载模组-24292f?logo=github&logoColor=white)](https://github.com/YGHFv/Salt-Extend-Online/releases)
 [![构建状态](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/YGHFv/Salt-Extend-Online/actions/workflows/build.yml)
 
-**1.0.4 · 开发预览** · Windows / Steam Salt 1.19.3
+**1.0.6 · 开发预览** · Windows / Steam Salt 1.19.3
 
 </div>
 
@@ -76,6 +76,10 @@ Apple Music 入口支持热门、搜索、我的专辑和我的歌单；点击�
 音质以当前账号的官方权限为准，只播放可访问的完整音轨，不提供试听替代、会员或风控绕过。B站搜索需要登录，网易云部分匿名接口也可能要求登录。
 
 ## 版本与兼容
+
+**1.0.6** 修复网易云“私人雷达”打开时报 `NET_CONTENTS/RESPONSE`：兼容歌单歌曲中 `alg:null` 后重复返回算法字符串的格式，分页与完整队列保持原有校验。授权后优先安装平台入口，保存歌单、播放恢复、视频绑定与 Windows 媒体身份改在入口可用后后台准备；权限等待间隔从 1 秒缩短为 100 毫秒。后续准备不持有界面操作锁，停止先撤销当前实例，再排空后台工作，避免清理与发布形成循环等待。原因与验证见 [私人雷达与启用延迟修复](docs/ACTIVATION_LATENCY_FIX_1.0.6.md)。
+
+**1.0.5** 修复网易云大尺寸封面空白，列表和播放封面分别请求 CDN 的 480／1024 像素版本。修复后台初始化仅检查一次权限／安装界面、失败后不自动重试的问题；启用后等待宿主授权状态就绪并有限重试，未授权或持续安装失败时显示提示。诊断日志新增权限状态、安装阶段、失败类别与尝试次数。详见 [封面与启用未生效修复](docs/COVER_ACTIVATION_FIX_1.0.5.md)。
 
 **1.0.4** 第二轮检查进一步拆开视频原生命令、后台缓存撤销、Apple Music 浏览器／PCM 清理，以及保存歌曲和封面 I/O 与界面状态锁之间的等待。后台任务在发布前重新检查会话和取消状态；详见 [全量复查与等待链修复](docs/LOGIC_AUDIT_1.0.4.md)。
 
