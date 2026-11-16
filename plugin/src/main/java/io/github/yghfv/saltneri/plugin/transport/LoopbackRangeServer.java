@@ -474,7 +474,7 @@ public final class LoopbackRangeServer implements AutoCloseable {
         if(header!=null)headers.put("Content-Range","bytes "+first+"-"+last+"/"+total);
         // Validate the first chunk before accepting the native player's request.
         boolean cached=cache.limitBytes()>=VIDEO_CHUNK_BYTES;
-        ByteRange range=videoRange(first,last,total,cached,HOST_CHUNK_BYTES);
+        ByteRange range=videoRange(entry,first,last,cached,foreground?HOST_CHUNK_BYTES:VIDEO_CHUNK_BYTES);
         byte[] data=cached?fetchData(request,entry,range,foreground):download(request,entry,range);
         reply(request,header==null?200:206,headers);
         for(;;) {
@@ -484,14 +484,18 @@ public final class LoopbackRangeServer implements AutoCloseable {
             if(cached && foreground)scheduleReadAhead(entry,range);
             first=range.last()+1;if(first>last)break;
             // Preserve a short startup read; sustained video needs fewer CDN round trips than audio.
-            range=videoRange(first,last,total,cached,VIDEO_CHUNK_BYTES);
+            range=videoRange(entry,first,last,cached,VIDEO_CHUNK_BYTES);
             data=cached?fetchData(request,entry,range,foreground):download(request,entry,range);
         }
     }
-    private static ByteRange videoRange(long first,long last,long total,boolean cached,long maximum) {
+    private ByteRange videoRange(Entry entry,long first,long last,boolean cached,long maximum) {
         if(!cached)return new ByteRange(first,Math.min(last,first+maximum-1));
         long aligned=first/VIDEO_CHUNK_BYTES*VIDEO_CHUNK_BYTES;
-        return new ByteRange(aligned,Math.min(total,aligned+VIDEO_CHUNK_BYTES)-1);
+        var block=new ByteRange(aligned,Math.min(entry.length(),aligned+VIDEO_CHUNK_BYTES)-1);
+        // Reuse warm blocks, but never make a cold header/tail probe wait for 2 MiB.
+        // End partial reads at the block boundary so sustained playback rejoins read-ahead.
+        if(cache.contains(entry,block))return block;
+        return new ByteRange(first,Math.min(Math.min(last,block.last()),first+maximum-1));
     }
 
     private void fetch(Request request, Entry entry, ByteRange range, boolean foreground) throws IOException {

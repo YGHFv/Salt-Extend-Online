@@ -109,6 +109,18 @@ public final class BiliClientContractTest {
                     "\"base_url\":\"https://fixture.mcdn.bilivideo.cn:8082/1080.m4s\",\"backup_url\":[\"https://edge.mountaintoys.cn:4483/a\",\"https://upos-fixture.bilivideo.com/backup.m4s?token=SECRET%2FKEEP\"]");
             var backup=fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request);
             check(fixture.requests.getLast().getURL().getPath().equals("/backup.m4s"));
+            String permitted=fixture.play;
+            for(String slow:List.of("https://upos-sz-mirrorcoso1.bilivideo.com/mcdn.m4s?os=mcdn&token=SECRET%2FKEEP",
+                    "https://upos-sz-mirrorcoso1.bilivideo.com/mcdn.m4s?%6fs=mc%64n",
+                    "https://upos-sz-302.bilivideo.com/mcdn.m4s")) {
+                fixture.play=permitted.replace("https://fixture.mcdn.bilivideo.cn:8082/1080.m4s",slow);
+                fixture.requests.clear();
+                fixture.client().resolveVideo(new BiliTarget(BV,2),"fixture-anonymous",request);
+                check(fixture.requests.getLast().getURL().getPath().equals("/backup.m4s"));
+                check(fixture.requests.getLast().getURL().getQuery().equals("token=SECRET%2FKEEP"));
+                check(fixture.requests.stream().noneMatch(r->r.getURL().getPath().equals("/mcdn.m4s")));
+            }
+            fixture.play=permitted;
             check(fixture.requests.getLast().getURL().getQuery().equals("token=SECRET%2FKEEP"));
             check(fixture.requests.stream().noneMatch(r->r.getURL().getPort()>443));
             fixture.play=fixture.play.replace("\"height\":1080,","\"height\":1920,\"width\":1080,");

@@ -74,12 +74,13 @@ public final class VideoPrecache implements AutoCloseable {
                 if(!attempted.add(key))continue;
                 BooleanSupplier current=()->valid(key) && enabled.getAsBoolean() && revision==transport.cacheRevision()
                         && plan.equals(snapshotOrder());
-                try(var request=new RequestScope(current,300000)) {
+                try(var request=new RequestScope(current,15000)) {
                     pending=request;
                     URI uri=resolve(key.target(),request);
                     if(uri!=null) {
                         transport.prefetchVideoStart(uri,request);
-                        transport.prefetch(uri,request);
+                        // Warm each upcoming video's header/index before spending bandwidth on
+                        // its body. Actual playback advances the bounded transport read-ahead.
                     }
                 } catch(Exception | LinkageError ignored) { /* Speculation never changes playback or retries a denial. */ }
                 finally {pending=null;}

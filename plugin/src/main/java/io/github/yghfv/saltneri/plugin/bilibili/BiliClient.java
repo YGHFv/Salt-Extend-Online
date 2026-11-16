@@ -219,11 +219,28 @@ public class BiliClient {
             for(Object url:candidates)try {URI parsed=videoUri(url);if(!usable.contains(parsed))usable.add(parsed);}
                 catch(IOException unavailable) { }
             // Prefer ordinary signed CDN mirrors to MCDN. Keep the server's full URL/signature.
-            usable.sort(java.util.Comparator.comparingInt(uri->uri.getHost().startsWith("upos-")?0:1));
+            usable.sort(java.util.Comparator.comparingInt(BiliClient::videoCdnRank));
             for(var uri:usable)if(!urls.contains(uri))urls.add(uri);
         }
         if(urls.isEmpty())throw new IOException("No permitted Bilibili video stream");
         return List.copyOf(urls);
+    }
+    private static int videoCdnRank(URI uri) {
+        String host=uri.getHost().toLowerCase(java.util.Locale.ROOT);
+        String query=uri.getRawQuery();
+        // PiliPlus also classifies signed upos URLs with os=mcdn and 302 mirrors as MCDN.
+        // Rank only API-returned URLs; changing a host would invalidate edge-specific signatures.
+        boolean mcdn=host.contains(".mcdn.") || host.startsWith("mcdn.") || host.startsWith("bcache")
+                || host.matches("upos-[^-]+-302.*");
+        if(query!=null)for(String parameter:query.split("&")) {
+            String[] parts=parameter.split("=",2);
+            try {
+                if(parts.length==2 && java.net.URLDecoder.decode(parts[0],java.nio.charset.StandardCharsets.UTF_8).equals("os")
+                        && java.net.URLDecoder.decode(parts[1],java.nio.charset.StandardCharsets.UTF_8).equals("mcdn"))mcdn=true;
+            } catch(IllegalArgumentException malformed) { /* Preserve the supplied URL. */ }
+        }
+        if(mcdn)return 2;
+        return host.startsWith("upos-") || host.startsWith("proxy-tf-")?0:1;
     }
     private static URI videoUri(Object value) throws IOException {
         try {

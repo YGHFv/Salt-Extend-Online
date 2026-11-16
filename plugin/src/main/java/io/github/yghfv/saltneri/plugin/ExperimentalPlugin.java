@@ -59,6 +59,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private PlatformPlaylistController platformPlaylists;
     private java.util.concurrent.ScheduledExecutorService savedRestore;
     private io.github.yghfv.saltneri.plugin.host.SavedPlaybackRecovery savedRecovery;
+    private io.github.yghfv.saltneri.plugin.host.SavedStartupPreparation startupPreparation;
     private io.github.yghfv.saltneri.plugin.host.WindowsMediaIdentity mediaIdentity;
     private volatile String mediaIdentityStatus="not registered";
     private volatile PlaybackSettings settings=PlaybackSettings.DEFAULT;
@@ -103,11 +104,27 @@ public final class ExperimentalPlugin extends SpwPlugin {
         startupReady = false;
         supportReady = false;
         status = "Checking native UI capabilities; no network or queue changes.";
+        // Bounded bytecode registrations must precede the host's disk-queue restore.
+        // It performs no persistence, network access, native audio work or AWT wait.
+        ensureStartupPreparation();
         startup = new io.github.yghfv.saltneri.plugin.host.DeferredPluginStartup(this, () -> {
             if (generation != started || stopped) return;
             initialize(started);
             requestNativeActivation(started);
         }, failure -> status = "Plugin initialization failed (" + failure.getClass().getSimpleName() + "); restart Salt to retry.");
+    }
+    private void ensureStartupPreparation() {
+        if(startupPreparation!=null || !"1.19.3".equals(getPluginContext().getSpwVersion()) || !granted())return;
+        try {
+            Object owner=generation;
+            startupPreparation=new io.github.yghfv.saltneri.plugin.host.SavedStartupPreparation(
+                    io.github.yghfv.saltneri.plugin.host.SavedStartupPreparation.defaultDirectory(),
+                    io.github.yghfv.saltneri.plugin.host.SavedStartupPreparation.nativeHost(WorkshopApi.class.getClassLoader()),
+                    io.github.yghfv.saltneri.plugin.host.Salt1193EngineLink.hooks(WorkshopApi.hookRegistrar()),
+                    ()->generation==owner && granted());
+        } catch(ReflectiveOperationException | RuntimeException | LinkageError unsupported) {
+            status="Saved startup selection binding unavailable ("+unsupported.getClass().getSimpleName()+")";
+        }
     }
     private void requestNativeActivation(Object started) {
         nativeActivation=new io.github.yghfv.saltneri.plugin.host.DeferredNativeActivation(this,
@@ -296,6 +313,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
     private boolean adapterArmed() { Salt1193DiagnosticRuntime current = runtime; return current != null && !current.isClosed(); }
     private synchronized void ensureNativeUi() throws Exception {
         if (stopped || !granted()) throw new SecurityException("Experimental permission required");
+        ensureStartupPreparation();
         if (nativeUi == null || !nativeUi.available()) {
             if(javax.swing.SwingUtilities.isEventDispatchThread()) {
                 startupReady=false;
@@ -467,6 +485,7 @@ public final class ExperimentalPlugin extends SpwPlugin {
         io.github.yghfv.saltneri.plugin.net.SourceProxySettings.reset();
         if(playbackVideo!=null){playbackVideo.close();playbackVideo=null;}
         if(savedRecovery!=null) {savedRecovery.close();savedRecovery=null;}
+        if(startupPreparation!=null) {startupPreparation.close();startupPreparation=null;}
         if(savedRestore!=null) {savedRestore.shutdownNow();savedRestore=null;}
         if(savedPlaylists!=null) {savedPlaylists.close();savedPlaylists=null;}
         if(platformPlaylists!=null) {platformPlaylists.close();platformPlaylists=null;}
