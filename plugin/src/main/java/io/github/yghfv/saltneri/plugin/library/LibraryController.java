@@ -43,6 +43,7 @@ public final class LibraryController implements AutoCloseable {
         boolean appending;
         String loadToken=UUID.randomUUID().toString();
         Contents contents;
+        List<Item> radioPlayback=List.of();
         AccountCredentials account;
         int knownPages;
         long totalCount = -1;
@@ -109,7 +110,7 @@ public final class LibraryController implements AutoCloseable {
         if(pageLimit==value)return;
         pageLimit=value;
         for(State s:states.values()) {
-            s.chunks=1;s.appending=false;s.playPending=false;s.preserveWindow=false;s.loadToken=UUID.randomUUID().toString();
+            s.chunks=1;s.appending=false;s.playPending=false;s.radioPlayback=List.of();s.preserveWindow=false;s.loadToken=UUID.randomUUID().toString();
             if(s.query==null)continue;
             s.query=at(s.query,1);s.resultPage=1;
             if(s.contents!=null)rebuild(s);
@@ -147,12 +148,14 @@ public final class LibraryController implements AutoCloseable {
         s.loader.invalidate(""); s.complete.invalidate(""); s.contents = null; s.visible = null; s.delivered=null; s.rows.clear();
         s.chunks=1;s.appending=false;s.loadToken=UUID.randomUUID().toString();
         s.playPending = false; s.preserveWindow = false; s.error = ""; s.knownPages = 0; s.totalCount = -1;
+        s.radioPlayback=List.of();
         if (s.fullMode) {
             navigation.run(); s.resultPage=s.query.page(); s.account = accounts.apply(s.platform); s.complete.start(allQuery(s.query),"all");
         } else load(s,s.query);
     }
     private void reset(State s) {
         s.complete.invalidate(""); s.contents = null; s.fullMode = false; s.playPending = false; s.preserveWindow = false;
+        s.radioPlayback=List.of();
         s.knownPages = 0; s.totalCount = -1; s.creator = ""; s.filter = ""; s.sort = Sort.DEFAULT; s.error = ""; s.title="";
         s.completedPages=0; s.requestedPages=0;
         s.chunks=1;s.visibleChunks=1;s.appending=false;s.delivered=null;s.loadToken=UUID.randomUUID().toString();
@@ -310,6 +313,10 @@ public final class LibraryController implements AutoCloseable {
     private void requireFolder(State s) {
         refresh(s); if (s.query == null || s.query.view()!=View.FOLDER && s.query.view()!=View.COLLECTION) throw new IllegalStateException("Open a playlist first");
     }
+    private boolean canPlayAll(State s) {
+        return s.query!=null && (s.query.view()==View.FOLDER || s.query.view()==View.COLLECTION
+                || !s.rows.isEmpty() && s.rows.values().stream().allMatch(i->i.kind()==Kind.TRACK));
+    }
     private void complete(State s) {
         s.error="";
         if(!s.fullMode && s.visible!=null && s.query.page()==1 && !s.visible.hasMore()) {
@@ -331,6 +338,7 @@ public final class LibraryController implements AutoCloseable {
         if(s.query!=null && s.query.view()==View.AUTHOR_VIDEOS) {
             if(order!=Sort.DEFAULT && order!=Sort.REVERSE && order!=Sort.PLAY_COUNT) throw new IllegalArgumentException("Unsupported author order");
             if(s.sort==order && s.error.isEmpty() && !s.loader.snapshot().failed()) return;
+            s.complete.invalidate("");s.contents=null;s.fullMode=false;s.playPending=false;s.preserveWindow=false;
             s.sort=order;
             load(s,new Query(s.platform,View.AUTHOR_VIDEOS,0,1,s.query.owner(),"",order==Sort.REVERSE,order==Sort.PLAY_COUNT?order:Sort.DEFAULT));
             return;
@@ -347,16 +355,26 @@ public final class LibraryController implements AutoCloseable {
         complete(s); if(s.contents!=null) {s.query=at(s.query,1);rebuild(s);}
     }
     public synchronized void requestPlaylist() {
-        State s=current(); requireFolder(s); s.playPending=true; s.error="";
+        State s=current(); refresh(s);
+        if(!canPlayAll(s)) throw new IllegalStateException("Open a track list first");
+        s.playPending=true; s.error="";
+        // Radio is an open-ended stream: play the loaded batch without fetching future recommendations.
+        if(s.query.view()==View.PERSONAL_RADIO) {
+            var unique=new LinkedHashMap<String,Item>();
+            s.rows.values().forEach(i->unique.putIfAbsent(i.target(),i));
+            s.radioPlayback=List.copyOf(unique.values());return;
+        }
         if(!s.fullMode) {s.preserveWindow=true;s.resultPage=s.query.page();}
         complete(s);
     }
-    public synchronized void cancelPendingPlayback() { for(State s:states.values()) s.playPending=false; }
+    public synchronized void cancelPendingPlayback() { for(State s:states.values()) {s.playPending=false;s.radioPlayback=List.of();} }
     public synchronized Playlist takePlaylist() {
-        State s=current(); refresh(s); if(!s.playPending || s.contents==null) return null; s.playPending=false;
+        State s=current(); refresh(s); if(!s.playPending) return null;
+        boolean radio=s.query!=null && s.query.view()==View.PERSONAL_RADIO;
+        if(!radio && s.contents==null) return null; s.playPending=false;
         if(accounts.apply(s.platform)!=s.account || s.account!=null && !s.account.isActive()) { invalidate(s); return null; }
         // Play means the whole collection in the selected order, not only the current page/filter.
-        List<Item> items=ordered(s,false);
+        List<Item> items=radio?s.radioPlayback:ordered(s,false);s.radioPlayback=List.of();
         if(items.isEmpty()) { s.error="\u5408\u96c6\u4e2d\u6ca1\u6709\u53ef\u64ad\u653e\u5185\u5bb9"; return null; }
         return new Playlist(s.platform,items,s.account);
     }
@@ -375,6 +393,7 @@ public final class LibraryController implements AutoCloseable {
         result.put("platform",platform.name()); result.put("view",s.query==null ? "" : s.query.view().name()); result.put("page",s.query==null ? 1 : s.query.page());
         result.put("more",s.visible!=null && s.visible.hasMore()); result.put("items",items); result.put("error",!s.error.isEmpty()?s.error:status.failed()?status.status():"");
         result.put("loaded",s.visible!=null); result.put("totalPages",s.knownPages); result.put("totalCount",s.totalCount); result.put("filter",s.filter); result.put("sort",s.sort.name());
+        result.put("canPlayAll",canPlayAll(s));
         result.put("loadingAll",s.fullMode && s.contents==null && !status.failed());
         result.put("loadProgress",s.completedPages+"/"+(s.requestedPages>0?s.requestedPages:"?"));
         result.put("pageLimit",pageLimit);result.put("infinite",pageLimit==0);result.put("loadingMore",s.appending);

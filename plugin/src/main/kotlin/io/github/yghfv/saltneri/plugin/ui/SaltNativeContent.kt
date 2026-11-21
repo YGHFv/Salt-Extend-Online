@@ -486,14 +486,14 @@ private class PageMemory(val platform: AccountPlatform, layout: String) {
 
 @Composable
 private fun CatalogTitle(ui: SaltNativeUi, platform: AccountPlatform, title: String, count: Long, action: (() -> Unit) -> Unit,
-                         memory: PageMemory, selectedSort: String, back: Boolean, folder: Boolean, author: Boolean) {
+                         memory: PageMemory, selectedSort: String, back: Boolean, folder: Boolean, author: Boolean, canPlayAll: Boolean) {
     val goBack={action {ui.desk().back(platform);memory.localSearch=false;memory.localText=""}}
     val tools: @Composable () -> Unit = {
         Row(verticalAlignment=Alignment.CenterVertically) {
             if(folder) {
                 SearchControl(ui,memory.localField,memory.localSearch,{memory.localSearch=it},true,"\u641c\u7d22\u5408\u96c6") { keyword -> action {ui.desk().filter(keyword)} }
-                HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) {action {ui.desk().playPlaylist()}}
             }
+            if(canPlayAll) HeaderIcon(ui,"\u5168\u90e8\u64ad\u653e",HeaderGlyph.PLAY) {action {ui.desk().playPlaylist()}}
             LayoutSwitch(ui,memory,action)
             if(folder || author) SortMenu(ui,platform,selectedSort,author,action)
         }
@@ -709,7 +709,7 @@ private fun OnlinePage(ui: SaltNativeUi, platform: AccountPlatform) {
             Column(Modifier.fillMaxWidth().padding(horizontal=if(secondary && ui.nativeSecondaryHeaderAvailable()) 0.dp else 16.dp).padding(bottom=8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 CatalogTitle(ui,platform,if(author) (catalog?.get("authorName") as? String).orEmpty() else title,
                     if(folder || author) (catalog?.get("totalCount") as? Number)?.toLong() ?: -1 else -1,
-                    action,memory,(catalog?.get("sort") as? String) ?: "DEFAULT",catalog?.get("back")==true,folder,catalog?.get("view")=="AUTHOR_VIDEOS")
+                    action,memory,(catalog?.get("sort") as? String) ?: "DEFAULT",catalog?.get("back")==true,folder,catalog?.get("view")=="AUTHOR_VIDEOS",catalog?.get("canPlayAll")==true)
                 if(author) NativeButtons(ui,listOf(
                     NativeButton("\u89c6\u9891",catalog?.get("view")=="AUTHOR_VIDEOS") {action {ui.desk().authorTab(false)}},
                     NativeButton("\u5408\u96c6",catalog?.get("view")=="AUTHOR_COLLECTIONS") {action {ui.desk().authorTab(true)}}))

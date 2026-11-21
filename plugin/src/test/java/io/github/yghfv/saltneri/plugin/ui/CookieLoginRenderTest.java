@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers;
 import kotlin.jvm.functions.Function3;
 import org.jetbrains.skia.*;
 
-/** Actual Salt Compose cookie form and recommendation navigation; synthetic input, no login or playback. */
+/** Actual Salt Compose cookie form/recommendations; synthetic input and recording queue only. */
 public final class CookieLoginRenderTest {
     private static int checks;
     private static void check(boolean value){checks++;if(!value)throw new AssertionError("Cookie render check "+checks);}
@@ -26,15 +26,23 @@ public final class CookieLoginRenderTest {
     public static void main(String[] args) throws Exception {
         var clock=Clock.systemUTC();var submissions=new AtomicInteger();var last=new AtomicReference<String>();
         var query=new AtomicReference<Catalog.Query>();
+        var playlist=new AtomicReference<LibraryController.Playlist>();
         var logged=new AtomicBoolean();
         var output=java.nio.file.Path.of(System.getProperty("java.io.tmpdir")).resolve("cookie-ui-render");Files.createDirectories(output);
         try(var player=new OnlinePlaybackController(p->null,()->true,()->false,(a,s)->{throw new AssertionError("No queue");},clock,
                 a->(t,q,s,r)->{throw new AssertionError("No audio");});
             var library=new LibraryController(p->null,()->true,t->{throw new AssertionError("No prepare");},()->{},clock,
-                a->(q,k,s,r)->{query.set(q);return new Catalog.Page("发现",List.of(),false,clock.instant().plusSeconds(300),1);})) {
+                a->(q,k,s,r)->{
+                    query.set(q);
+                    var items=q.view()==Catalog.View.DAILY || q.view()==Catalog.View.PERSONAL_RADIO?
+                            List.of(new Catalog.Item(Catalog.Kind.TRACK,"1","Fixture song","Artist",1000,true)):
+                            List.<Catalog.Item>of();
+                    return new Catalog.Page("发现",items,q.view()==Catalog.View.PERSONAL_RADIO,clock.instant().plusSeconds(300),1);
+                })) {
             var desk=new NativeDesk(library,player,p->new AccountLoginController.Snapshot(logged.get()?AccountLoginController.Phase.LOGGED_IN:AccountLoginController.Phase.IDLE,
                     "",null,logged.get()?"42":""),(p,a)->{},()->true);
             desk.cookieLogin((p,c)->{check(c.equals("MUSIC_U=SYNTHETIC_SECRET;"));last.set(c);submissions.incrementAndGet();logged.set(true);});
+            desk.playlistPlayer(playlist::set);
             try(var ui=new SaltNativeUi(CookieLoginRenderTest.class.getClassLoader(),new NativePageRenderTest.Hooks(),desk,()->true)) {
                 SwingUtilities.invokeAndWait(()->{});
                 Class<?> singleton=Class.forName(SaltPageContentBinding.SINGLETON);
@@ -50,6 +58,8 @@ public final class CookieLoginRenderTest {
                         });
                         try {
                             HeaderSearchRenderTest.render(scene);
+                            HeaderSearchRenderTest.click(scene,"推荐歌单");
+                            check(HeaderSearchRenderTest.find(scene,"全部播放",SemanticsActions.INSTANCE.getOnClick())==null);
                             var labels=platform==AccountPlatform.NETEASE?List.of("推荐歌单","每日推荐","音乐漫游","私人歌单","推荐新歌"):List.of("推荐歌单","每日推荐","猜你喜欢");
                             for(String label:labels) {
                                 var tab=HeaderSearchRenderTest.find(scene,label,SemanticsActions.INSTANCE.getOnClick());check(tab!=null);
@@ -77,6 +87,29 @@ public final class CookieLoginRenderTest {
                             check(HeaderSearchRenderTest.find(scene,"填写 Cookie 登录",SemanticsActions.INSTANCE.getOnClick())!=null);
                             HeaderSearchRenderTest.click(scene,"填写 Cookie 登录");
                             check(HeaderSearchRenderTest.draft(scene).isEmpty());
+                            HeaderSearchRenderTest.click(scene,"取消");
+                            for(String tab:List.of("每日推荐",platform==AccountPlatform.QQMUSIC?"猜你喜欢":"音乐漫游")) {
+                                HeaderSearchRenderTest.click(scene,tab);
+                                var play=HeaderSearchRenderTest.find(scene,"全部播放",SemanticsActions.INSTANCE.getOnClick());
+                                var layout=HeaderSearchRenderTest.find(scene,"切换列表",SemanticsActions.INSTANCE.getOnClick());
+                                check(play!=null && layout!=null);
+                                var a=play.getBoundsInRoot();var b=layout.getBoundsInRoot();
+                                check(a.getRight()<=b.getLeft() && b.getRight()<=width && Math.abs(a.getTop()-b.getTop())<1);
+                                check(Math.abs(a.getWidth()-36)<1 && Math.abs(a.getHeight()-36)<1);
+                                playlist.set(null);HeaderSearchRenderTest.click(scene,"全部播放");
+                                check(playlist.get()!=null && playlist.get().items().size()==1);
+                                if(platform==AccountPlatform.QQMUSIC && tab.equals("猜你喜欢")) {
+                                    try(var image=scene.render(System.nanoTime());var data=image.encodeToData(EncodedImageFormat.PNG,100,0)) {
+                                        Files.write(output.resolve("qqmusic-radio-play-all-"+width+".png"),data.getBytes());
+                                    }
+                                }
+                                for(int mode=0;mode<3;mode++) {
+                                    HeaderSearchRenderTest.click(scene,"切换列表");
+                                    check(HeaderSearchRenderTest.find(scene,"全部播放",SemanticsActions.INSTANCE.getOnClick())!=null);
+                                }
+                            }
+                            HeaderSearchRenderTest.click(scene,"推荐歌单");
+                            check(HeaderSearchRenderTest.find(scene,"全部播放",SemanticsActions.INSTANCE.getOnClick())==null);
                         } catch(Exception error){throw new AssertionError(error);}
                         finally {scene.close();}
                     });

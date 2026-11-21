@@ -99,6 +99,22 @@ public final class NeteaseRecommendationContractTest {
             check(first.items().size()==20 && second.items().size()==10 && second.items().getFirst().target().equals("21"));
             check(first.totalCount()==30 && first.hasMore() && !second.hasMore());
             check(fixture.dailyCalls==1 && fixture.verifyCalls==1);
+            var full=client(account,clock,fixture,cache).loadAll(query(View.DAILY,1),request);
+            check(full.items().size()==30 && full.items().getLast().target().equals("30") && fixture.dailyCalls==1);
+            fails(()->client(account,clock,fixture,cache).loadAll(query(View.PERSONAL_RADIO,1),request));
+            var qqCalls=new java.util.concurrent.atomic.AtomicInteger();
+            var qqCookie=CookieLogin.parse(AccountPlatform.QQMUSIC,"uin=42; qqmusic_key=FIXTURE_SECRET;",clock);
+            var qqAccount=new AccountCredentials(AccountPlatform.QQMUSIC,"42",qqCookie,clock);
+            try {
+                var qqClient=new CatalogClient(qqAccount,clock,(uri,form)->{
+                    qqCalls.incrementAndGet();var songs=new ArrayList<Object>();
+                    for(int id=1;id<=30;id++) songs.add(Map.of("mid",String.format(Locale.ROOT,"00%012d",id),
+                            "title","QQ song "+id,"interval",120,"singer",List.of(Map.of("name","Artist"))));
+                    return new Response(uri,Map.of("code",0,"req_0",Map.of("code",0,"data",Map.of("songlist",songs))));
+                });
+                var qqFull=qqClient.loadAll(new Query(AccountPlatform.QQMUSIC,View.DAILY,0,1),request);
+                check(qqFull.items().size()==30 && qqFull.items().getLast().title().equals("QQ song 30") && qqCalls.get()==1);
+            } finally {qqAccount.retire();}
             var window=CatalogPaging.load(query(View.DAILY,1),30,request,q->client(account,clock,fixture,cache).load(q,request));
             check(window.items().size()==30 && !window.hasMore() && fixture.dailyCalls==1);
             check(window.items().getFirst().cover()!=null && window.items().getFirst().subtitle().equals("Artist"));

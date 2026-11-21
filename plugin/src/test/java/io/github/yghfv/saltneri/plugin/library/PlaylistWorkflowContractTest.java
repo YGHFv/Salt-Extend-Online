@@ -71,7 +71,58 @@ public final class PlaylistWorkflowContractTest {
         searchAndRetry();
         failedFullLoad();
         playbackDiagnostics();
+        directTrackLists();
         System.out.println("PASS: "+checks+" platform-local navigation, whole-list filter/sort, search/retry, unfiltered replacement intent and revocation checks");
+    }
+    private static void directTrackLists() throws Exception {
+        var requests=new AtomicInteger();
+        try(var library=new LibraryController(p->null,()->true,t->{},()->{},Clock.systemUTC(),a->(q,k,s,r)->{
+            requests.incrementAndGet();
+            if(q.view()==View.DISCOVER) return new Page("Playlists",List.of(new Item(Kind.FOLDER,"10","Playlist","",1,true)),false,Instant.MAX,1,1);
+            if(q.view()==View.PERSONAL_RADIO) return new Page("Radio",List.of(
+                    new Item(Kind.TRACK,""+q.page(),"Radio "+q.page(),"Artist",1000,true)),true,Instant.MAX);
+            var items=new ArrayList<Item>();
+            for(int id=(q.page()-1)*20+1;id<=Math.min(q.page()*20,45);id++)
+                items.add(new Item(Kind.TRACK,""+id,"Song "+id,"Artist",1000,true,null,99,id));
+            return new Page("Tracks",items,q.page()<3,Instant.MAX,3,45);
+        })) {
+            library.pageLimit(20);
+            library.browse(AccountPlatform.QQMUSIC,View.DISCOVER);ready(library);
+            check(library.snapshot().get("canPlayAll").equals(false));
+            try {library.requestPlaylist();throw new AssertionError("Playlist tiles accepted");}
+            catch(IllegalStateException expected) {checks++;}
+            for(var view:List.of(View.DAILY,View.NEW_SONGS,View.SEARCH)) {
+                var platform=view==View.NEW_SONGS?AccountPlatform.NETEASE:AccountPlatform.QQMUSIC;
+                if(view==View.SEARCH) library.search(platform,"Song");else library.browse(platform,view);
+                ready(library);library.turn(1);ready(library);
+                check(library.snapshot().get("canPlayAll").equals(true));
+                var token=(String)rows(library).getFirst().get("token");
+                library.requestPlaylist();ready(library);var playlist=library.takePlaylist();
+                check(playlist!=null && playlist.items().size()==45 && playlist.items().getFirst().target().equals("1"));
+                check(playlist.items().getLast().target().equals("45") && library.takePlaylist()==null);
+                check(library.snapshot().get("page").equals(2) && library.currentRow(token));
+            }
+            library.search(AccountPlatform.BILIBILI,"Artist");ready(library);
+            library.author((String)rows(library).getFirst().get("token"));ready(library);
+            library.requestPlaylist();ready(library);check(library.takePlaylist().items().size()==45);
+            library.sort(Sort.REVERSE);ready(library);
+            check(library.snapshot().get("sort").equals("REVERSE") && rows(library).size()==20);
+            library.requestPlaylist();ready(library);
+            check(library.takePlaylist().items().getFirst().target().equals("45"));
+            for(var platform:List.of(AccountPlatform.QQMUSIC,AccountPlatform.NETEASE)) {
+                library.pageLimit(0);library.browse(platform,View.PERSONAL_RADIO);ready(library);
+                var token=(String)library.snapshot().get("loadToken");library.loadMore(platform,token);
+                long until=System.nanoTime()+3_000_000_000L;
+                while(rows(library).size()<2 && System.nanoTime()<until) Thread.sleep(10);
+                check(rows(library).size()==2);
+                int before=requests.get();token=(String)rows(library).getFirst().get("token");
+                library.requestPlaylist();var playlist=library.takePlaylist();
+                check(playlist!=null && playlist.items().stream().map(Item::target).toList().equals(List.of("1","2")));
+                check(requests.get()==before && library.snapshot().get("more").equals(true) && library.currentRow(token));
+                library.requestPlaylist();library.cancelPendingPlayback();check(library.takePlaylist()==null);
+                library.requestPlaylist();library.accountChanged(platform);check(library.takePlaylist()==null);
+            }
+        }
     }
     private static void playbackDiagnostics() throws Exception {
         var cases=new LinkedHashMap<Throwable,String>();

@@ -90,7 +90,7 @@ public final class CatalogClient {
     }
     CollectionContents loadAll(Query query, RequestScope request, CatalogPageCache cache,
                                java.util.function.BiConsumer<Integer,Integer> progress) throws IOException {
-        if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) throw invalid();
+        if(query.view()!=View.FOLDER && query.view()!=View.COLLECTION) return loadAllTracks(query,request,progress);
         if(query.platform()==AccountPlatform.KUGOU)return new KugouCatalog(account,clock,new io.github.yghfv.saltneri.plugin.kugou.KugouHttp(uri->opener.open(uri,null))).loadAll(query,request);
         if(query.platform()==AccountPlatform.APPLEMUSIC)return new AppleMusicCatalog(account,clock,appleHttp).loadAll(query,request);
         if(query.platform()==AccountPlatform.QQMUSIC) return new QqMusicCatalog(account,clock,opener::open).loadAll(query,request);
@@ -139,6 +139,22 @@ public final class CatalogClient {
                 request.check(); return new CollectionContents(first.title(),items,first.totalCount());
             } finally { pending.forEach(f->f.cancel(true)); worker.shutdownNow(); }
         }
+    }
+    private CollectionContents loadAllTracks(Query query,RequestScope request,
+                                             java.util.function.BiConsumer<Integer,Integer> progress) throws IOException {
+        if(query.view()==View.PERSONAL_RADIO) throw invalid();
+        var items=new LinkedHashMap<String,Item>();String title="";
+        for(int index=1;index<=500;index++) {
+            request.check();
+            Page result=load(new Query(query.platform(),query.view(),query.folder(),index,query.owner(),query.keyword(),
+                    query.reverse(),query.order(),query.resource()),request);
+            if(result.totalCount()>CatalogPaging.MAX_ITEMS) throw invalid();
+            title=result.title();
+            for(Item item:result.items()) if(item.enabled() && item.kind()==Kind.TRACK) items.putIfAbsent(item.target(),item);
+            progress.accept(index,result.totalPages());
+            if(!result.hasMore()) return new CollectionContents(title,List.copyOf(items.values()),items.size());
+        }
+        throw new IOException("Track list exceeds bounded catalog; no partial queue submitted");
     }
     /** Video detail can embed the entire UGC season; accept only a complete, same-order snapshot. */
     private CollectionContents collectionSnapshot(Query query,Page first,CatalogHttp http,RequestScope parent) throws IOException {
